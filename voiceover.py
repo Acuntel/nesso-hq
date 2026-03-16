@@ -46,7 +46,7 @@ def _generate_silence(duration: float, output_path: str) -> str:
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono",
         "-t", str(duration),
-        "-c:a", "aac", "-b:a", "64k",
+        "-c:a", "libmp3lame", "-b:a", "64k",
         output_path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
@@ -54,6 +54,27 @@ def _generate_silence(duration: float, output_path: str) -> str:
         log.warning("Silence generation failed: %s", result.stderr[-200:])
         return ""
     return output_path
+
+
+def _generate_silence_robust(duration: float, output_path: str) -> str:
+    """Generate silence with fallback. Tries MP3 codec directly if AAC fails."""
+    result = _generate_silence(duration, output_path)
+    if result:
+        return result
+    # Fallback: use PCM -> MP3 pipeline with different parameters
+    log.info("Primary silence gen failed, trying fallback for %s", output_path)
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-t", str(duration),
+        "-c:a", "libmp3lame", "-b:a", "64k",
+        output_path,
+    ]
+    fallback = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+    if fallback.returncode == 0:
+        return output_path
+    log.error("Robust silence generation also failed for %s", output_path)
+    return ""
 
 
 def generate_voiceover(
@@ -93,16 +114,18 @@ def generate_voiceover(
     for i, msg in enumerate(messages):
         speech_text = _format_message_for_speech(msg)
         clip_path = os.path.join(temp_dir, f"vo_{i:03d}.mp3")
+        fallback_delay = msg.get("delay", 1.2)
 
         if not speech_text:
             # System message (read receipt, typing...) — generate 1.5s silence
             silence_dur = 1.5
-            result = _generate_silence(silence_dur, clip_path)
+            result = _generate_silence_robust(silence_dur, clip_path)
             if result:
                 clip_paths.append(clip_path)
                 per_message_durations.append(silence_dur)
             else:
-                per_message_durations.append(msg.get("delay", 1.2))
+                # SYNC INVARIANT: skip from BOTH lists, not just one
+                log.warning("Silence gen failed for msg %d, skipping from VO track", i)
             continue
 
         try:
@@ -122,8 +145,14 @@ def generate_voiceover(
             # Get actual duration of generated audio
             clip_dur = get_duration(clip_path)
             if clip_dur <= 0:
-                log.warning("TTS clip %d has zero duration, using delay", i)
-                per_message_durations.append(msg.get("delay", 1.2))
+                log.warning("TTS clip %d has zero duration, generating silence fallback", i)
+                # SYNC INVARIANT: overwrite with silence, add to BOTH lists
+                silence_result = _generate_silence_robust(fallback_delay, clip_path)
+                if silence_result:
+                    clip_paths.append(clip_path)
+                    per_message_durations.append(fallback_delay)
+                else:
+                    log.warning("Silence fallback also failed for msg %d, skipping", i)
                 continue
 
             # Add 0.3s buffer so text lingers slightly after speech ends
@@ -134,11 +163,13 @@ def generate_voiceover(
 
         except Exception as e:
             log.warning("TTS failed for message %d: %s", i, e)
-            per_message_durations.append(msg.get("delay", 1.2))
-            # Generate silence as placeholder
-            _generate_silence(msg.get("delay", 1.2), clip_path)
-            if os.path.exists(clip_path):
+            # SYNC INVARIANT: generate silence, add to BOTH lists or NEITHER
+            silence_result = _generate_silence_robust(fallback_delay, clip_path)
+            if silence_result and os.path.exists(clip_path):
                 clip_paths.append(clip_path)
+                per_message_durations.append(fallback_delay)
+            else:
+                log.warning("Silence fallback failed for msg %d, skipping from VO track", i)
 
     if not clip_paths:
         log.warning("No voiceover clips generated")
@@ -178,10 +209,25 @@ def generate_voiceover(
         log.warning("Voiceover concat failed: %s", result.stderr[-300:])
         return "", []
 
-    total_dur = get_duration(concat_path)
+    # Drift correction: measure actual concatenated duration and adjust
+    # per_message_durations so their sum matches the real audio length.
+    # Without this, small per-clip measurement errors accumulate (50-200ms).
+    actual_total_dur = get_duration(concat_path)
+    expected_total_dur = sum(per_message_durations)
+
+    if actual_total_dur > 0 and expected_total_dur > 0:
+        drift = actual_total_dur - expected_total_dur
+        if abs(drift) > 0.01:
+            scale = actual_total_dur / expected_total_dur
+            per_message_durations = [d * scale for d in per_message_durations]
+            log.info(
+                "VO drift correction: expected=%.3fs, actual=%.3fs, scale=%.4f",
+                expected_total_dur, actual_total_dur, scale,
+            )
+
     log.info(
         "Voiceover generated: %s (%.1fs, %d clips)",
-        concat_path, total_dur, len(clip_paths),
+        concat_path, actual_total_dur, len(clip_paths),
     )
 
     return concat_path, per_message_durations

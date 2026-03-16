@@ -112,7 +112,9 @@ def morph_and_concat(
         except OSError:
             pass
 
-    log.info("Full video (before audio): %.1fs", get_duration(full_video))
+    # Measure ACTUAL video duration (not calculated estimate) for audio sync
+    actual_video_dur = get_duration(full_video)
+    log.info("Full video (before audio): %.1fs", actual_video_dur)
 
     # Clean intermediate
     try:
@@ -132,17 +134,19 @@ def morph_and_concat(
         reveal_dur=reveal_dur,
         morph_dur=MORPH_DURATION,
         output_path=full_audio,
+        actual_video_dur=actual_video_dur,
     )
 
     # ── STEP 4: Mux video + audio ─────────────────────────────────────
+    # NO -shortest: we want the full video (including reveal) even if audio
+    # is slightly shorter. -t trims audio to match video, not the reverse.
     mux_cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", full_video,
         "-i", full_audio,
         "-c:v", "copy",
         "-c:a", "aac", "-b:a", "128k",
-        "-shortest",
-        "-preset", FFMPEG_PRESET,
+        "-t", str(actual_video_dur),
         output_path,
     ]
 
@@ -254,6 +258,7 @@ def _build_audio_track(
     reveal_dur: float,
     morph_dur: float,
     output_path: str,
+    actual_video_dur: float = 0,
 ) -> str:
     """
     Build the complete audio track:
@@ -263,7 +268,14 @@ def _build_audio_track(
     - Background music during story (12% with VO, 18% without)
     - Fade out during reveal
     """
-    total_dur = hook_dur + story_dur + reveal_dur - morph_dur
+    calculated_dur = hook_dur + story_dur + reveal_dur - morph_dur
+    # Use actual video duration if available; otherwise fall back to calculated
+    total_dur = actual_video_dur if actual_video_dur > 0 else calculated_dur
+    if actual_video_dur > 0 and abs(actual_video_dur - calculated_dur) > 0.5:
+        log.info(
+            "Audio track using actual video dur %.1fs (calculated was %.1fs)",
+            actual_video_dur, calculated_dur,
+        )
     music_start = hook_dur - morph_dur / 2
 
     has_voiceover = voiceover_path and os.path.exists(voiceover_path)

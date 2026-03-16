@@ -31,7 +31,7 @@ from music import download_background_music, download_psych_sfx
 from renderer import compile_frames_to_video, render_text_story_frames
 from reveal import render_nesso_reveal
 from scripts import generate_text_story
-from verify import check_pipeline_health, get_duration, verify_clip
+from verify import get_duration, verify_clip
 from voiceover import generate_voiceover
 
 log = logging.getLogger(__name__)
@@ -125,7 +125,8 @@ def render_single_video(
             log.info("[%s] No voiceover — using text delays only", render_id)
 
         # ── STEP 4: Render text story frames ──────────────────────────
-        story_frames = render_text_story_frames(messages, render_dir)
+        voiceover_active = bool(vo_path and vo_durations)
+        story_frames = render_text_story_frames(messages, render_dir, voiceover_active=voiceover_active)
         log.info("[%s] Rendered %d frames", render_id, len(story_frames))
 
         # ── STEP 5: Compile frames to video ───────────────────────────
@@ -202,8 +203,8 @@ def render_single_video(
             pass
 
         # ── STEP 10: Verify final output ──────────────────────────────
-        health = check_pipeline_health(hook_path, story_video, output_path)
-        # hook_path and story_video are deleted, but output_path is what matters
+        # Note: hook_path and story_video are already deleted at this point.
+        # Only verify the final output — the health check on deleted files was dead code.
         if not verify_clip(output_path):
             raise RuntimeError("Final video failed verification")
 

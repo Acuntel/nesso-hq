@@ -194,6 +194,7 @@ def render_message_bubble(
 def render_text_story_frames(
     messages: list[dict],
     temp_dir: str,
+    voiceover_active: bool = False,
 ) -> list[tuple[str, float]]:
     """
     Render the text story as a series of PNG frames.
@@ -235,13 +236,16 @@ def render_text_story_frames(
         duration = messages[msg_idx].get("delay", 1.2)
         frames.append((frame_path, duration))
 
-    # Enforce minimum 15s total story duration — scale delays up if needed
+    # Enforce minimum 15s total story duration — but NEVER when voiceover
+    # is active, because frame durations must match the VO audio exactly.
     total_dur = sum(d for _, d in frames)
     min_story_dur = 15.0
-    if total_dur < min_story_dur and total_dur > 0:
+    if not voiceover_active and total_dur < min_story_dur and total_dur > 0:
         scale = min_story_dur / total_dur
         frames = [(p, d * scale) for p, d in frames]
         log.info("Scaled story delays by %.2fx to reach %.1fs minimum", scale, min_story_dur)
+    elif voiceover_active:
+        log.info("Voiceover active — skipping 15s minimum scaling (story=%.1fs)", total_dur)
 
     log.info("Rendered %d text story frames (%.1fs total)", len(frames), sum(d for _, d in frames))
     return frames
