@@ -14,9 +14,13 @@ from config import (
     FFMPEG_THREADS,
     FFMPEG_TIMEOUT,
     FPS,
+    HEIGHT,
     MORPH_DURATION,
     MORPH_TRANSITION,
     MUSIC_VOLUME_RATIO,
+    MUSIC_VOLUME_WITH_VO,
+    VOICEOVER_VOLUME,
+    WIDTH,
 )
 from verify import get_duration
 
@@ -31,16 +35,18 @@ def morph_and_concat(
     psych_sfx_path: str,
     music_path: str,
     output_path: str,
+    voiceover_path: str = "",
 ) -> str:
     """
     Full video assembly with morph transition:
-    Hook (with audio) → MORPH (psych sfx) → Story (with music) → Reveal → Black screen
+    Hook (with audio) → MORPH (psych sfx) → Story (with voiceover + music) → Reveal
 
     Audio layers:
     1. Hook original audio (full volume) during hook
     2. PSYCH sfx at morph point (overlaps 0.2s on each side)
-    3. Lo-fi music during text story (15-20% volume)
-    4. Silence/fade during reveal
+    3. Voiceover during text story (85% volume) — if available
+    4. Lo-fi music during text story (12% with VO, 18% without)
+    5. Silence/fade during reveal
     """
     hook_dur = get_duration(hook_path)
     story_dur = get_duration(story_path)
@@ -48,6 +54,11 @@ def morph_and_concat(
 
     if hook_dur <= 0 or story_dur <= 0:
         raise RuntimeError(f"Invalid durations: hook={hook_dur}, story={story_dur}")
+
+    log.info(
+        "Assembly: hook=%.1fs, story=%.1fs, reveal=%.1fs",
+        hook_dur, story_dur, reveal_dur,
+    )
 
     temp_dir = os.path.dirname(output_path)
 
@@ -78,9 +89,30 @@ def morph_and_concat(
         log.warning("xfade failed, falling back to simple concat: %s", result.stderr[-300:])
         morphed_video = _simple_concat_video(hook_path, story_path, morphed_video)
 
+    morphed_dur = get_duration(morphed_video)
+
     # ── STEP 2: Concat morphed + reveal ────────────────────────────────
     full_video = os.path.join(temp_dir, "full_v.mp4")
     _concat_with_reveal(morphed_video, reveal_path, full_video)
+
+    # Verify concat didn't silently drop the reveal
+    full_video_dur = get_duration(full_video)
+    expected_dur = morphed_dur + reveal_dur
+    if full_video_dur < expected_dur * 0.8:
+        log.warning(
+            "Concat may have dropped reveal: got %.1fs, expected %.1fs. Retrying with re-encode.",
+            full_video_dur, expected_dur,
+        )
+        # Re-encode reveal to force matching stream params, then retry
+        reveal_reencode = os.path.join(temp_dir, "reveal_re.mp4")
+        _reencode_to_match(reveal_path, morphed_video, reveal_reencode)
+        _concat_with_reveal(morphed_video, reveal_reencode, full_video)
+        try:
+            os.remove(reveal_reencode)
+        except OSError:
+            pass
+
+    log.info("Full video (before audio): %.1fs", get_duration(full_video))
 
     # Clean intermediate
     try:
@@ -94,6 +126,7 @@ def morph_and_concat(
         hook_audio_path=hook_audio_path,
         psych_sfx_path=psych_sfx_path,
         music_path=music_path,
+        voiceover_path=voiceover_path,
         hook_dur=hook_dur,
         story_dur=story_dur,
         reveal_dur=reveal_dur,
@@ -102,7 +135,6 @@ def morph_and_concat(
     )
 
     # ── STEP 4: Mux video + audio ─────────────────────────────────────
-    video_dur = get_duration(full_video)
     mux_cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", full_video,
@@ -161,6 +193,25 @@ def _simple_concat_video(path_a: str, path_b: str, output_path: str) -> str:
     return output_path
 
 
+def _reencode_to_match(source_path: str, reference_path: str, output_path: str) -> str:
+    """Re-encode source video to match reference video's stream parameters."""
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-i", source_path,
+        "-r", str(FPS),
+        "-vf", f"scale={WIDTH}:{HEIGHT},setsar=1:1",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", FFMPEG_PRESET,
+        "-an",
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+    if result.returncode != 0:
+        raise RuntimeError(f"Re-encode failed: {result.stderr[-500:]}")
+    return output_path
+
+
 def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> str:
     """Concatenate the morphed video with the reveal sequence."""
     temp_dir = os.path.dirname(output_path)
@@ -176,6 +227,7 @@ def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> 
         "-i", concat_file,
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
+        "-r", str(FPS),
         "-preset", FFMPEG_PRESET,
         output_path,
     ]
@@ -196,6 +248,7 @@ def _build_audio_track(
     hook_audio_path: str,
     psych_sfx_path: str,
     music_path: str,
+    voiceover_path: str,
     hook_dur: float,
     story_dur: float,
     reveal_dur: float,
@@ -206,12 +259,17 @@ def _build_audio_track(
     Build the complete audio track:
     - Hook audio at full volume (0 → hook_dur)
     - PSYCH sfx at morph point
-    - Background music during story at low volume
+    - Voiceover during story (85% volume) — if available
+    - Background music during story (12% with VO, 18% without)
     - Fade out during reveal
     """
     total_dur = hook_dur + story_dur + reveal_dur - morph_dur
     music_start = hook_dur - morph_dur / 2
-    music_end = music_start + story_dur
+
+    has_voiceover = voiceover_path and os.path.exists(voiceover_path)
+
+    # Use lower music volume when voiceover is present
+    effective_music_vol = MUSIC_VOLUME_WITH_VO if has_voiceover else MUSIC_VOLUME_RATIO
 
     # Build filter_complex for audio mixing
     inputs = []
@@ -244,6 +302,17 @@ def _build_audio_track(
         )
         stream_idx += 1
 
+    # Voiceover (during story section)
+    if has_voiceover:
+        inputs.extend(["-i", voiceover_path])
+        vo_delay_ms = int(music_start * 1000)
+        filter_parts.append(
+            f"[{stream_idx}:a]volume={VOICEOVER_VOLUME},"
+            f"afade=t=in:st=0:d=0.3,"
+            f"adelay={vo_delay_ms}|{vo_delay_ms}[vo_a]"
+        )
+        stream_idx += 1
+
     # Background music
     has_music = music_path and os.path.exists(music_path)
     if has_music:
@@ -251,7 +320,7 @@ def _build_audio_track(
         music_delay_ms = int(music_start * 1000)
         fade_start = story_dur - 2
         filter_parts.append(
-            f"[{stream_idx}:a]volume={MUSIC_VOLUME_RATIO},"
+            f"[{stream_idx}:a]volume={effective_music_vol},"
             f"atrim=0:{story_dur + reveal_dur},"
             f"afade=t=in:st=0:d=1,afade=t=out:st={fade_start}:d=2,"
             f"adelay={music_delay_ms}|{music_delay_ms}[music_a]"
@@ -263,6 +332,9 @@ def _build_audio_track(
     mix_count = 1
     if has_psych:
         mix_inputs += "[psych_a]"
+        mix_count += 1
+    if has_voiceover:
+        mix_inputs += "[vo_a]"
         mix_count += 1
     if has_music:
         mix_inputs += "[music_a]"

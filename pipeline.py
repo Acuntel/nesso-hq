@@ -32,6 +32,7 @@ from renderer import compile_frames_to_video, render_text_story_frames
 from reveal import render_nesso_reveal
 from scripts import generate_text_story
 from verify import check_pipeline_health, get_duration, verify_clip
+from voiceover import generate_voiceover
 
 log = logging.getLogger(__name__)
 
@@ -111,6 +112,18 @@ def render_single_video(
         messages = generate_text_story(hook_desc, hook_category)
         log.info("[%s] Script: %d messages", render_id, len(messages))
 
+        # ── STEP 3.5: Generate voiceover (ElevenLabs TTS) ────────────
+        vo_path, vo_durations = generate_voiceover(messages, render_dir)
+        if vo_path and vo_durations:
+            # Override message delays with TTS durations (synced to speech)
+            for i, dur in enumerate(vo_durations):
+                if i < len(messages):
+                    messages[i]["delay"] = dur
+            log.info("[%s] Voiceover: %.1fs total", render_id, sum(vo_durations))
+        else:
+            vo_path = ""
+            log.info("[%s] No voiceover — using text delays only", render_id)
+
         # ── STEP 4: Render text story frames ──────────────────────────
         story_frames = render_text_story_frames(messages, render_dir)
         log.info("[%s] Rendered %d frames", render_id, len(story_frames))
@@ -150,10 +163,11 @@ def render_single_video(
             psych_sfx_path=psych_path,
             music_path=music_path,
             output_path=concat_video,
+            voiceover_path=vo_path,
         )
 
         # Clean intermediates
-        for f in [hook_path, hook_audio, story_video, reveal_video, music_path]:
+        for f in [hook_path, hook_audio, story_video, reveal_video, music_path, vo_path]:
             if f:
                 try:
                     os.remove(f)

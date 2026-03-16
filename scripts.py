@@ -27,7 +27,14 @@ FORMAT: Return ONLY a JSON array. No other text. No markdown. No explanation.
 ]
 
 "sender" options: "me", "best friend", "college roommate", "the group chat", or a first name
-"delay" is seconds to wait before showing this message (controls pacing)
+"delay" is seconds to wait before showing this message (controls pacing).
+DELAYS MUST BE SLOW ENOUGH TO READ. Guidelines:
+- Regular messages: 1.2 - 2.0 seconds
+- Messages with emotional weight or longer text: 2.0 - 2.5 seconds
+- Gut-punch / knife moments: 2.5 - 3.5 seconds
+- "..." or typing indicators: 2.0 - 3.0 seconds (let the silence build)
+- "Read" receipts or "delivered": 2.5 - 3.5 seconds (the pause IS the emotion)
+- NEVER go below 1.0 seconds on any message
 
 STRUCTURE:
 1. Message 1: React to the hook video (you'll be told what it showed)
@@ -108,7 +115,9 @@ def _validate_messages(messages: list[dict]) -> list[dict]:
         if "text" not in msg:
             raise ValueError("Missing text in message")
         if "delay" not in msg:
-            msg["delay"] = 0.7
+            msg["delay"] = 1.2
+        # Enforce minimum 1.0s delay — anything faster is unreadable
+        msg["delay"] = max(1.0, msg["delay"])
 
     if len(messages) > 15:
         messages = messages[:15]
@@ -129,13 +138,13 @@ def get_fallback_script() -> list[dict]:
         log.error("Failed to load fallback scripts: %s", e)
         # Ultimate fallback — hardcoded minimal script
         return [
-            {"sender": "me", "text": "bro that was insane 💀", "delay": 0.8},
-            {"sender": "me", "text": "speaking of insane... when's the last time you talked to your best friend", "delay": 1.2},
-            {"sender": "best friend", "text": "wdym we're talking rn", "delay": 0.6},
-            {"sender": "me", "text": "no like actually talked. not just memes", "delay": 0.9},
-            {"sender": "best friend", "text": "...", "delay": 1.5},
-            {"sender": "me", "text": "exactly", "delay": 0.7},
-            {"sender": "best friend", "text": "idk what happened tbh", "delay": 0.8},
-            {"sender": "me", "text": "me neither", "delay": 0.6},
-            {"sender": "system", "text": "Read 11:47 PM", "delay": 2.0},
+            {"sender": "me", "text": "bro that was insane 💀", "delay": 1.5},
+            {"sender": "me", "text": "speaking of insane... when's the last time you talked to your best friend", "delay": 2.0},
+            {"sender": "best friend", "text": "wdym we're talking rn", "delay": 1.5},
+            {"sender": "me", "text": "no like actually talked. not just memes", "delay": 2.0},
+            {"sender": "best friend", "text": "...", "delay": 2.5},
+            {"sender": "me", "text": "exactly", "delay": 1.5},
+            {"sender": "best friend", "text": "idk what happened tbh", "delay": 2.0},
+            {"sender": "me", "text": "me neither", "delay": 1.5},
+            {"sender": "system", "text": "Read 11:47 PM", "delay": 3.0},
         ]

@@ -42,8 +42,8 @@ def get_most_replayed_moment(video_url: str) -> tuple[float, float]:
         heatmap = info.get("heatmap", None)
 
         if not heatmap or not duration:
-            # FALLBACK: No heatmap — use first 15% of video
-            end = min(duration * 0.15, 8)
+            # FALLBACK: No heatmap — use first 15% of video (min 5s, max 10s)
+            end = max(5, min(duration * 0.15, 10))
             log.info("No heatmap for %s, using first %.1fs", video_url, end)
             return (0, end)
 
@@ -60,9 +60,16 @@ def get_most_replayed_moment(video_url: str) -> tuple[float, float]:
             peak_start = peak_position * duration
             peak_end = peak_start + min(duration * 0.05, 6)
 
-        # Expand window to capture full action — 2s before, 1s after
-        expanded_start = max(0, peak_start - 2)
-        expanded_end = min(duration, peak_end + 1)
+        # Expand window to capture full action — 3s before, 3s after
+        expanded_start = max(0, peak_start - 3)
+        expanded_end = min(duration, peak_end + 3)
+
+        # Enforce minimum 5s hook duration — widen symmetrically if too short
+        clip_dur = expanded_end - expanded_start
+        if clip_dur < 5:
+            deficit = 5 - clip_dur
+            expanded_start = max(0, expanded_start - deficit / 2)
+            expanded_end = min(duration, expanded_end + deficit / 2)
 
         log.info(
             "Heatmap peak for %s: %.1f-%.1fs (expanded: %.1f-%.1fs)",

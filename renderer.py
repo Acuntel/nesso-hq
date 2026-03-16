@@ -232,10 +232,18 @@ def render_text_story_frames(
         frame_path = os.path.join(temp_dir, f"frame_{msg_idx:04d}.png")
         img.save(frame_path, "PNG")
 
-        duration = messages[msg_idx].get("delay", 0.7)
+        duration = messages[msg_idx].get("delay", 1.2)
         frames.append((frame_path, duration))
 
-    log.info("Rendered %d text story frames", len(frames))
+    # Enforce minimum 15s total story duration — scale delays up if needed
+    total_dur = sum(d for _, d in frames)
+    min_story_dur = 15.0
+    if total_dur < min_story_dur and total_dur > 0:
+        scale = min_story_dur / total_dur
+        frames = [(p, d * scale) for p, d in frames]
+        log.info("Scaled story delays by %.2fx to reach %.1fs minimum", scale, min_story_dur)
+
+    log.info("Rendered %d text story frames (%.1fs total)", len(frames), sum(d for _, d in frames))
     return frames
 
 

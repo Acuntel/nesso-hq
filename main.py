@@ -8,6 +8,13 @@ import logging
 import os
 import sys
 
+# Load .env file if present (for local dev — Railway uses env vars directly)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

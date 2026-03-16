@@ -1,16 +1,16 @@
 """
 Nesso Content Engine V20 — Nesso Reveal Frame Generation
 
-Renders the final reveal sequence:
-1. One-liner about Nesso (text bubble or overlay)
-2. Agent Mode mention
-3. Nesso logo + "Free on the App Store"
-4. Black screen + "Link in bio"
+Conversion-optimized 3-frame reveal (~5 seconds):
+1. Single feature line tied to the text conversation emotion
+2. Nesso logo + "it's free"
+3. @nesso.app CTA
 """
 
 import logging
 import os
 import subprocess
+import textwrap
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -24,10 +24,12 @@ from config import (
     HEIGHT,
     NESSO_LOGO_PATH,
     REVEAL_DURATION,
+    REVEAL_TEXT_DURATION,
     TEXT_COLOR,
     WIDTH,
-    get_reveal_lines,
+    get_reveal_line,
 )
+from verify import get_duration
 
 log = logging.getLogger(__name__)
 
@@ -73,25 +75,52 @@ def _draw_centered_text(
     return int(y + text_height + 10)
 
 
-def render_reveal_frame_text(line1: str, line2: str) -> Image.Image:
-    """Render the text reveal frame (one-liner + agent mode mention)."""
+def _draw_centered_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    y: int,
+    font: ImageFont.FreeTypeFont,
+    fill: tuple[int, int, int] = TEXT_COLOR,
+    max_width: int = 900,
+) -> int:
+    """Draw text centered, wrapping if it exceeds max_width."""
+    # Check if text fits in one line
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+
+    if text_width <= max_width:
+        return _draw_centered_text(draw, text, y, font, fill)
+
+    # Wrap text
+    avg_char_width = font.getlength("m")
+    chars_per_line = max(1, int(max_width / avg_char_width))
+    lines = textwrap.wrap(text, width=chars_per_line)
+
+    line_height = font.size + 8
+    for line in lines:
+        _draw_centered_text(draw, line, y, font, fill)
+        y += line_height
+
+    return y
+
+
+def render_reveal_frame_text(line: str) -> Image.Image:
+    """Render the single feature line centered on screen."""
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    font_main = _get_font(36, bold=True)
-    font_sub = _get_font(28)
+    font = _get_font(38, bold=True)
 
     # Center vertically
-    y_start = HEIGHT // 2 - 60
+    y_start = HEIGHT // 2 - 30
 
-    _draw_centered_text(draw, line1, y_start, font_main)
-    _draw_centered_text(draw, line2, y_start + 60, font_sub, fill=(180, 180, 180))
+    _draw_centered_wrapped_text(draw, line, y_start, font, max_width=900)
 
     return img
 
 
 def render_reveal_frame_logo() -> Image.Image:
-    """Render the logo + 'Free on the App Store' frame."""
+    """Render the logo + 'it's free' frame."""
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
@@ -104,43 +133,45 @@ def render_reveal_frame_logo() -> Image.Image:
 
             # Center logo
             logo_x = (WIDTH - logo_size) // 2
-            logo_y = HEIGHT // 2 - logo_size // 2 - 40
+            logo_y = HEIGHT // 2 - logo_size // 2 - 60
 
             # Paste with alpha
             img.paste(logo, (logo_x, logo_y), logo)
         except Exception as e:
             log.warning("Could not load logo: %s", e)
-            # Draw placeholder circle
             logo_x = (WIDTH - logo_size) // 2
-            logo_y = HEIGHT // 2 - logo_size // 2 - 40
+            logo_y = HEIGHT // 2 - logo_size // 2 - 60
             draw.ellipse(
                 (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
                 fill=(0, 122, 255),
             )
     else:
-        # Placeholder
         logo_x = (WIDTH - logo_size) // 2
-        logo_y = HEIGHT // 2 - logo_size // 2 - 40
+        logo_y = HEIGHT // 2 - logo_size // 2 - 60
         draw.ellipse(
             (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
             fill=(0, 122, 255),
         )
 
-    # "Free on the App Store" text below logo
-    font = _get_font(30)
-    text_y = HEIGHT // 2 + logo_size // 2
-    _draw_centered_text(draw, "Free on the App Store", text_y, font)
+    # "it's free" — casual, high-converting CTA
+    font_main = _get_font(36, bold=True)
+    text_y = HEIGHT // 2 + logo_size // 2 - 20
+    _draw_centered_text(draw, "it's free", text_y, font_main)
+
+    # Small "Nesso" below for searchability
+    font_small = _get_font(24)
+    _draw_centered_text(draw, "Nesso", text_y + 50, font_small, fill=(142, 142, 147))
 
     return img
 
 
 def render_reveal_frame_black() -> Image.Image:
-    """Render the final black screen with 'Link in bio'."""
+    """Render the final CTA screen with @nesso.app handle."""
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    font = _get_font(34, bold=True)
-    _draw_centered_text(draw, "Link in bio", HEIGHT // 2 - 20, font)
+    font = _get_font(36, bold=True)
+    _draw_centered_text(draw, "@nesso.app", HEIGHT // 2 - 20, font)
 
     return img
 
@@ -148,14 +179,14 @@ def render_reveal_frame_black() -> Image.Image:
 def render_nesso_reveal(output_path: str) -> str:
     """
     Render the complete Nesso reveal sequence as a video.
-    3 frames: text reveal → logo → black screen.
-    Total duration: ~4 seconds.
+    3 frames: feature line → logo + "it's free" → @nesso.app
+    Total duration: ~5 seconds.
     """
     temp_dir = os.path.dirname(output_path)
-    line1, line2 = get_reveal_lines()
+    line = get_reveal_line()
 
     # Render frames
-    frame_text = render_reveal_frame_text(line1, line2)
+    frame_text = render_reveal_frame_text(line)
     frame_logo = render_reveal_frame_logo()
     frame_black = render_reveal_frame_black()
 
@@ -172,18 +203,19 @@ def render_nesso_reveal(output_path: str) -> str:
     concat_file = os.path.join(temp_dir, "reveal_concat.txt")
     with open(concat_file, "w") as f:
         f.write(f"file '{path_text}'\n")
-        f.write(f"duration 1.5\n")  # Text reveal
+        f.write(f"duration {REVEAL_TEXT_DURATION}\n")
         f.write(f"file '{path_logo}'\n")
-        f.write(f"duration {REVEAL_DURATION}\n")  # Logo
+        f.write(f"duration {REVEAL_DURATION}\n")
         f.write(f"file '{path_black}'\n")
-        f.write(f"duration {BLACK_SCREEN_DURATION}\n")  # Link in bio
+        f.write(f"duration {BLACK_SCREEN_DURATION}\n")
         f.write(f"file '{path_black}'\n")  # Repeat last to avoid black frame
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-f", "concat", "-safe", "0",
         "-i", concat_file,
-        "-vf", f"fps={FPS}",
+        "-r", str(FPS),  # Force matching framerate for reliable concat
+        "-vf", f"fps={FPS},scale={WIDTH}:{HEIGHT}",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-preset", FFMPEG_PRESET,
@@ -202,5 +234,14 @@ def render_nesso_reveal(output_path: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"Reveal render failed: {result.stderr[-500:]}")
 
-    log.info("Reveal rendered: %s", output_path)
+    # Verify reveal duration
+    reveal_dur = get_duration(output_path)
+    expected_dur = REVEAL_TEXT_DURATION + REVEAL_DURATION + BLACK_SCREEN_DURATION
+    if reveal_dur < expected_dur * 0.8:
+        log.warning(
+            "Reveal duration %.1fs is shorter than expected %.1fs",
+            reveal_dur, expected_dur,
+        )
+
+    log.info("Reveal rendered: %s (%.1fs)", output_path, reveal_dur)
     return output_path

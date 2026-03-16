@@ -59,11 +59,19 @@ MORPH_DURATION = 0.3   # seconds
 MORPH_TRANSITION = "smoothleft"
 
 # ── Reveal ─────────────────────────────────────────────────────────────────
-REVEAL_DURATION = 1.5  # logo display seconds
-BLACK_SCREEN_DURATION = 1.0  # "link in bio" screen
+REVEAL_TEXT_DURATION = 2.0   # single feature line
+REVEAL_DURATION = 2.0        # logo + "it's free"
+BLACK_SCREEN_DURATION = 1.0  # @nesso.app CTA
+
+# ── ElevenLabs TTS Voiceover ─────────────────────────────────────────────
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "pFZP5JQG7iQjIQuC4Bku")
+VOICEOVER_ENABLED = True
+VOICEOVER_VOLUME = 0.85       # voiceover is primary audio during story
+MUSIC_VOLUME_WITH_VO = 0.12   # lower music when voiceover is playing
 
 # ── Music ──────────────────────────────────────────────────────────────────
-MUSIC_VOLUME_RATIO = 0.18  # 18% of hook volume
+MUSIC_VOLUME_RATIO = 0.18  # 18% of hook volume (used when no voiceover)
 IMESSAGE_SFX_VOLUME_RATIO = 0.10  # 10% of hook volume
 IMESSAGE_SFX_FADE_AFTER = 3  # only play sfx on first N messages
 
@@ -120,31 +128,23 @@ def get_random_hook_query(exclude: list[str] | None = None) -> str:
     return random.choice(available)
 
 
-# ── Nesso Reveal Variations ───────────────────────────────────────────────
+# ── Nesso Reveal — Single Feature Lines (conversion-optimized) ───────────
+# Each line ties directly to the friendship drift emotion in the text convo.
+# Single feature > feature list. Feels like a personal recommendation.
 NESSO_REVEAL_LINES = [
-    ("there's an app that reminds you before this happens",
-     "it even writes the message for you"),
-    ("Nesso literally texts you before your friendships go silent",
-     "free. no account needed."),
-    ("this is why I downloaded Nesso",
-     "it reminds me to text people before it's too late"),
-    ("imagine getting a reminder before you forget your best friend exists",
-     "that's Nesso"),
-    ("Nesso caught me before I became the friend who disappeared",
-     "it even suggests what to say"),
-    ("one reminder could have saved this conversation",
-     "Nesso makes sure you don't forget"),
-    ("your friendships don't have to end like this",
-     "Nesso sends reminders + AI message suggestions"),
-    ("before the group chat dies... there's Nesso",
-     "free on the App Store"),
+    "there's an app that reminds you before this happens",
+    "Nesso caught me before I became the friend who disappeared",
+    "one reminder could have saved this conversation",
+    "imagine getting a reminder before you forget your best friend exists — that's Nesso",
+    "this is why I downloaded Nesso — it texts you before it's too late",
+    "Nesso literally nudges you before your friendships go silent",
 ]
 
 _last_reveal_index = -1
 
 
-def get_reveal_lines() -> tuple[str, str]:
-    """Rotate through reveal lines. Never repeat consecutively."""
+def get_reveal_line() -> str:
+    """Pick a single reveal line. Never repeat consecutively."""
     global _last_reveal_index
     available = list(range(len(NESSO_REVEAL_LINES)))
     if _last_reveal_index >= 0:
