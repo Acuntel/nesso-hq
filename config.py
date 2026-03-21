@@ -117,22 +117,29 @@ HOOK_SEARCH_QUERIES = [
     "dashcam near miss compilation",
     "rally car crash spectators",
     "motorcycle close call highway",
+    "truck near miss compilation dashcam",
     # Extreme Heights
     "cliff jumping gone wrong",
     "base jump fail",
     "bungee jump bridge extreme",
     "rock climbing fall caught on camera",
     "boulder falling off cliff",
+    "wingsuit flying near miss",
+    "glass bridge crack prank",
     # Explosions & Destruction
     "building demolition explosion",
     "fireworks fail compilation",
     "controlled explosion slow motion",
+    "gender reveal explosion fail",
+    "satisfying building implosion",
     # Extreme Sports
     "ski jump crash compilation",
     "big wave surfing wipeout",
     "snowboard fail mountain",
     "parkour fail rooftop",
     "skateboard mega ramp crash",
+    "BMX massive crash compilation",
+    "wakeboarding fail compilation",
     # Nature & Animals
     "lightning strike caught on camera",
     "bear charges at camera",
@@ -140,12 +147,37 @@ HOOK_SEARCH_QUERIES = [
     "animal fight caught on camera wild",
     "ocean wave destroys beach",
     "tornado caught on camera close",
+    "volcano eruption close up footage",
+    "shark encounter caught on gopro",
+    # Food & Cooking Fails
+    "cooking fail fire kitchen",
+    "gordon ramsay disgusting food",
+    "satisfying food cutting compilation",
+    "cake decorating fail vs expectation",
+    "street food satisfying compilation",
+    # Gaming & Internet Culture
+    "most insane gaming moment ever",
+    "streamer freakout compilation",
+    "speedrun impossible trick shot",
+    "VR fail compilation hilarious",
+    # Sports Highlights
+    "most insane sports play ever",
+    "crowd reaction incredible goal",
+    "last second buzzer beater compilation",
+    "referee worst call ever",
+    # Satisfying & Oddly Satisfying
+    "most satisfying video compilation",
+    "hydraulic press crushing things",
+    "perfect fit satisfying compilation",
+    "domino chain reaction incredible",
     # Viral / AI / Unbelievable
     "most insane video on the internet",
     "AI generated video unbelievable",
     "impossible moments caught on camera",
     "luckiest people alive compilation",
     "one in a million caught on camera",
+    "security camera unbelievable footage",
+    "drone footage incredible discovery",
 ]
 
 
@@ -197,16 +229,24 @@ def get_reveal_line() -> str:
 def get_hook_category(query: str) -> str:
     """Infer hook category from search query for script bridge line."""
     q = query.lower()
-    if any(w in q for w in ["crash", "dashcam", "near miss", "close call"]):
+    if any(w in q for w in ["crash", "dashcam", "near miss", "close call", "truck"]):
         return "crash"
-    if any(w in q for w in ["cliff", "jump", "base jump", "bungee", "climbing", "fall", "boulder"]):
+    if any(w in q for w in ["cliff", "jump", "base jump", "bungee", "climbing", "fall", "boulder", "wingsuit", "glass bridge"]):
         return "extreme_heights"
-    if any(w in q for w in ["explosion", "demolition", "fireworks"]):
+    if any(w in q for w in ["explosion", "demolition", "fireworks", "gender reveal", "implosion"]):
         return "explosion"
-    if any(w in q for w in ["ski", "surfing", "snowboard", "parkour", "skateboard"]):
+    if any(w in q for w in ["ski", "surfing", "snowboard", "parkour", "skateboard", "bmx", "wakeboard"]):
         return "extreme_sports"
-    if any(w in q for w in ["lightning", "bear", "dog", "animal", "wave", "tornado", "ocean"]):
+    if any(w in q for w in ["lightning", "bear", "dog", "animal", "wave", "tornado", "ocean", "volcano", "shark"]):
         return "nature"
+    if any(w in q for w in ["cooking", "food", "gordon", "cake", "kitchen", "street food"]):
+        return "viral"
+    if any(w in q for w in ["gaming", "streamer", "speedrun", "vr fail"]):
+        return "viral"
+    if any(w in q for w in ["sports", "goal", "buzzer", "referee"]):
+        return "extreme_sports"
+    if any(w in q for w in ["satisfying", "hydraulic", "domino", "perfect fit"]):
+        return "viral"
     return "viral"
 
 

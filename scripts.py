@@ -188,6 +188,52 @@ RULES:
 - Each message is 1-2 short sentences. NO paragraphs.
 - The conversation must make the viewer want to text their friend IMMEDIATELY
 - Use current slang and meme language naturally — don't force it
+
+=== EXAMPLES OF PERFECT 10/10 SCRIPTS ===
+
+EXAMPLE 1 (scroll-stopper opener → specific gut-punch → unresolved):
+[
+  {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 2.5},
+  {"sender": "best friend", "text": "that's not true lol", "delay": 1.5},
+  {"sender": "me", "text": "ok name 5 people you've actually TALKED to this month. not texted. talked.", "delay": 2.5},
+  {"sender": "best friend", "text": "...", "delay": 2.5},
+  {"sender": "me", "text": "exactly", "delay": 1.5},
+  {"sender": "me", "text": "I just realized the last time I called someone who wasn't my mom was in february", "delay": 3.0},
+  {"sender": "best friend", "text": "ok that's actually insane when you say it like that", "delay": 2.0},
+  {"sender": "me", "text": "we went from 3 hour FaceTime calls to not even knowing each other's ringtone", "delay": 3.0},
+  {"sender": "system", "text": "Read 1:23 AM", "delay": 3.0}
+]
+
+EXAMPLE 2 (chaotic energy → specific memory → painful silence):
+[
+  {"sender": "me", "text": "ok new fear just dropped", "delay": 1.5},
+  {"sender": "best friend", "text": "what now", "delay": 1.2},
+  {"sender": "me", "text": "I just looked at my camera roll and the last pic I have with my best friend from high school is from 2021", "delay": 3.0},
+  {"sender": "best friend", "text": "who marcus?", "delay": 1.5},
+  {"sender": "me", "text": "yeah. we literally said 'friends forever' at graduation", "delay": 2.5},
+  {"sender": "me", "text": "forever lasted about 2 years", "delay": 2.0},
+  {"sender": "best friend", "text": "did something happen or", "delay": 1.5},
+  {"sender": "me", "text": "that's the worst part. nothing happened. we just stopped.", "delay": 3.0},
+  {"sender": "best friend", "text": "...", "delay": 2.5},
+  {"sender": "me", "text": "and neither of us has said a word about it", "delay": 2.5},
+  {"sender": "system", "text": "Delivered", "delay": 3.0}
+]
+
+EXAMPLE 3 (meme format opener → uncomfortable truth → left on read):
+[
+  {"sender": "me", "text": "pov: you're the friend everyone slowly replaces and you just realized it", "delay": 2.5},
+  {"sender": "best friend", "text": "why would you send me this at midnight", "delay": 1.5},
+  {"sender": "me", "text": "because I just saw emma's story and she's with people I've never even met", "delay": 2.5},
+  {"sender": "me", "text": "we used to be inseparable. now I don't even know her friends' names", "delay": 2.5},
+  {"sender": "best friend", "text": "tbh that happens to everyone after college", "delay": 2.0},
+  {"sender": "me", "text": "does that make it hurt less?", "delay": 2.0},
+  {"sender": "best friend", "text": "no", "delay": 1.5},
+  {"sender": "me", "text": "the wild part is she probably doesn't even know she replaced me. it just happened.", "delay": 3.0},
+  {"sender": "system", "text": "typing...", "delay": 3.0},
+  {"sender": "system", "text": "Read 12:47 AM", "delay": 3.0}
+]
+
+Study these examples. The pattern is: MESSAGE 1 STOPS THE SCROLL. Then the conversation spirals into something painfully relatable. It ends unresolved.
 """
 
 

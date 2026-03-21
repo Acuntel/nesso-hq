@@ -26,6 +26,7 @@ from config import (
     generate_ig_caption,
     generate_ig_pin_comment,
 )
+from analytics import log_render
 from hooks import get_full_hook
 from morph import morph_and_concat
 from music import download_background_music, download_psych_sfx
@@ -243,6 +244,17 @@ def render_single_video(
 
         # Clean up on failure
         cleanup_temp_files(render_dir)
+
+    # Log to analytics
+    log_render(
+        hook_query=result.get("hook_query", ""),
+        hook_category=hook_category if "hook_category" in dir() else "",
+        hook_description=result.get("hook_description", ""),
+        script_length=len(messages) if "messages" in dir() else 0,
+        duration=result.get("duration", 0),
+        success=result["error"] is None,
+        error=result.get("error", ""),
+    )
 
     return result
 

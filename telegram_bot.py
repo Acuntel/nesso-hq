@@ -2,9 +2,10 @@
 Nesso Content Engine V20 — Telegram Bot Interface
 
 Commands:
-  /make      — Generate 1 video
-  /make N    — Generate batch of N videos (max 10)
-  /status    — Show pipeline health
+  /make [count]        — Generate 1-10 videos
+  /theme <topic>       — Generate video with specific emotional angle
+  /status              — Show pipeline health
+  /stats               — Show render analytics
 """
 
 import logging
@@ -19,6 +20,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from analytics import get_stats
 from pipeline import render_batch, render_single_video
 
 log = logging.getLogger(__name__)
@@ -29,17 +31,105 @@ _last_error: str | None = None
 _total_renders: int = 0
 _total_failures: int = 0
 
+# Theme → hook query mapping for /theme command
+THEME_QUERIES = {
+    "loneliness": "most alone you've ever felt compilation",
+    "birthday": "forgot friend birthday reaction",
+    "groupchat": "group chat dying meme compilation",
+    "nostalgia": "childhood best friend memories compilation",
+    "college": "college friends drifting apart graduation",
+    "ghosting": "friend ghosted me story time",
+    "moving": "moving away from friends emotional",
+    "phone": "phone call vs texting friendship decline",
+    "social": "social media fake friends compilation",
+    "growing": "growing apart from friends after 25",
+    "replaced": "being replaced by new friends story",
+    "distance": "long distance friendship struggle",
+}
+
+
+async def _send_video_result(update, result, video_num=""):
+    """Send a completed video with all captions as separate messages."""
+    global _total_renders, _last_render_time
+
+    if result["error"]:
+        global _total_failures, _last_error
+        _total_failures += 1
+        _last_error = result["error"]
+        await update.message.reply_text(
+            f"❌ {video_num}Video failed\n\n"
+            f"**Stage:** Pipeline error\n"
+            f"**Error:** {result['error'][:500]}\n\n"
+            f"Hook query: {result.get('hook_query', 'N/A')}"
+        )
+        return
+
+    _total_renders += 1
+    _last_render_time = time.time()
+
+    output_path = result["output_path"]
+    duration = result["duration"]
+
+    # Message 1: The video file
+    try:
+        with open(output_path, "rb") as video_file:
+            await update.message.reply_video(
+                video=video_file,
+                caption=f"{video_num}Nesso Content V20 — {duration:.0f}s",
+                supports_streaming=True,
+            )
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ {video_num}Video rendered but failed to send: {e}"
+        )
+        return
+
+    # Message 2: TikTok caption — clean copy-paste
+    await update.message.reply_text(
+        f"⬇️ TIKTOK — copy below ⬇️",
+    )
+    await update.message.reply_text(
+        result["tiktok_caption"],
+        parse_mode=None,
+    )
+
+    # Message 3: IG caption — clean copy-paste
+    await update.message.reply_text(
+        f"⬇️ INSTAGRAM CAPTION — copy below ⬇️",
+    )
+    await update.message.reply_text(
+        result["ig_caption"],
+        parse_mode=None,
+    )
+
+    # Message 4: IG pin comment — separate for easy copy
+    if result.get("ig_pin_comment"):
+        await update.message.reply_text(
+            f"📌 INSTAGRAM PIN COMMENT — copy below 📌",
+        )
+        await update.message.reply_text(
+            result["ig_pin_comment"],
+            parse_mode=None,
+        )
+
+    # Clean up the video file
+    try:
+        os.remove(output_path)
+        render_dir = os.path.dirname(output_path)
+        if os.path.isdir(render_dir) and "render_" in render_dir:
+            import shutil
+            shutil.rmtree(render_dir, ignore_errors=True)
+    except OSError:
+        pass
+
 
 async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /make [count] command."""
-    global _last_render_time, _last_error, _total_renders, _total_failures
-
-    # Parse count from args
     count = 1
     if context.args:
         try:
             count = int(context.args[0])
-            count = max(1, min(count, 10))  # Clamp to 1-10
+            count = max(1, min(count, 10))
         except ValueError:
             await update.message.reply_text("Usage: /make or /make <number 1-10>")
             return
@@ -60,81 +150,80 @@ async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for i, result in enumerate(results):
         video_num = f"[{i+1}/{count}] " if count > 1 else ""
-
-        if result["error"]:
-            _total_failures += 1
-            _last_error = result["error"]
-            await update.message.reply_text(
-                f"❌ {video_num}Video failed\n\n"
-                f"**Stage:** Pipeline error\n"
-                f"**Error:** {result['error'][:500]}\n\n"
-                f"Hook query: {result.get('hook_query', 'N/A')}"
-            )
-            continue
-
-        _total_renders += 1
-        _last_render_time = time.time()
-
-        output_path = result["output_path"]
-        duration = result["duration"]
-
-        # Message 1: The video file
-        try:
-            with open(output_path, "rb") as video_file:
-                await update.message.reply_video(
-                    video=video_file,
-                    caption=f"{video_num}Nesso Content V20 — {duration:.0f}s",
-                    supports_streaming=True,
-                )
-        except Exception as e:
-            await update.message.reply_text(
-                f"❌ {video_num}Video rendered but failed to send: {e}"
-            )
-            continue
-
-        # Message 2: TikTok caption — clean copy-paste
-        await update.message.reply_text(
-            f"⬇️ TIKTOK — copy below ⬇️",
-        )
-        await update.message.reply_text(
-            result["tiktok_caption"],
-            parse_mode=None,
-        )
-
-        # Message 3: IG caption — clean copy-paste
-        await update.message.reply_text(
-            f"⬇️ INSTAGRAM CAPTION — copy below ⬇️",
-        )
-        await update.message.reply_text(
-            result["ig_caption"],
-            parse_mode=None,
-        )
-
-        # Message 4: IG pin comment — separate for easy copy
-        if result.get("ig_pin_comment"):
-            await update.message.reply_text(
-                f"📌 INSTAGRAM PIN COMMENT — copy below 📌",
-            )
-            await update.message.reply_text(
-                result["ig_pin_comment"],
-                parse_mode=None,
-            )
-
-        # Clean up the video file
-        try:
-            os.remove(output_path)
-            # Also remove the render temp dir
-            render_dir = os.path.dirname(output_path)
-            if os.path.isdir(render_dir) and "render_" in render_dir:
-                import shutil
-                shutil.rmtree(render_dir, ignore_errors=True)
-        except OSError:
-            pass
+        await _send_video_result(update, result, video_num)
 
     await update.message.reply_text(
         f"✅ Batch complete in {elapsed:.0f}s — "
         f"{sum(1 for r in results if not r['error'])}/{count} successful"
     )
+
+
+async def cmd_theme(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /theme <topic> — generate video with a specific emotional angle."""
+    if not context.args:
+        themes_list = "\n".join(f"  /{t}" for t in sorted(THEME_QUERIES.keys()))
+        await update.message.reply_text(
+            f"🎯 Available themes:\n\n{themes_list}\n\n"
+            "Usage: /theme loneliness\n"
+            "Or: /theme birthday"
+        )
+        return
+
+    theme = context.args[0].lower().strip()
+
+    if theme not in THEME_QUERIES:
+        # Try partial match
+        matches = [t for t in THEME_QUERIES if theme in t]
+        if matches:
+            theme = matches[0]
+        else:
+            await update.message.reply_text(
+                f"❓ Unknown theme '{theme}'. Try /theme to see options."
+            )
+            return
+
+    query = THEME_QUERIES[theme]
+    await update.message.reply_text(
+        f"🎯 Generating video with theme: **{theme}**\n"
+        f"Hook query: {query}\n"
+        "This takes 1-3 minutes..."
+    )
+
+    start_time = time.time()
+    result = render_single_video(query=query)
+    elapsed = time.time() - start_time
+
+    await _send_video_result(update, result)
+    await update.message.reply_text(f"✅ Done in {elapsed:.0f}s")
+
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /stats — show render analytics."""
+    stats = get_stats()
+
+    lines = [
+        "📈 **Render Analytics**\n",
+        f"Total renders: {stats['total']} ({stats['successes']}✅ {stats['failures']}❌)",
+        f"Last 24h: {stats.get('last_24h', 0)} renders",
+        f"Avg duration: {stats.get('avg_duration', 0)}s",
+    ]
+
+    if stats.get("top_categories"):
+        lines.append("\n**Top categories:**")
+        for cat, cnt in stats["top_categories"]:
+            lines.append(f"  {cat}: {cnt} videos")
+
+    if stats.get("top_transitions"):
+        lines.append("\n**Top transitions:**")
+        for trans, cnt in stats["top_transitions"]:
+            lines.append(f"  {trans}: {cnt} uses")
+
+    if stats.get("recent_errors"):
+        lines.append("\n**Recent errors:**")
+        for ts, err in stats["recent_errors"]:
+            lines.append(f"  {ts[:16]}: {err[:100]}")
+
+    await update.message.reply_text("\n".join(lines))
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -159,7 +248,6 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _last_error:
         status_lines.append(f"\nLast error: {_last_error[:200]}")
 
-    # Check assets
     from config import PSYCH_SFX_PATH, NESSO_LOGO_PATH
     status_lines.append(f"\nAssets:")
     status_lines.append(f"  Logo: {'✅' if os.path.exists(NESSO_LOGO_PATH) else '❌'}")
@@ -174,9 +262,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎬 **Nesso Content Engine V20**\n\n"
         "Commands:\n"
         "/make — Generate 1 video\n"
-        "/make 5 — Generate 5 videos\n"
+        "/make 5 — Generate batch of 5\n"
+        "/theme — Generate with a specific vibe\n"
+        "/stats — Render analytics\n"
         "/status — Pipeline health\n\n"
-        "Each video: YouTube hook → PSYCH morph → fake text story → Nesso reveal"
+        "Each video: hook → PSYCH morph → text story → app walkthrough → CTA"
     )
 
 
@@ -186,6 +276,8 @@ def create_bot(token: str) -> Application:
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("make", cmd_make))
+    app.add_handler(CommandHandler("theme", cmd_theme))
+    app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("status", cmd_status))
 
     return app
