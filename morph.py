@@ -21,6 +21,7 @@ from config import (
     MUSIC_VOLUME_WITH_VO,
     VOICEOVER_VOLUME,
     WIDTH,
+    get_morph_transition,
 )
 from verify import get_duration
 
@@ -63,8 +64,12 @@ def morph_and_concat(
     temp_dir = os.path.dirname(output_path)
 
     # ── STEP 1: Morph hook → story using xfade ─────────────────────────
-    # For fadeblack, use a slightly longer transition for smooth visual
-    effective_morph_dur = MORPH_DURATION if MORPH_TRANSITION != "fadeblack" else max(MORPH_DURATION, 0.5)
+    # Pick a transition from the rotation pool
+    transition = get_morph_transition()
+    log.info("Using morph transition: %s", transition)
+    # For fade transitions, use a slightly longer duration for smooth visual
+    is_fade = transition.startswith("fade")
+    effective_morph_dur = max(MORPH_DURATION, 0.5) if is_fade else MORPH_DURATION
     morph_offset = max(0, hook_dur - effective_morph_dur / 2)
     morphed_video = os.path.join(temp_dir, "morphed_v.mp4")
 
@@ -76,7 +81,7 @@ def morph_and_concat(
         (
             f"[0:v]setpts=PTS-STARTPTS[v0];"
             f"[1:v]setpts=PTS-STARTPTS[v1];"
-            f"[v0][v1]xfade=transition={MORPH_TRANSITION}:"
+            f"[v0][v1]xfade=transition={transition}:"
             f"duration={effective_morph_dur}:offset={morph_offset}[vout]"
         ),
         "-map", "[vout]",

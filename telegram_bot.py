@@ -92,18 +92,33 @@ async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             continue
 
-        # Message 2: TikTok caption
+        # Message 2: TikTok caption — clean copy-paste
         await update.message.reply_text(
-            f"📱 **TIKTOK CAPTION** (copy-paste):\n\n"
-            f"{result['tiktok_caption']}",
-            parse_mode=None,  # Plain text for easy copying
+            f"⬇️ TIKTOK — copy below ⬇️",
         )
-
-        # Message 3: Instagram caption
         await update.message.reply_text(
-            f"{result['ig_caption']}",
+            result["tiktok_caption"],
             parse_mode=None,
         )
+
+        # Message 3: IG caption — clean copy-paste
+        await update.message.reply_text(
+            f"⬇️ INSTAGRAM CAPTION — copy below ⬇️",
+        )
+        await update.message.reply_text(
+            result["ig_caption"],
+            parse_mode=None,
+        )
+
+        # Message 4: IG pin comment — separate for easy copy
+        if result.get("ig_pin_comment"):
+            await update.message.reply_text(
+                f"📌 INSTAGRAM PIN COMMENT — copy below 📌",
+            )
+            await update.message.reply_text(
+                result["ig_pin_comment"],
+                parse_mode=None,
+            )
 
         # Clean up the video file
         try:

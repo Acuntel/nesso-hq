@@ -24,6 +24,7 @@ from config import (
     get_random_hook_query,
     generate_tiktok_caption,
     generate_ig_caption,
+    generate_ig_pin_comment,
 )
 from hooks import get_full_hook
 from morph import morph_and_concat
@@ -88,6 +89,7 @@ def render_single_video(
         "output_path": "",
         "tiktok_caption": "",
         "ig_caption": "",
+        "ig_pin_comment": "",
         "hook_query": "",
         "hook_description": "",
         "duration": 0,
@@ -225,9 +227,10 @@ def render_single_video(
                 story_theme = text
                 break
 
-        # Generate captions
-        result["tiktok_caption"] = generate_tiktok_caption(story_theme)
-        result["ig_caption"] = generate_ig_caption(story_theme)
+        # Generate captions with category-aware hashtags
+        result["tiktok_caption"] = generate_tiktok_caption(story_theme, hook_category)
+        result["ig_caption"] = generate_ig_caption(story_theme, hook_category)
+        result["ig_pin_comment"] = generate_ig_pin_comment()
 
         log.info(
             "[%s] Video complete: %s (%.1fs)",

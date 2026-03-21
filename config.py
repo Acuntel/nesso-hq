@@ -56,7 +56,36 @@ FFMPEG_TIMEOUT = 120  # seconds
 
 # ── Morph ──────────────────────────────────────────────────────────────────
 MORPH_DURATION = 0.3   # seconds
-MORPH_TRANSITION = "fadeblack"
+MORPH_TRANSITION = "fadeblack"  # default, but get_morph_transition() rotates
+
+# Transition pool — all tested safe on Railway FFmpeg
+MORPH_TRANSITIONS = [
+    "fadeblack",
+    "fadewhite",
+    "dissolve",
+    "wipeleft",
+    "wiperight",
+    "wipeup",
+    "circleopen",
+    "circleclose",
+    "radial",
+    "smoothleft",
+    "smoothright",
+    "smoothup",
+]
+
+_last_transition_index = -1
+
+
+def get_morph_transition() -> str:
+    """Pick a morph transition. Never repeat consecutively."""
+    global _last_transition_index
+    available = list(range(len(MORPH_TRANSITIONS)))
+    if _last_transition_index >= 0:
+        available.remove(_last_transition_index)
+    idx = random.choice(available)
+    _last_transition_index = idx
+    return MORPH_TRANSITIONS[idx]
 
 # ── Reveal ─────────────────────────────────────────────────────────────────
 REVEAL_TEXT_DURATION = 2.0   # single feature line
@@ -138,6 +167,16 @@ NESSO_REVEAL_LINES = [
     "imagine getting a reminder before you forget your best friend exists — that's Nesso",
     "this is why I downloaded Nesso — it texts you before it's too late",
     "Nesso literally nudges you before your friendships go silent",
+    "what if your phone reminded you to be a better friend",
+    "Nesso knew I was about to lose my best friend before I did",
+    "the app that won't let you become a stranger to the people you love",
+    "one notification. that's all it would have taken.",
+    "Nesso is basically a friendship insurance policy and it's free",
+    "your phone tracks your screen time but not your friendships — Nesso does",
+    "I almost let my best friendship die. Nesso didn't let me.",
+    "the difference between staying close and drifting apart is one reminder",
+    "Nesso pings you before the awkward 'hey stranger' text becomes necessary",
+    "friendships don't end with a fight. they end with silence. Nesso breaks the silence.",
 ]
 
 _last_reveal_index = -1
@@ -183,6 +222,16 @@ TIKTOK_NICHE_HASHTAGS = [
     "#bff", "#squad", "#drifting", "#textconvo",
 ]
 
+# Category-specific hashtags — mixed into captions based on hook type
+CATEGORY_HASHTAGS = {
+    "crash": ["#dashcam", "#carcrash", "#nearmiss", "#caughtoncamera", "#scary"],
+    "extreme_heights": ["#extreme", "#heights", "#adrenaline", "#nope", "#vertigo"],
+    "explosion": ["#explosion", "#demolition", "#slowmo", "#destruction", "#insane"],
+    "extreme_sports": ["#extremesports", "#fail", "#wipeout", "#sendit", "#gnarly"],
+    "nature": ["#nature", "#wildlife", "#caughtoncamera", "#scary", "#wow"],
+    "viral": ["#viral", "#unbelievable", "#impossible", "#lucky", "#oneinamillion"],
+}
+
 IG_HASHTAGS = [
     "#friendship", "#bestfriend", "#relatable", "#texting",
     "#groupchat", "#nesso", "#viral", "#reels", "#trending",
@@ -198,6 +247,10 @@ TIKTOK_CAPTION_HOOKS = [
     "the group chat has been QUIET lately 💀",
     "you're either the friend who disappeared or the friend who noticed",
     "pov: you realized you're the friend everyone forgot about",
+    "this video + this conversation = why I can't sleep at 2am",
+    "you scrolled past 47 people in your contacts today and texted none of them",
+    "friendships have a shelf life and nobody talks about it",
+    "the last message in your group chat is from 3 months ago and you know it",
 ]
 
 IG_CAPTION_HOOKS = [
@@ -206,18 +259,25 @@ IG_CAPTION_HOOKS = [
     "we all have that one friend we keep meaning to call",
     "screenshot this and send it to the friend you've been neglecting",
     "if you watched this and thought of someone... text them rn",
+    "the friend you're thinking of right now? they're thinking the same thing.",
+    "stop scrolling and go text them. seriously.",
+    "this is the sign you've been waiting for to reach out",
 ]
 
 IG_PIN_COMMENTS = [
     "when's the last time you actually called your best friend? 👀",
     "name the friend you haven't talked to in months 👇",
     "be honest... how long since you hung out with your closest friend?",
+    "tag them before this becomes your story too 💔",
+    "the group chat is watching this rn and nobody's saying anything 💀",
 ]
 
 
-def generate_tiktok_caption(story_theme: str = "") -> str:
+def generate_tiktok_caption(story_theme: str = "", hook_category: str = "") -> str:
     niche = random.sample(TIKTOK_NICHE_HASHTAGS, min(4, len(TIKTOK_NICHE_HASHTAGS)))
-    tags = " ".join(TIKTOK_HASHTAGS + niche)
+    cat_tags = CATEGORY_HASHTAGS.get(hook_category, [])
+    cat_sample = random.sample(cat_tags, min(2, len(cat_tags))) if cat_tags else []
+    tags = " ".join(TIKTOK_HASHTAGS + niche + cat_sample)
     if story_theme:
         caption = story_theme
     else:
@@ -225,14 +285,21 @@ def generate_tiktok_caption(story_theme: str = "") -> str:
     return f"{caption}\n\n{tags}"
 
 
-def generate_ig_caption(story_theme: str = "") -> str:
-    tags = " ".join(random.sample(IG_HASHTAGS, min(15, len(IG_HASHTAGS))))
+def generate_ig_caption(story_theme: str = "", hook_category: str = "") -> str:
+    cat_tags = CATEGORY_HASHTAGS.get(hook_category, [])
+    cat_sample = random.sample(cat_tags, min(3, len(cat_tags))) if cat_tags else []
+    base_tags = random.sample(IG_HASHTAGS, min(12, len(IG_HASHTAGS)))
+    tags = " ".join(base_tags + cat_sample)
     if story_theme:
         caption = story_theme
     else:
         caption = random.choice(IG_CAPTION_HOOKS)
-    pin_comment = random.choice(IG_PIN_COMMENTS)
-    return f"📱 IG CAPTION:\n{caption}\n\n{tags}\n\n📌 PIN THIS COMMENT:\n{pin_comment}"
+    return f"{caption}\n\n{tags}"
+
+
+def generate_ig_pin_comment() -> str:
+    """Generate a pin comment for Instagram — sent as a separate message."""
+    return random.choice(IG_PIN_COMMENTS)
 
 
 # ── Ensure temp dir exists ────────────────────────────────────────────────
