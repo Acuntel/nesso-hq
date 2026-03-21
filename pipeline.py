@@ -114,12 +114,18 @@ def render_single_video(
 
         # ── STEP 3.5: Generate voiceover (ElevenLabs TTS) ────────────
         vo_path, vo_durations = generate_voiceover(messages, render_dir)
-        if vo_path and vo_durations:
+        if vo_path and vo_durations and len(vo_durations) == len(messages):
             # Override message delays with TTS durations (synced to speech)
             for i, dur in enumerate(vo_durations):
-                if i < len(messages):
-                    messages[i]["delay"] = dur
+                messages[i]["delay"] = dur
             log.info("[%s] Voiceover: %.1fs total", render_id, sum(vo_durations))
+        elif vo_path and vo_durations:
+            # Length mismatch — VO track is out of sync, discard it
+            log.warning(
+                "[%s] Voiceover length mismatch: %d durations vs %d messages — discarding",
+                render_id, len(vo_durations), len(messages),
+            )
+            vo_path = ""
         else:
             vo_path = ""
             log.info("[%s] No voiceover — using text delays only", render_id)
@@ -211,9 +217,17 @@ def render_single_video(
         result["output_path"] = output_path
         result["duration"] = get_duration(output_path)
 
+        # Extract a story theme from the script for captions
+        story_theme = ""
+        for msg in messages:
+            text = msg.get("text", "")
+            if msg.get("sender") == "me" and len(text) > 30:
+                story_theme = text
+                break
+
         # Generate captions
-        result["tiktok_caption"] = generate_tiktok_caption()
-        result["ig_caption"] = generate_ig_caption()
+        result["tiktok_caption"] = generate_tiktok_caption(story_theme)
+        result["ig_caption"] = generate_ig_caption(story_theme)
 
         log.info(
             "[%s] Video complete: %s (%.1fs)",

@@ -97,17 +97,27 @@ def search_youtube(query: str) -> list[dict]:
 
     candidates = []
     for entry in results.get("entries", []):
-        views = entry.get("view_count", 0)
-        if views and views >= MIN_VIEWS_FOR_HEATMAP:
-            candidates.append({
-                "id": entry.get("id"),
-                "url": entry.get("url") or f"https://youtube.com/watch?v={entry['id']}",
-                "title": entry.get("title", ""),
-                "view_count": views,
-            })
+        vid_id = entry.get("id")
+        if not vid_id:
+            continue
+        views = entry.get("view_count") or 0
+        candidates.append({
+            "id": vid_id,
+            "url": entry.get("url") or f"https://youtube.com/watch?v={vid_id}",
+            "title": entry.get("title", ""),
+            "view_count": views,
+        })
 
+    # Prefer videos with enough views for heatmap, but keep all as fallback
+    high_view = [c for c in candidates if c["view_count"] >= MIN_VIEWS_FOR_HEATMAP]
+    if high_view:
+        high_view.sort(key=lambda x: x["view_count"], reverse=True)
+        log.info("Query '%s': %d candidates with %d+ views", query, len(high_view), MIN_VIEWS_FOR_HEATMAP)
+        return high_view
+
+    # Fall back to all candidates sorted by views (heatmap may still work)
     candidates.sort(key=lambda x: x["view_count"], reverse=True)
-    log.info("Query '%s': %d candidates with %d+ views", query, len(candidates), MIN_VIEWS_FOR_HEATMAP)
+    log.info("Query '%s': no high-view candidates, using %d total", query, len(candidates))
     return candidates
 
 
@@ -162,6 +172,9 @@ def download_hook_clip(
         "quiet": True,
         "no_warnings": True,
         "merge_output_format": "mp4",
+        "socket_timeout": 30,
+        "retries": 3,
+        "fragment_retries": 3,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:

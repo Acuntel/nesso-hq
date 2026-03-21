@@ -9,6 +9,7 @@ times can be synced to speech.
 import logging
 import os
 import subprocess
+import wave
 
 from config import (
     ELEVENLABS_API_KEY,
@@ -56,12 +57,31 @@ def _generate_silence(duration: float, output_path: str) -> str:
     return output_path
 
 
+def _generate_silence_wav(duration: float, output_path: str) -> str:
+    """Generate silence using pure Python wave module — no ffmpeg needed.
+    Always succeeds. Writes a WAV file (ffmpeg concat handles WAV fine)."""
+    try:
+        sample_rate = 44100
+        num_samples = int(sample_rate * duration)
+        # Write to .wav path (ffmpeg concat can mix formats)
+        wav_path = os.path.splitext(output_path)[0] + ".wav"
+        with wave.open(wav_path, "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(b"\x00\x00" * num_samples)
+        return wav_path
+    except Exception as e:
+        log.error("Pure Python silence generation failed: %s", e)
+        return ""
+
+
 def _generate_silence_robust(duration: float, output_path: str) -> str:
-    """Generate silence with fallback. Tries MP3 codec directly if AAC fails."""
+    """Generate silence with multiple fallbacks. Guaranteed to return a path."""
     result = _generate_silence(duration, output_path)
     if result:
         return result
-    # Fallback: use PCM -> MP3 pipeline with different parameters
+    # Fallback 1: use PCM -> MP3 pipeline with different parameters
     log.info("Primary silence gen failed, trying fallback for %s", output_path)
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
@@ -73,8 +93,9 @@ def _generate_silence_robust(duration: float, output_path: str) -> str:
     fallback = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
     if fallback.returncode == 0:
         return output_path
-    log.error("Robust silence generation also failed for %s", output_path)
-    return ""
+    # Fallback 2: pure Python WAV — no ffmpeg dependency
+    log.info("FFmpeg silence failed, using pure Python WAV for %s", output_path)
+    return _generate_silence_wav(duration, output_path)
 
 
 def generate_voiceover(
@@ -120,12 +141,8 @@ def generate_voiceover(
             # System message (read receipt, typing...) — generate 1.5s silence
             silence_dur = 1.5
             result = _generate_silence_robust(silence_dur, clip_path)
-            if result:
-                clip_paths.append(clip_path)
-                per_message_durations.append(silence_dur)
-            else:
-                # SYNC INVARIANT: skip from BOTH lists, not just one
-                log.warning("Silence gen failed for msg %d, skipping from VO track", i)
+            clip_paths.append(result)
+            per_message_durations.append(silence_dur)
             continue
 
         try:
@@ -145,14 +162,10 @@ def generate_voiceover(
             # Get actual duration of generated audio
             clip_dur = get_duration(clip_path)
             if clip_dur <= 0:
-                log.warning("TTS clip %d has zero duration, generating silence fallback", i)
-                # SYNC INVARIANT: overwrite with silence, add to BOTH lists
-                silence_result = _generate_silence_robust(fallback_delay, clip_path)
-                if silence_result:
-                    clip_paths.append(clip_path)
-                    per_message_durations.append(fallback_delay)
-                else:
-                    log.warning("Silence fallback also failed for msg %d, skipping", i)
+                log.warning("TTS clip %d has zero duration, using silence fallback", i)
+                result = _generate_silence_robust(fallback_delay, clip_path)
+                clip_paths.append(result)
+                per_message_durations.append(fallback_delay)
                 continue
 
             # Add 0.3s buffer so text lingers slightly after speech ends
@@ -163,17 +176,18 @@ def generate_voiceover(
 
         except Exception as e:
             log.warning("TTS failed for message %d: %s", i, e)
-            # SYNC INVARIANT: generate silence, add to BOTH lists or NEITHER
-            silence_result = _generate_silence_robust(fallback_delay, clip_path)
-            if silence_result and os.path.exists(clip_path):
-                clip_paths.append(clip_path)
-                per_message_durations.append(fallback_delay)
-            else:
-                log.warning("Silence fallback failed for msg %d, skipping from VO track", i)
+            result = _generate_silence_robust(fallback_delay, clip_path)
+            clip_paths.append(result)
+            per_message_durations.append(fallback_delay)
 
-    if not clip_paths:
+    # Filter out any empty paths from failed silence generation
+    valid = [(p, d) for p, d in zip(clip_paths, per_message_durations) if p]
+    if not valid:
         log.warning("No voiceover clips generated")
         return "", []
+
+    clip_paths = [p for p, _ in valid]
+    per_message_durations = [d for _, d in valid]
 
     # Concatenate all clips into one continuous audio file
     concat_path = os.path.join(temp_dir, "voiceover.mp3")

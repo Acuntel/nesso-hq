@@ -73,19 +73,36 @@ def generate_text_story(
     Call Claude API to generate the fake text conversation.
     Falls back to pre-written scripts if API fails.
     """
+    # Map hook categories to bridge approaches so the pivot feels natural
+    category_bridges = {
+        "crash": "Use the crash/impact as a metaphor — friendships crash too, just slower",
+        "extreme_heights": "Use the height/falling as a metaphor — the fall from close friends to strangers",
+        "explosion": "Use the destruction as a metaphor — how fast a friendship can blow up or fall apart",
+        "extreme_sports": "Use the risk/adrenaline angle — we take risks for thrills but won't risk a text to an old friend",
+        "nature": "Use the force-of-nature angle — friendship drift is as unstoppable as a wave or storm",
+        "viral": "Use the 'unbelievable' angle — it's unbelievable how fast we lose touch with people",
+    }
+    bridge_hint = category_bridges.get(hook_category, "React with shock, then pivot to friendship")
+
     user_message = (
         f"The hook video shows: {hook_description}\n"
-        f"Hook category: {hook_category}\n\n"
+        f"Hook category: {hook_category}\n"
+        f"Bridge approach: {bridge_hint}\n\n"
         "Generate a fake text conversation that:\n"
-        "1. Opens by reacting to this specific hook video\n"
-        "2. Pivots to an outlandish statement about friendship\n"
+        "1. Opens with a SHORT reaction to the hook video (1 message, generic is fine — 'bro that was INSANE' etc.)\n"
+        "2. Message 2: The OUTLANDISH pivot — use the bridge approach above to connect the hook to friendship\n"
         "3. Builds emotional tension through a specific, relatable friendship drift scenario\n"
         "4. Ends unresolved — someone leaves on read or the conversation trails off\n\n"
         "Return ONLY the JSON array. Nothing else."
     )
 
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        log.warning("ANTHROPIC_API_KEY not set — using fallback script")
+        return get_fallback_script()
+
     try:
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1500,
@@ -133,7 +150,8 @@ def get_fallback_script() -> list[dict]:
     try:
         with open(scripts_path) as f:
             all_scripts = json.load(f)
-        return random.choice(all_scripts)
+        script = random.choice(all_scripts)
+        return _validate_messages(script)
     except Exception as e:
         log.error("Failed to load fallback scripts: %s", e)
         # Ultimate fallback — hardcoded minimal script

@@ -3,6 +3,7 @@ Nesso Content Engine V20 — Background Music Sourcing
 Downloads royalty-free music from YouTube Audio Library via yt-dlp.
 """
 
+import glob
 import logging
 import os
 import random
@@ -23,6 +24,21 @@ MUSIC_SEARCH_QUERIES = [
     "soft emotional beat no copyright",
     "nostalgic acoustic guitar background",
 ]
+
+
+def _resolve_downloaded_file(output_path: str) -> None:
+    """Find the actual file yt-dlp created and rename it to output_path.
+    yt-dlp postprocessors change extensions unpredictably, so we glob
+    for any audio file matching the base name."""
+    if os.path.exists(output_path):
+        return
+
+    base_no_ext = os.path.splitext(output_path)[0]
+    candidates = glob.glob(base_no_ext + ".*")
+    audio_exts = {".mp3", ".m4a", ".webm", ".opus", ".ogg", ".wav", ".aac"}
+    candidates = [c for c in candidates if os.path.splitext(c)[1].lower() in audio_exts]
+    if candidates:
+        os.rename(candidates[0], output_path)
 
 
 def download_background_music(
@@ -70,10 +86,11 @@ def download_background_music(
         chosen = random.choice(candidates)
         url = chosen.get("url") or f"https://youtube.com/watch?v={chosen['id']}"
 
-        # Download audio only
+        # Download audio only — use %(ext)s so yt-dlp controls the extension
+        base_no_ext = os.path.splitext(output_path)[0]
         dl_opts = {
             "format": "bestaudio[ext=m4a]/bestaudio",
-            "outtmpl": output_path,
+            "outtmpl": base_no_ext + ".%(ext)s",
             "quiet": True,
             "no_warnings": True,
             "postprocessors": [{
@@ -83,24 +100,10 @@ def download_background_music(
             }],
         }
 
-        # yt-dlp may append .mp3 extension
         with yt_dlp.YoutubeDL(dl_opts) as ydl:
             ydl.download([url])
 
-        # Check both with and without .mp3 extension
-        actual_path = output_path
-        if not os.path.exists(actual_path):
-            mp3_path = output_path + ".mp3"
-            if os.path.exists(mp3_path):
-                os.rename(mp3_path, output_path)
-            else:
-                # Try without extension
-                base, _ = os.path.splitext(output_path)
-                for ext in [".mp3", ".m4a", ".webm", ".opus"]:
-                    candidate = base + ext
-                    if os.path.exists(candidate):
-                        os.rename(candidate, output_path)
-                        break
+        _resolve_downloaded_file(output_path)
 
         if verify_audio(output_path):
             log.info("Music downloaded: %s", output_path)
@@ -146,9 +149,11 @@ def download_psych_sfx(output_path: str) -> str:
             chosen = entries[0]
             url = chosen.get("url") or f"https://youtube.com/watch?v={chosen['id']}"
 
+            # Download audio — use %(ext)s so yt-dlp controls the extension
+            base_no_ext = os.path.splitext(output_path)[0]
             dl_opts = {
                 "format": "bestaudio[ext=m4a]/bestaudio",
-                "outtmpl": output_path,
+                "outtmpl": base_no_ext + ".%(ext)s",
                 "quiet": True,
                 "no_warnings": True,
                 "postprocessors": [{
@@ -161,13 +166,7 @@ def download_psych_sfx(output_path: str) -> str:
             with yt_dlp.YoutubeDL(dl_opts) as ydl:
                 ydl.download([url])
 
-            # Handle extension variations
-            if not os.path.exists(output_path):
-                for ext in [".mp3", ".m4a", ".webm"]:
-                    candidate = os.path.splitext(output_path)[0] + ext
-                    if os.path.exists(candidate):
-                        os.rename(candidate, output_path)
-                        break
+            _resolve_downloaded_file(output_path)
 
             if verify_audio(output_path):
                 log.info("Psych SFX downloaded: %s", output_path)

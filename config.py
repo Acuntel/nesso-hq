@@ -56,7 +56,7 @@ FFMPEG_TIMEOUT = 120  # seconds
 
 # ── Morph ──────────────────────────────────────────────────────────────────
 MORPH_DURATION = 0.3   # seconds
-MORPH_TRANSITION = "smoothleft"
+MORPH_TRANSITION = "fadeblack"
 
 # ── Reveal ─────────────────────────────────────────────────────────────────
 REVEAL_TEXT_DURATION = 2.0   # single feature line
@@ -191,17 +191,47 @@ IG_HASHTAGS = [
 ]
 
 
+TIKTOK_CAPTION_HOOKS = [
+    "tag someone you haven't texted in months 👀",
+    "this is everyone's friend group rn and nobody wants to admit it",
+    "if this doesn't make you text your best friend idk what will",
+    "the group chat has been QUIET lately 💀",
+    "you're either the friend who disappeared or the friend who noticed",
+    "pov: you realized you're the friend everyone forgot about",
+]
+
+IG_CAPTION_HOOKS = [
+    "this hit different at 2am 💔",
+    "tag your friend before it's too late",
+    "we all have that one friend we keep meaning to call",
+    "screenshot this and send it to the friend you've been neglecting",
+    "if you watched this and thought of someone... text them rn",
+]
+
+IG_PIN_COMMENTS = [
+    "when's the last time you actually called your best friend? 👀",
+    "name the friend you haven't talked to in months 👇",
+    "be honest... how long since you hung out with your closest friend?",
+]
+
+
 def generate_tiktok_caption(story_theme: str = "") -> str:
     niche = random.sample(TIKTOK_NICHE_HASHTAGS, min(4, len(TIKTOK_NICHE_HASHTAGS)))
     tags = " ".join(TIKTOK_HASHTAGS + niche)
-    caption = story_theme if story_theme else "tag someone you haven't texted in months 👀"
+    if story_theme:
+        caption = story_theme
+    else:
+        caption = random.choice(TIKTOK_CAPTION_HOOKS)
     return f"{caption}\n\n{tags}"
 
 
 def generate_ig_caption(story_theme: str = "") -> str:
     tags = " ".join(random.sample(IG_HASHTAGS, min(15, len(IG_HASHTAGS))))
-    caption = story_theme if story_theme else "this hit different at 2am 💔"
-    pin_comment = "when's the last time you actually called your best friend? 👀"
+    if story_theme:
+        caption = story_theme
+    else:
+        caption = random.choice(IG_CAPTION_HOOKS)
+    pin_comment = random.choice(IG_PIN_COMMENTS)
     return f"📱 IG CAPTION:\n{caption}\n\n{tags}\n\n📌 PIN THIS COMMENT:\n{pin_comment}"
 
 

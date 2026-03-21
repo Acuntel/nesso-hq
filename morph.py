@@ -63,7 +63,9 @@ def morph_and_concat(
     temp_dir = os.path.dirname(output_path)
 
     # ── STEP 1: Morph hook → story using xfade ─────────────────────────
-    morph_offset = max(0, hook_dur - MORPH_DURATION / 2)
+    # For fadeblack, use a slightly longer transition for smooth visual
+    effective_morph_dur = MORPH_DURATION if MORPH_TRANSITION != "fadeblack" else max(MORPH_DURATION, 0.5)
+    morph_offset = max(0, hook_dur - effective_morph_dur / 2)
     morphed_video = os.path.join(temp_dir, "morphed_v.mp4")
 
     xfade_cmd = [
@@ -75,7 +77,7 @@ def morph_and_concat(
             f"[0:v]setpts=PTS-STARTPTS[v0];"
             f"[1:v]setpts=PTS-STARTPTS[v1];"
             f"[v0][v1]xfade=transition={MORPH_TRANSITION}:"
-            f"duration={MORPH_DURATION}:offset={morph_offset}[vout]"
+            f"duration={effective_morph_dur}:offset={morph_offset}[vout]"
         ),
         "-map", "[vout]",
         "-c:v", "libx264",
