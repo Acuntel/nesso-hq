@@ -197,6 +197,7 @@ def render_single_video(
                 "force_original_aspect_ratio=decrease,"
                 f"pad={WIDTH}:{HEIGHT}:-1:-1:color=black"
             ),
+            "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
             "-preset", FFMPEG_PRESET,
             output_path,

@@ -59,18 +59,37 @@ def _generate_silence(duration: float, output_path: str) -> str:
 
 def _generate_silence_wav(duration: float, output_path: str) -> str:
     """Generate silence using pure Python wave module — no ffmpeg needed.
-    Always succeeds. Writes a WAV file (ffmpeg concat handles WAV fine)."""
+    Always succeeds. Writes a WAV then converts to MP3 so concat format stays consistent."""
     try:
         sample_rate = 44100
         num_samples = int(sample_rate * duration)
-        # Write to .wav path (ffmpeg concat can mix formats)
-        wav_path = os.path.splitext(output_path)[0] + ".wav"
+        wav_path = os.path.splitext(output_path)[0] + "_tmp.wav"
         with wave.open(wav_path, "w") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
             wf.setframerate(sample_rate)
             wf.writeframes(b"\x00\x00" * num_samples)
-        return wav_path
+
+        # Convert WAV → MP3 so all concat inputs share the same format
+        mp3_path = output_path  # caller expects .mp3
+        cmd = [
+            "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+            "-i", wav_path,
+            "-c:a", "libmp3lame", "-b:a", "64k",
+            mp3_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+        try:
+            os.remove(wav_path)
+        except OSError:
+            pass
+
+        if result.returncode == 0 and os.path.exists(mp3_path):
+            return mp3_path
+
+        # If even conversion fails, return the wav (better than nothing)
+        log.warning("WAV→MP3 conversion failed, silence may cause concat issues")
+        return ""
     except Exception as e:
         log.error("Pure Python silence generation failed: %s", e)
         return ""

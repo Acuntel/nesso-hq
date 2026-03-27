@@ -179,8 +179,10 @@ def _simple_concat_video(path_a: str, path_b: str, output_path: str) -> str:
     concat_file = os.path.join(temp_dir, "morph_concat.txt")
 
     with open(concat_file, "w") as f:
-        f.write(f"file '{path_a}'\n")
-        f.write(f"file '{path_b}'\n")
+        safe_a = path_a.replace("'", "'\\''")
+        safe_b = path_b.replace("'", "'\\''")
+        f.write(f"file '{safe_a}'\n")
+        f.write(f"file '{safe_b}'\n")
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
@@ -229,8 +231,10 @@ def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> 
     concat_file = os.path.join(temp_dir, "reveal_concat.txt")
 
     with open(concat_file, "w") as f:
-        f.write(f"file '{video_path}'\n")
-        f.write(f"file '{reveal_path}'\n")
+        safe_v = video_path.replace("'", "'\\''")
+        safe_r = reveal_path.replace("'", "'\\''")
+        f.write(f"file '{safe_v}'\n")
+        f.write(f"file '{safe_r}'\n")
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
