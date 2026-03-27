@@ -104,11 +104,11 @@ MUSIC_VOLUME_RATIO = 0.18  # 18% of hook volume (used when no voiceover)
 IMESSAGE_SFX_VOLUME_RATIO = 0.10  # 10% of hook volume
 IMESSAGE_SFX_FADE_AFTER = 3  # only play sfx on first N messages
 
-# ── Heatmap / Hook ─────────────────────────────────────────────────────────
-MIN_VIEWS_FOR_HEATMAP = 50000
-YOUTUBE_SEARCH_COUNT = 10
+# ── Pexels API (replaces YouTube for hooks — works from datacenter IPs) ────
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
+
+# ── Hook Settings ──────────────────────────────────────────────────────────
 MAX_HOOK_CANDIDATES = 3
-MAX_DOWNLOAD_HEIGHT = 720
 
 # ── Hook Search Queries ────────────────────────────────────────────────────
 HOOK_SEARCH_QUERIES = [

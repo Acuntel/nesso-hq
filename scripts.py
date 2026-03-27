@@ -38,59 +38,9 @@ def fetch_trending_memes() -> list[str]:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Fetch fresh trends via yt-dlp search (trending meme compilations)
-    trends = []
-    search_queries = [
-        "trending tiktok memes this week",
-        "viral tiktok sounds today",
-        "trending meme formats right now",
-    ]
-
-    try:
-        import yt_dlp
-        for query in search_queries[:2]:  # Only try 2 queries to stay fast
-            ydl_opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "extract_flat": True,
-                "default_search": f"ytsearch5:{query}",
-                "socket_timeout": 10,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                result = ydl.extract_info(query, download=False)
-                if result and "entries" in result:
-                    for entry in result["entries"]:
-                        title = entry.get("title", "")
-                        if title and len(title) > 10:
-                            trends.append(title)
-    except Exception as e:
-        log.debug("yt-dlp trending fetch failed (using fallback): %s", e)
-
-    # Also try a quick Google-style search for current memes
-    try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/videos",
-            params={
-                "part": "snippet",
-                "chart": "mostPopular",
-                "regionCode": "US",
-                "videoCategoryId": "23",  # Comedy
-                "maxResults": 10,
-                "key": os.environ.get("YOUTUBE_API_KEY", ""),
-            },
-            timeout=8,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            for item in data.get("items", []):
-                title = item.get("snippet", {}).get("title", "")
-                if title:
-                    trends.append(title)
-    except Exception:
-        pass  # YouTube API is optional, not critical
-
-    if not trends:
-        trends = _get_curated_meme_formats()
+    # Use curated meme formats — no external API needed
+    # (YouTube search/API calls fail from datacenter IPs)
+    trends = _get_curated_meme_formats()
 
     # Cache results
     try:

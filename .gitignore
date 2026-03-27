@@ -7,5 +7,6 @@ tmp/
 *.wav
 *.png
 !assets/nesso_logo.png
+!assets/psych_sfx.mp3
 .DS_Store
 venv/

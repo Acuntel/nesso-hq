@@ -1,195 +1,204 @@
 """
-Nesso Content Engine V20 — YouTube Hook Sourcing & Heatmap Extraction
+Nesso Content Engine V20 — Hook Video Sourcing (Pexels API)
+
+Downloads attention-grabbing video clips from Pexels (free stock video API).
+Replaces YouTube/yt-dlp which gets blocked on datacenter IPs.
 """
 
 import logging
 import os
+import random
 import subprocess
 
-import yt_dlp
+import requests
 
 from config import (
     FFMPEG_PRESET,
     FFMPEG_THREADS,
     FFMPEG_TIMEOUT,
     HEIGHT,
-    MAX_DOWNLOAD_HEIGHT,
     MAX_HOOK_CANDIDATES,
-    MIN_VIEWS_FOR_HEATMAP,
+    PEXELS_API_KEY,
     WIDTH,
-    YOUTUBE_SEARCH_COUNT,
 )
 from verify import verify_clip
 
 log = logging.getLogger(__name__)
 
+# ── Pexels search queries mapped to hook categories ──────────────────────
+# These return visually striking stock footage that grabs attention.
+PEXELS_HOOK_QUERIES = [
+    # Crashes & Action
+    "car crash",
+    "car accident",
+    "motorcycle racing",
+    "racing speed",
+    # Extreme Heights
+    "cliff jumping",
+    "skydiving",
+    "bungee jumping",
+    "rock climbing mountain",
+    "paragliding",
+    "base jumping",
+    # Explosions & Fire
+    "explosion",
+    "fireworks",
+    "fire burning",
+    "demolition",
+    # Extreme Sports
+    "surfing big wave",
+    "snowboarding",
+    "skateboarding tricks",
+    "parkour",
+    "bmx",
+    "wakeboarding",
+    "skiing downhill",
+    # Nature & Dramatic
+    "lightning storm",
+    "ocean waves crashing",
+    "tornado",
+    "volcano",
+    "avalanche",
+    "tsunami wave",
+    "waterfall",
+    # Satisfying & Viral
+    "slow motion",
+    "drone aerial city",
+    "underwater ocean",
+    "time lapse clouds",
+    "neon lights city",
+    "fast cars driving",
+    "roller coaster",
+]
 
-def get_most_replayed_moment(video_url: str) -> tuple[float, float]:
+
+def search_pexels(query: str) -> list[dict]:
     """
-    Extract the most replayed segment from a YouTube video using heatmap data.
-    Returns (start_seconds, end_seconds) of the peak moment.
-    Videos need 50K+ views to have heatmap data.
+    Search Pexels for video clips.
+    Returns list of dicts with 'id', 'url', 'download_url', 'title', 'duration', 'width', 'height'.
     """
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": False,
-    }
+    if not PEXELS_API_KEY:
+        log.error("PEXELS_API_KEY not set — cannot search for hooks")
+        return []
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(video_url, download=False)
-        duration = info.get("duration", 0)
-        heatmap = info.get("heatmap", None)
-
-        if not heatmap or not duration:
-            # FALLBACK: No heatmap — use first 15% of video (min 5s, max 10s)
-            end = max(5, min(duration * 0.15, 10))
-            log.info("No heatmap for %s, using first %.1fs", video_url, end)
-            return (0, end)
-
-        # Find the peak intensity segment
-        if isinstance(heatmap[0], dict):
-            # New format: {'start_time': float, 'end_time': float, 'value': float}
-            peak = max(heatmap, key=lambda x: x.get("value", 0))
-            peak_start = peak["start_time"]
-            peak_end = peak["end_time"]
-        else:
-            # Legacy format: [[position, intensity], ...]
-            peak = max(heatmap, key=lambda x: x[1])
-            peak_position = peak[0]
-            peak_start = peak_position * duration
-            peak_end = peak_start + min(duration * 0.05, 6)
-
-        # Expand window to capture full action — 3s before, 3s after
-        expanded_start = max(0, peak_start - 3)
-        expanded_end = min(duration, peak_end + 3)
-
-        # Enforce minimum 5s hook duration — widen symmetrically if too short
-        clip_dur = expanded_end - expanded_start
-        if clip_dur < 5:
-            deficit = 5 - clip_dur
-            expanded_start = max(0, expanded_start - deficit / 2)
-            expanded_end = min(duration, expanded_end + deficit / 2)
-
-        log.info(
-            "Heatmap peak for %s: %.1f-%.1fs (expanded: %.1f-%.1fs)",
-            video_url, peak_start, peak_end, expanded_start, expanded_end,
-        )
-        return (expanded_start, expanded_end)
-
-
-def search_youtube(query: str) -> list[dict]:
-    """
-    Search YouTube and return candidates filtered by view count.
-    Returns list of dicts with 'id', 'url', 'title', 'view_count'.
-    """
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": True,
-        "default_search": f"ytsearch{YOUTUBE_SEARCH_COUNT}",
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        results = ydl.extract_info(
-            f"ytsearch{YOUTUBE_SEARCH_COUNT}:{query}", download=False
+    try:
+        resp = requests.get(
+            "https://api.pexels.com/videos/search",
+            params={
+                "query": query,
+                "per_page": 15,
+                "orientation": "portrait",  # prefer vertical
+                "size": "medium",
+            },
+            headers={"Authorization": PEXELS_API_KEY},
+            timeout=15,
         )
 
-    candidates = []
-    for entry in results.get("entries", []):
-        vid_id = entry.get("id")
-        if not vid_id:
-            continue
-        views = entry.get("view_count") or 0
-        candidates.append({
-            "id": vid_id,
-            "url": entry.get("url") or f"https://youtube.com/watch?v={vid_id}",
-            "title": entry.get("title", ""),
-            "view_count": views,
-        })
+        if resp.status_code != 200:
+            log.warning("Pexels API returned %d: %s", resp.status_code, resp.text[:200])
+            # Try without orientation filter as fallback
+            resp = requests.get(
+                "https://api.pexels.com/videos/search",
+                params={"query": query, "per_page": 15, "size": "medium"},
+                headers={"Authorization": PEXELS_API_KEY},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                return []
 
-    # Prefer videos with enough views for heatmap, but keep all as fallback
-    high_view = [c for c in candidates if c["view_count"] >= MIN_VIEWS_FOR_HEATMAP]
-    if high_view:
-        high_view.sort(key=lambda x: x["view_count"], reverse=True)
-        log.info("Query '%s': %d candidates with %d+ views", query, len(high_view), MIN_VIEWS_FOR_HEATMAP)
-        return high_view
+        data = resp.json()
+        candidates = []
 
-    # Fall back to all candidates sorted by views (heatmap may still work)
-    candidates.sort(key=lambda x: x["view_count"], reverse=True)
-    log.info("Query '%s': no high-view candidates, using %d total", query, len(candidates))
-    return candidates
+        for video in data.get("videos", []):
+            duration = video.get("duration", 0)
+            if duration < 3 or duration > 120:
+                continue
+
+            # Find the best video file (prefer HD, avoid 4K to save bandwidth)
+            best_file = None
+            for vf in video.get("video_files", []):
+                quality = vf.get("quality", "")
+                w = vf.get("width", 0)
+                h = vf.get("height", 0)
+
+                if quality == "hd" or (w >= 720 and h >= 720):
+                    if best_file is None or h > best_file.get("height", 0):
+                        # Prefer taller (more vertical) files
+                        if h <= 1920:  # skip 4K
+                            best_file = vf
+
+            if not best_file:
+                # Take whatever we can get
+                files = video.get("video_files", [])
+                if files:
+                    best_file = files[0]
+
+            if best_file:
+                candidates.append({
+                    "id": video.get("id"),
+                    "url": video.get("url", ""),
+                    "download_url": best_file.get("link", ""),
+                    "title": video.get("url", "pexels video"),
+                    "duration": duration,
+                    "width": best_file.get("width", 0),
+                    "height": best_file.get("height", 0),
+                })
+
+        log.info("Pexels '%s': %d candidates", query, len(candidates))
+        return candidates
+
+    except Exception as e:
+        log.warning("Pexels search failed: %s", e)
+        return []
 
 
-def search_and_find_hook(query: str) -> tuple[str | None, float | None, float | None, str]:
-    """
-    Search YouTube for extreme content and return the most replayed moment.
-    Returns (url, start_time, end_time, description).
-    """
-    candidates = search_youtube(query)
-
-    if not candidates:
-        log.warning("No candidates found for query: %s", query)
-        return None, None, None, ""
-
-    # Try top candidates for heatmap availability
-    for candidate in candidates[:MAX_HOOK_CANDIDATES]:
-        url = candidate["url"]
-        try:
-            start, end = get_most_replayed_moment(url)
-            if start is not None:
-                desc = candidate.get("title", "extreme video")
-                log.info("Hook found: %s (%.1f-%.1fs) — %s", url, start, end, desc)
-                return url, start, end, desc
-        except Exception as e:
-            log.warning("Failed heatmap for %s: %s", url, e)
-            continue
-
-    # If no heatmap found, use highest-viewed and take first 6s
-    fallback = candidates[0]
-    log.info("No heatmap available, using first 6s of %s", fallback["url"])
-    return fallback["url"], 0, 6, fallback.get("title", "extreme video")
-
-
-def download_hook_clip(
-    url: str,
-    start_time: float,
-    end_time: float,
+def download_pexels_clip(
+    download_url: str,
     output_path: str,
+    max_duration: float = 15.0,
 ) -> str:
     """
-    Download ONLY the needed segment from YouTube.
-    Uses download_ranges to avoid downloading entire videos (Railway OOM fix).
+    Download a video clip from Pexels direct URL.
+    Trims to max_duration if needed.
     """
-    ydl_opts = {
-        "format": f"bestvideo[height<={MAX_DOWNLOAD_HEIGHT}][ext=mp4]+bestaudio[ext=m4a]/"
-                  f"best[height<={MAX_DOWNLOAD_HEIGHT}]",
-        "outtmpl": output_path,
-        "download_ranges": yt_dlp.utils.download_range_func(
-            None, [(start_time, end_time)]
-        ),
-        "force_keyframes_at_cuts": True,
-        "quiet": True,
-        "no_warnings": True,
-        "merge_output_format": "mp4",
-        "socket_timeout": 30,
-        "retries": 3,
-        "fragment_retries": 3,
-    }
+    # Download the raw file
+    raw_path = output_path + ".raw.mp4"
+    try:
+        resp = requests.get(download_url, stream=True, timeout=60)
+        resp.raise_for_status()
+        with open(raw_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+    except Exception as e:
+        raise RuntimeError(f"Pexels download failed: {e}")
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    if not os.path.exists(raw_path) or os.path.getsize(raw_path) < 10000:
+        raise RuntimeError("Pexels download produced empty file")
 
-    if not verify_clip(output_path):
-        raise RuntimeError(f"Hook clip verification failed: {output_path}")
+    # Trim to max_duration
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-i", raw_path,
+        "-t", str(max_duration),
+        "-c", "copy",
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    log.info("Hook clip downloaded: %s (%.1f-%.1fs)", output_path, start_time, end_time)
+    try:
+        os.remove(raw_path)
+    except OSError:
+        pass
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Clip trim failed: {result.stderr[-300:]}")
+
     return output_path
 
 
 def crop_to_vertical(input_path: str, output_path: str) -> str:
     """
-    Crop a horizontal video to 9:16 vertical.
+    Crop a video to 9:16 vertical.
     If already vertical, just scale to 1080x1920.
     """
     cmd = [
@@ -202,7 +211,7 @@ def crop_to_vertical(input_path: str, output_path: str) -> str:
         ),
         "-preset", FFMPEG_PRESET,
         "-an",  # Strip audio temporarily — we'll add it back in morph
-        "-t", "15",  # Safety cap — hooks should never be >15s
+        "-t", "15",  # Safety cap
         output_path,
     ]
 
@@ -217,7 +226,7 @@ def crop_to_vertical(input_path: str, output_path: str) -> str:
 
 
 def extract_hook_audio(input_path: str, output_path: str) -> str:
-    """Extract audio from the original hook clip (before cropping strips it)."""
+    """Extract audio from the hook clip (before cropping strips it)."""
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", input_path,
@@ -236,15 +245,35 @@ def get_full_hook(
     temp_dir: str,
 ) -> tuple[str, str, float, str]:
     """
-    Full hook pipeline: search → heatmap → download → crop → extract audio.
+    Full hook pipeline: search Pexels → download → crop → extract audio.
     Returns (vertical_clip_path, audio_path, duration, description).
     """
-    url, start, end, description = search_and_find_hook(query)
-    if url is None:
-        raise RuntimeError(f"No hook found for query: {query}")
+    # Map the incoming query to a Pexels-friendly search
+    pexels_query = _map_to_pexels_query(query)
+    candidates = search_pexels(pexels_query)
 
+    # If no results, try a broader search
+    if not candidates:
+        log.warning("No Pexels results for '%s', trying broader search", pexels_query)
+        broad_queries = ["extreme sports action", "dramatic slow motion", "intense nature"]
+        for bq in broad_queries:
+            candidates = search_pexels(bq)
+            if candidates:
+                break
+
+    if not candidates:
+        raise RuntimeError(f"No hook videos found for query: {query}")
+
+    # Pick a random candidate from top results (variety per render)
+    top = candidates[:MAX_HOOK_CANDIDATES]
+    chosen = random.choice(top)
+
+    description = f"Pexels video: {pexels_query}"
+    log.info("Hook chosen: id=%s, dur=%ds — %s", chosen["id"], chosen["duration"], description)
+
+    # Download the clip
     raw_clip = os.path.join(temp_dir, "hook_raw.mp4")
-    download_hook_clip(url, start, end, raw_clip)
+    download_pexels_clip(chosen["download_url"], raw_clip, max_duration=15)
 
     # Extract audio before cropping (crop strips audio)
     hook_audio = os.path.join(temp_dir, "hook_audio.m4a")
@@ -266,3 +295,58 @@ def get_full_hook(
     duration = get_duration(hook_vertical)
 
     return hook_vertical, hook_audio, duration, description
+
+
+def _map_to_pexels_query(youtube_query: str) -> str:
+    """
+    Map an existing YouTube-style hook query to a Pexels-friendly search.
+    Also works if the query is already Pexels-friendly.
+    """
+    q = youtube_query.lower()
+
+    # Direct keyword mapping
+    mappings = [
+        (["car crash", "dashcam", "near miss", "close call"], "car crash accident"),
+        (["motorcycle", "truck"], "motorcycle speed racing"),
+        (["cliff", "jumping gone wrong"], "cliff jumping ocean"),
+        (["base jump"], "skydiving extreme"),
+        (["bungee"], "bungee jumping"),
+        (["rock climbing", "boulder", "climbing fall"], "rock climbing mountain"),
+        (["wingsuit", "glass bridge"], "extreme heights vertigo"),
+        (["demolition", "building"], "demolition building"),
+        (["fireworks"], "fireworks night sky"),
+        (["explosion", "gender reveal"], "explosion fire"),
+        (["ski", "snowboard"], "snowboarding skiing mountain"),
+        (["surfing", "big wave", "wipeout"], "surfing big wave ocean"),
+        (["parkour"], "parkour urban"),
+        (["skateboard", "mega ramp"], "skateboarding tricks"),
+        (["bmx"], "bmx jump extreme"),
+        (["wakeboard"], "wakeboarding water"),
+        (["lightning"], "lightning storm dramatic"),
+        (["bear", "animal", "dog saves"], "wild animals nature"),
+        (["ocean wave", "tsunami"], "ocean waves crashing power"),
+        (["tornado"], "tornado storm dramatic"),
+        (["volcano"], "volcano eruption lava"),
+        (["shark"], "underwater ocean shark"),
+        (["cooking", "food", "gordon", "cake", "kitchen"], "cooking fire kitchen"),
+        (["gaming", "streamer", "speedrun", "vr"], "gaming esports"),
+        (["sports", "goal", "buzzer"], "sports goal celebration"),
+        (["satisfying", "hydraulic", "perfect fit"], "satisfying slow motion"),
+        (["domino"], "domino chain reaction"),
+        (["drone", "aerial"], "drone aerial view"),
+        (["insane", "impossible", "lucky", "one in a million"], "impossible amazing moment"),
+        (["security camera"], "surveillance camera footage"),
+        (["rally car"], "rally car racing dirt"),
+        (["roller coaster"], "roller coaster ride"),
+    ]
+
+    for keywords, pexels_query in mappings:
+        if any(kw in q for kw in keywords):
+            return pexels_query
+
+    # If no mapping found, just use the original query (Pexels handles most terms)
+    # Strip YouTube-specific phrases
+    cleaned = q.replace("caught on camera", "").replace("compilation", "")
+    cleaned = cleaned.replace("gone wrong", "").replace("fail", "")
+    cleaned = cleaned.replace("incredible", "").replace("insane", "extreme")
+    return cleaned.strip() or "extreme action"
