@@ -4,9 +4,9 @@ Nesso Content Engine V20 — Nesso Reveal Sequence
 Uses REAL app screenshots for the reveal, not Pillow fakes.
 Flow:
 1. Feature text line (2s)
-2. Real app screenshots with feature overlays (2s each)
-3. Logo + "it's free" (2s)
-4. @nesso.app CTA (1.5s)
+2. 2 app screenshots with pan (2.5s each = 5s)
+3. Logo + "it's free" + "Download on the App Store" + @nesso.app (2.5s)
+Total: ~10s
 """
 
 import logging
@@ -39,22 +39,22 @@ APP_SCREENS_DIR = os.path.join(ASSETS_DIR, "app_screens")
 REAL_SCREENS = [
     {
         "file": "home.png",
-        "feature_text": "track everyone who matters in one place",
+        "feature_text": "never forget the people who matter",
         "duration": 2.5,
     },
     {
         "file": "home_contacts.png",
-        "feature_text": "see your inner circle at a glance",
-        "duration": 2.0,
+        "feature_text": "see when friendships are fading",
+        "duration": 2.5,
     },
     {
         "file": "reach_out.png",
-        "feature_text": "reach out in seconds — text, call, or email",
+        "feature_text": "reach out in one tap",
         "duration": 2.5,
     },
     {
         "file": "ai_suggestions.png",
-        "feature_text": "AI writes the perfect message for you",
+        "feature_text": "AI writes the perfect message",
         "duration": 2.5,
     },
 ]
@@ -229,46 +229,58 @@ def render_reveal_frame_text(line: str) -> Image.Image:
     """Render the opening feature text line."""
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
-    font = _get_font(38, bold=True)
-    y_start = HEIGHT // 2 - 30
+    font = _get_font(42, bold=True)
+    y_start = HEIGHT // 2 - 40
     _draw_centered_wrapped_text(draw, line, y_start, font, max_width=900)
     return img
 
 
 def render_reveal_frame_logo() -> Image.Image:
-    """Render the logo + 'it's free' frame."""
+    """Render the logo + 'it's free' + App Store CTA frame."""
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    logo_size = 200
+    logo_size = 320
+    logo_y_center = HEIGHT // 2 - 100
+
     if os.path.exists(NESSO_LOGO_PATH):
         try:
             logo = Image.open(NESSO_LOGO_PATH).convert("RGBA")
             logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
             logo_x = (WIDTH - logo_size) // 2
-            logo_y = HEIGHT // 2 - logo_size // 2 - 60
+            logo_y = logo_y_center - logo_size // 2
             img.paste(logo, (logo_x, logo_y), logo)
         except Exception:
             logo_x = (WIDTH - logo_size) // 2
-            logo_y = HEIGHT // 2 - logo_size // 2 - 60
+            logo_y = logo_y_center - logo_size // 2
             draw.ellipse(
                 (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
                 fill=(232, 212, 207),
             )
     else:
         logo_x = (WIDTH - logo_size) // 2
-        logo_y = HEIGHT // 2 - logo_size // 2 - 60
+        logo_y = logo_y_center - logo_size // 2
         draw.ellipse(
             (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
             fill=(232, 212, 207),
         )
 
-    font_main = _get_font(36, bold=True)
-    text_y = HEIGHT // 2 + logo_size // 2 - 20
+    # "it's free" — large
+    text_y = logo_y_center + logo_size // 2 + 20
+    font_main = _get_font(42, bold=True)
     _draw_centered_text(draw, "it's free", text_y, font_main)
 
-    font_small = _get_font(24)
-    _draw_centered_text(draw, "Nesso", text_y + 50, font_small, fill=(142, 142, 147))
+    # "Nesso" brand name
+    font_brand = _get_font(28)
+    _draw_centered_text(draw, "Nesso", text_y + 55, font_brand, fill=(142, 142, 147))
+
+    # "Download on the App Store"
+    font_store = _get_font(22, bold=True)
+    _draw_centered_text(draw, "Download on the App Store", text_y + 100, font_store, fill=(200, 200, 200))
+
+    # @nesso.app handle
+    font_handle = _get_font(20)
+    _draw_centered_text(draw, "@nesso.app", text_y + 140, font_handle, fill=(142, 142, 147))
 
     return img
 

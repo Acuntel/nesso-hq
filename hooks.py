@@ -540,6 +540,98 @@ def extract_hook_audio(input_path: str, output_path: str) -> str:
     return output_path
 
 
+# ── Hook Text Overlay ────────────────────────────────────────────────────
+
+
+def _overlay_hook_text(input_path: str, output_path: str, description: str, hook_category: str = "viral") -> str:
+    """
+    Overlay large scroll-stopping text on the hook video.
+    Uses PNG overlay approach (render text once → FFmpeg overlay filter) — fast.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    import random as _random
+    import textwrap
+
+    from config import HOOK_CATEGORY_TEXT, HOOK_TEXT_TEMPLATES
+    category_texts = HOOK_CATEGORY_TEXT.get(hook_category, HOOK_TEXT_TEMPLATES)
+    hook_text = _random.choice(category_texts)
+
+    temp_dir = os.path.dirname(output_path)
+
+    # Get bold font at 64px
+    font_paths = [
+        "/System/Library/Fonts/SFProDisplay-Bold.otf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ]
+    font = None
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                font = ImageFont.truetype(fp, 64)
+                break
+            except Exception:
+                continue
+    if not font:
+        font = ImageFont.load_default()
+
+    # Get actual video dimensions
+    from verify import get_resolution
+    res = get_resolution(input_path)
+    vid_w, vid_h = res if res else (WIDTH, HEIGHT)
+
+    # Render text overlay as transparent PNG matching video dimensions
+    overlay = Image.new("RGBA", (vid_w, vid_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    lines = textwrap.wrap(hook_text, width=18)
+    y = 140  # top area, below status bar
+
+    for line in lines:
+        bbox = draw.textbbox((0, 0), line, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        x = (vid_w - tw) / 2
+
+        # Black stroke (4px thick outline)
+        for dx in range(-4, 5):
+            for dy in range(-4, 5):
+                if abs(dx) + abs(dy) > 0:
+                    draw.text((x + dx, y + dy), line, fill=(0, 0, 0, 255), font=font)
+        # White text on top
+        draw.text((x, y), line, fill=(255, 255, 255, 255), font=font)
+        y += th + 12
+
+    overlay_path = os.path.join(temp_dir, "hook_text_overlay.png")
+    overlay.save(overlay_path, "PNG")
+
+    # Use FFmpeg overlay filter — one pass, fast
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-i", input_path,
+        "-i", overlay_path,
+        "-filter_complex", "[0:v][1:v]overlay=0:0[vout]",
+        "-map", "[vout]",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-preset", FFMPEG_PRESET,
+        "-an",
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+
+    try:
+        os.remove(overlay_path)
+    except OSError:
+        pass
+
+    if result.returncode != 0:
+        log.warning("Hook text overlay failed, using original: %s", result.stderr[-200:])
+        import shutil
+        shutil.copy2(input_path, output_path)
+
+    return output_path
+
+
 # ── Main Entry Point ─────────────────────────────────────────────────────
 
 
@@ -553,23 +645,35 @@ def get_full_hook(
     """
     # Try Reddit first — public API, no bot detection, best viral content
     result = _try_reddit_hook(query, temp_dir)
-    if result:
-        return result
-    log.warning("Reddit failed for '%s', trying YouTube", query)
+    if not result:
+        log.warning("Reddit failed for '%s', trying YouTube", query)
 
-    # Try YouTube with cookies
-    if not _cookies_expired:
-        result = _try_youtube_hook(query, temp_dir)
-        if result:
-            return result
-        if _cookies_expired:
-            log.warning("YouTube cookies expired")
-        else:
-            log.warning("YouTube failed for '%s'", query)
+        # Try YouTube with cookies
+        if not _cookies_expired:
+            result = _try_youtube_hook(query, temp_dir)
+            if not result:
+                if _cookies_expired:
+                    log.warning("YouTube cookies expired")
+                else:
+                    log.warning("YouTube failed for '%s'", query)
 
-    # Last resort: Pexels
-    result = _try_pexels_hook(query, temp_dir)
-    if result:
-        return result
+        # Last resort: Pexels
+        if not result:
+            result = _try_pexels_hook(query, temp_dir)
 
-    raise RuntimeError(f"No hook found for query: {query} (Reddit, YouTube, and Pexels all failed)")
+    if not result:
+        raise RuntimeError(f"No hook found for query: {query} (Reddit, YouTube, and Pexels all failed)")
+
+    # Add scroll-stopping text overlay to hook
+    from config import get_hook_category
+    hook_category = get_hook_category(query)
+    clip_path, audio_path, duration, desc = result
+    hook_with_text = os.path.join(temp_dir, "hook_text.mp4")
+    _overlay_hook_text(clip_path, hook_with_text, desc, hook_category)
+    # Replace the original clip with the text-overlaid version
+    try:
+        os.remove(clip_path)
+    except OSError:
+        pass
+
+    return hook_with_text, audio_path, duration, desc

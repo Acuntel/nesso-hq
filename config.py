@@ -85,6 +85,33 @@ def get_morph_transition() -> str:
     _last_transition_index = idx
     return MORPH_TRANSITIONS[idx]
 
+# ── Hook Text Overlay ─────────────────────────────────────────────────────
+HOOK_TEXT_TEMPLATES = [
+    "INSANE {category} 😱🔥",
+    "NO WAY THIS HAPPENED 💀",
+    "WAIT FOR IT... 🤯",
+    "HOW DID THIS HAPPEN 😱",
+    "THIS IS ACTUALLY INSANE 💀🔥",
+    "BRO WHAT 😭💀",
+    "NOBODY EXPECTED THIS 🤯",
+    "I CAN'T BELIEVE THIS 😱",
+    "THIS CHANGES EVERYTHING 🔥",
+    "WATCH TILL THE END 👀",
+]
+
+# Category-specific hook text (maps hook_category to more specific text)
+HOOK_CATEGORY_TEXT = {
+    "crash": ["INSANE CRASH 😱🔥", "HOW DID HE SURVIVE 💀", "CRAZY SAVE 🤯"],
+    "extreme_heights": ["DON'T LOOK DOWN 😱", "ABSOLUTE MADMAN 💀🔥", "NOPE NOPE NOPE 🤯"],
+    "explosion": ["BOOM 💥😱", "THAT ESCALATED FAST 🔥", "WAIT FOR THE EXPLOSION 💀"],
+    "extreme_sports": ["INSANE SKILLS 🔥", "HE ACTUALLY DID IT 😱", "FULL SEND 💀🤯"],
+    "nature": ["NATURE IS SCARY 😱", "RUN. NOW. 💀🔥", "CAUGHT ON CAMERA 🤯"],
+    "viral": ["NO WAY THIS IS REAL 😱", "WAIT FOR IT 🤯🔥", "BRO WHAT 💀"],
+}
+
+# Second ElevenLabs voice for "friend" messages
+ELEVENLABS_VOICE_ID_2 = os.environ.get("ELEVENLABS_VOICE_ID_2", "21m00Tcm4TlvDq8ikWAM")  # Rachel voice
+
 # ── Reveal ─────────────────────────────────────────────────────────────────
 REVEAL_TEXT_DURATION = 2.0   # single feature line
 REVEAL_DURATION = 2.0        # logo + "it's free"

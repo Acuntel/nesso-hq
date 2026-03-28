@@ -112,12 +112,12 @@ FORMAT: Return ONLY a JSON array. No other text. No markdown. No explanation.
 "sender" options: "me", "best friend", "college roommate", "the group chat", or a first name
 "delay" is seconds to wait before showing this message (controls pacing).
 DELAYS MUST BE SLOW ENOUGH TO READ. Guidelines:
-- Regular messages: 1.2 - 2.0 seconds
-- Messages with emotional weight or longer text: 2.0 - 2.5 seconds
-- Gut-punch / knife moments: 2.5 - 3.5 seconds
-- "..." or typing indicators: 2.0 - 3.0 seconds (let the silence build)
-- "Read" receipts or "delivered": 2.5 - 3.5 seconds (the pause IS the emotion)
-- NEVER go below 1.0 seconds on any message
+- Regular messages: 1.0 - 1.5 seconds
+- Messages with emotional weight or longer text: 1.5 - 2.0 seconds
+- Gut-punch / knife moments: 2.0 - 2.5 seconds
+- "..." or typing indicators: 1.5 - 2.0 seconds (let the silence build)
+- "Read" receipts or "delivered": 2.0 - 2.5 seconds (the pause IS the emotion)
+- NEVER go below 0.8 seconds on any message
 
 STRUCTURE:
 1. Message 1: THE SCROLL-STOPPER. This is NOT a reaction to the video. This is the most unhinged, attention-grabbing, meme-format opener you can write. Something so specific or chaotic that the viewer HAS to keep reading. Use current TikTok/Instagram meme language and formats. This line alone should make someone pause scrolling.
@@ -134,7 +134,7 @@ RULES:
 - At least one message that's just "..." or a single word response
 - The emotional gut-punch must be SPECIFIC — not "I miss hanging out" but "I just realized the last photo I have with Jake is from sophomore year"
 - Reference a SPECIFIC detail that makes it feel real (a name, a place, a date, a memory)
-- 8-15 messages. STRICT limit. More than 15 and viewers drop off.
+- 8-10 messages. STRICT limit. More than 10 and viewers drop off.
 - Each message is 1-2 short sentences. NO paragraphs.
 - The conversation must make the viewer want to text their friend IMMEDIATELY
 - Use current slang and meme language naturally — don't force it
@@ -275,13 +275,13 @@ def _validate_messages(messages: list[dict]) -> list[dict]:
             raise ValueError("Missing text in message")
         if "delay" not in msg:
             msg["delay"] = 1.2
-        # Enforce minimum 1.0s delay — anything faster is unreadable
-        msg["delay"] = max(1.0, msg["delay"])
+        # Enforce minimum 0.8s delay — anything faster is unreadable
+        msg["delay"] = max(0.8, msg["delay"])
 
-    if len(messages) > 15:
-        messages = messages[:15]
-    if len(messages) < 6:
-        raise ValueError(f"Script too short — only {len(messages)} messages, need at least 6")
+    if len(messages) > 10:
+        messages = messages[:10]
+    if len(messages) < 7:
+        raise ValueError(f"Script too short — only {len(messages)} messages, need at least 7")
 
     return messages
 
@@ -298,12 +298,13 @@ def get_fallback_script() -> list[dict]:
         log.error("Failed to load fallback scripts: %s", e)
         # Ultimate fallback — hardcoded minimal script
         return [
-            {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 2.0},
-            {"sender": "best friend", "text": "that's not true lol", "delay": 1.5},
-            {"sender": "me", "text": "ok name 5 people you've actually talked to this month. not texted. TALKED.", "delay": 2.5},
-            {"sender": "best friend", "text": "...", "delay": 2.5},
-            {"sender": "me", "text": "exactly", "delay": 1.5},
-            {"sender": "best friend", "text": "idk what happened tbh", "delay": 2.0},
-            {"sender": "me", "text": "nothing happened. that's the whole problem.", "delay": 2.5},
-            {"sender": "system", "text": "Read 11:47 PM", "delay": 3.0},
+            {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 1.5},
+            {"sender": "best friend", "text": "that's not true lol", "delay": 1.0},
+            {"sender": "me", "text": "ok name 5 people you've actually talked to this month. not texted. TALKED.", "delay": 2.0},
+            {"sender": "best friend", "text": "...", "delay": 1.5},
+            {"sender": "me", "text": "exactly", "delay": 1.0},
+            {"sender": "best friend", "text": "idk what happened tbh", "delay": 1.5},
+            {"sender": "me", "text": "nothing happened. that's the whole problem.", "delay": 2.0},
+            {"sender": "me", "text": "we just stopped trying and called it growing up", "delay": 2.0},
+            {"sender": "system", "text": "Read 11:47 PM", "delay": 2.5},
         ]

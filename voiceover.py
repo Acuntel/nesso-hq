@@ -14,6 +14,7 @@ import wave
 from config import (
     ELEVENLABS_API_KEY,
     ELEVENLABS_VOICE_ID,
+    ELEVENLABS_VOICE_ID_2,
     FFMPEG_THREADS,
     FFMPEG_TIMEOUT,
     VOICEOVER_ENABLED,
@@ -165,9 +166,13 @@ def generate_voiceover(
             continue
 
         try:
+            # Use different voice for different senders
+            sender = msg.get("sender", "")
+            voice_id = ELEVENLABS_VOICE_ID if sender == "me" else ELEVENLABS_VOICE_ID_2
+
             # Generate TTS via ElevenLabs API
             audio_generator = client.text_to_speech.convert(
-                voice_id=ELEVENLABS_VOICE_ID,
+                voice_id=voice_id,
                 text=speech_text,
                 model_id="eleven_turbo_v2_5",
                 output_format="mp3_44100_128",
