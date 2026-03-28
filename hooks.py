@@ -33,6 +33,12 @@ log = logging.getLogger(__name__)
 # ── Cookie Management ────────────────────────────────────────────────────
 
 _cookies_path: str | None = None
+_cookies_expired: bool = False
+
+
+def are_cookies_expired() -> bool:
+    """Check if YouTube cookies have been flagged as expired."""
+    return _cookies_expired
 
 
 def _get_cookies_path() -> str:
@@ -219,7 +225,13 @@ def _try_youtube_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] 
             return hook_vertical, hook_audio, duration, desc
 
         except Exception as e:
-            log.warning("YouTube hook failed for %s: %s", url, str(e)[:200])
+            err_str = str(e)
+            log.warning("YouTube hook failed for %s: %s", url, err_str[:200])
+            if "Sign in to confirm" in err_str or "bot" in err_str.lower():
+                global _cookies_expired
+                _cookies_expired = True
+                log.error("YouTube cookies expired — all YouTube downloads will fail")
+                return None
             continue
 
     return None
@@ -400,12 +412,16 @@ def get_full_hook(
     Full hook pipeline: YouTube (primary) → Pexels (fallback).
     Returns (vertical_clip_path, audio_path, duration, description).
     """
-    # Try YouTube first
-    result = _try_youtube_hook(query, temp_dir)
-    if result:
-        return result
+    # Skip YouTube entirely if cookies are already known to be expired
+    if not _cookies_expired:
+        result = _try_youtube_hook(query, temp_dir)
+        if result:
+            return result
 
-    log.warning("YouTube failed for '%s', trying Pexels fallback", query)
+    if _cookies_expired:
+        log.warning("YouTube cookies expired — using Pexels for '%s'", query)
+    else:
+        log.warning("YouTube failed for '%s', trying Pexels fallback", query)
 
     # Fallback to Pexels
     result = _try_pexels_hook(query, temp_dir)

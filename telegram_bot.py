@@ -30,6 +30,7 @@ _last_render_time: float | None = None
 _last_error: str | None = None
 _total_renders: int = 0
 _total_failures: int = 0
+_cookie_alert_sent: bool = False
 
 # Theme → hook query mapping for /theme command
 THEME_QUERIES = {
@@ -66,6 +67,30 @@ async def _send_video_result(update, result, video_num=""):
 
     _total_renders += 1
     _last_render_time = time.time()
+
+    # Check if YouTube cookies expired — send one-time alert
+    global _cookie_alert_sent
+    if not _cookie_alert_sent:
+        try:
+            from hooks import are_cookies_expired
+            if are_cookies_expired():
+                _cookie_alert_sent = True
+                await update.message.reply_text(
+                    "⚠️ **YouTube cookies expired** — hooks are using Pexels fallback.\n\n"
+                    "To restore YouTube hooks, run on your Mac:\n"
+                    "```\n"
+                    "cd ~/Desktop/nesso-content-v20\n"
+                    "yt-dlp --cookies-from-browser chrome "
+                    "--cookies /tmp/yt_cookies.txt "
+                    '"https://youtube.com" --skip-download\n'
+                    "grep -E '^(\\.|#)' /tmp/yt_cookies.txt "
+                    "| gzip | base64 > /tmp/c.txt\n"
+                    'railway variables --set "YT_COOKIES_B64=$(cat /tmp/c.txt)"\n'
+                    "railway redeploy -y\n"
+                    "```"
+                )
+        except Exception:
+            pass
 
     output_path = result["output_path"]
     duration = result["duration"]
