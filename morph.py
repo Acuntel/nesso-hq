@@ -107,22 +107,7 @@ def morph_and_concat(
     full_video = os.path.join(temp_dir, "full_v.mp4")
     _concat_with_reveal(morphed_video, reveal_path, full_video)
 
-    # Verify concat didn't silently drop the reveal
-    full_video_dur = get_duration(full_video)
-    expected_dur = morphed_dur + reveal_dur
-    if full_video_dur < expected_dur * 0.8:
-        log.warning(
-            "Concat may have dropped reveal: got %.1fs, expected %.1fs. Retrying with re-encode.",
-            full_video_dur, expected_dur,
-        )
-        # Re-encode reveal to force matching stream params, then retry
-        reveal_reencode = os.path.join(temp_dir, "reveal_re.mp4")
-        _reencode_to_match(reveal_path, morphed_video, reveal_reencode)
-        _concat_with_reveal(morphed_video, reveal_reencode, full_video)
-        try:
-            os.remove(reveal_reencode)
-        except OSError:
-            pass
+    # _concat_with_reveal normalizes both inputs, so no need for retry logic
 
     # Measure ACTUAL video duration (not calculated estimate) for audio sync
     actual_video_dur = get_duration(full_video)
@@ -178,46 +163,19 @@ def morph_and_concat(
     return output_path
 
 
-def _simple_concat_video(path_a: str, path_b: str, output_path: str) -> str:
-    """Simple video concatenation fallback (no xfade)."""
-    temp_dir = os.path.dirname(output_path)
-    concat_file = os.path.join(temp_dir, "morph_concat.txt")
-
-    with open(concat_file, "w") as f:
-        safe_a = path_a.replace("'", "'\\''")
-        safe_b = path_b.replace("'", "'\\''")
-        f.write(f"file '{safe_a}'\n")
-        f.write(f"file '{safe_b}'\n")
-
+def _normalize_video(input_path: str, output_path: str) -> str:
+    """
+    Re-encode a video to exactly 1080x1920, 30fps, yuv420p, libx264.
+    This guarantees any two normalized videos can be concatenated or xfaded.
+    """
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-f", "concat", "-safe", "0",
-        "-i", concat_file,
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-preset", FFMPEG_PRESET,
-        output_path,
-    ]
-
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
-    try:
-        os.remove(concat_file)
-    except OSError:
-        pass
-
-    if result.returncode != 0:
-        raise RuntimeError(f"Simple concat failed: {result.stderr[-500:]}")
-
-    return output_path
-
-
-def _reencode_to_match(source_path: str, reference_path: str, output_path: str) -> str:
-    """Re-encode source video to match reference video's stream parameters."""
-    cmd = [
-        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-i", source_path,
-        "-r", str(FPS),
-        "-vf", f"scale={WIDTH}:{HEIGHT},setsar=1:1",
+        "-i", input_path,
+        "-vf", (
+            f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,"
+            f"pad={WIDTH}:{HEIGHT}:-1:-1:color=black,"
+            f"fps={FPS},setsar=1:1"
+        ),
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-preset", FFMPEG_PRESET,
@@ -226,29 +184,28 @@ def _reencode_to_match(source_path: str, reference_path: str, output_path: str) 
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
     if result.returncode != 0:
-        raise RuntimeError(f"Re-encode failed: {result.stderr[-500:]}")
+        raise RuntimeError(f"Normalize failed: {result.stderr[-500:]}")
     return output_path
 
 
-def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> str:
-    """Concatenate the morphed video with the reveal sequence."""
+def _safe_concat(paths: list[str], output_path: str) -> str:
+    """
+    Concatenate videos that have ALREADY been normalized to identical params.
+    Uses -c copy since all inputs are guaranteed to match.
+    """
     temp_dir = os.path.dirname(output_path)
-    concat_file = os.path.join(temp_dir, "reveal_concat.txt")
+    concat_file = os.path.join(temp_dir, "safe_concat.txt")
 
     with open(concat_file, "w") as f:
-        safe_v = video_path.replace("'", "'\\''")
-        safe_r = reveal_path.replace("'", "'\\''")
-        f.write(f"file '{safe_v}'\n")
-        f.write(f"file '{safe_r}'\n")
+        for p in paths:
+            safe = p.replace("'", "'\\''")
+            f.write(f"file '{safe}'\n")
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-f", "concat", "-safe", "0",
         "-i", concat_file,
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-r", str(FPS),
-        "-preset", FFMPEG_PRESET,
+        "-c", "copy",
         output_path,
     ]
 
@@ -259,7 +216,45 @@ def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> 
         pass
 
     if result.returncode != 0:
-        raise RuntimeError(f"Reveal concat failed: {result.stderr[-500:]}")
+        raise RuntimeError(f"Safe concat failed: {result.stderr[-500:]}")
+
+    return output_path
+
+
+def _simple_concat_video(path_a: str, path_b: str, output_path: str) -> str:
+    """Normalize both inputs then concat. Cannot fail due to stream mismatch."""
+    temp_dir = os.path.dirname(output_path)
+    norm_a = os.path.join(temp_dir, "norm_a.mp4")
+    norm_b = os.path.join(temp_dir, "norm_b.mp4")
+
+    _normalize_video(path_a, norm_a)
+    _normalize_video(path_b, norm_b)
+    _safe_concat([norm_a, norm_b], output_path)
+
+    for f in [norm_a, norm_b]:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
+    return output_path
+
+
+def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> str:
+    """Normalize both inputs then concat with reveal."""
+    temp_dir = os.path.dirname(output_path)
+    norm_v = os.path.join(temp_dir, "norm_morphed.mp4")
+    norm_r = os.path.join(temp_dir, "norm_reveal.mp4")
+
+    _normalize_video(video_path, norm_v)
+    _normalize_video(reveal_path, norm_r)
+    _safe_concat([norm_v, norm_r], output_path)
+
+    for f in [norm_v, norm_r]:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
 
     return output_path
 

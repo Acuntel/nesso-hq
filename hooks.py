@@ -237,6 +237,139 @@ def _try_youtube_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] 
     return None
 
 
+# ── Reddit Hook Source ───────────────────────────────────────────────────
+
+REDDIT_SUBREDDITS = [
+    "nextfuckinglevel",
+    "ThatsInsane",
+    "holdmyredbull",
+    "CrazyFuckingVideos",
+    "SweatyPalms",
+    "nonononoyes",
+    "WTF",
+    "BeAmazed",
+    "Damnthatsinteresting",
+    "interestingasfuck",
+    "oddlysatisfying",
+    "NatureIsFuckingLit",
+    "toptalent",
+]
+
+REDDIT_HEADERS = {
+    "User-Agent": "NessoContentEngine/1.0 (content generation bot)",
+}
+
+
+def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] | None:
+    """
+    Get a viral hook clip from Reddit. Uses public JSON API (no auth needed).
+    Picks a random subreddit with extreme/viral video content.
+    """
+    # Pick 2-3 random subreddits to search
+    subs_to_try = random.sample(REDDIT_SUBREDDITS, min(3, len(REDDIT_SUBREDDITS)))
+
+    for subreddit in subs_to_try:
+        try:
+            # Fetch hot posts with video
+            resp = requests.get(
+                f"https://www.reddit.com/r/{subreddit}/hot.json",
+                params={"limit": 25},
+                headers=REDDIT_HEADERS,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                log.warning("Reddit r/%s returned %d", subreddit, resp.status_code)
+                continue
+
+            data = resp.json()
+            posts = data.get("data", {}).get("children", [])
+
+            # Filter for video posts with decent engagement
+            video_posts = []
+            for post in posts:
+                pd = post.get("data", {})
+                if not pd.get("is_video"):
+                    continue
+                score = pd.get("score", 0)
+                if score < 100:
+                    continue
+                media = pd.get("media", {})
+                reddit_video = media.get("reddit_video", {}) if media else {}
+                fallback_url = reddit_video.get("fallback_url", "")
+                duration = reddit_video.get("duration", 0)
+                if not fallback_url or duration < 3 or duration > 120:
+                    continue
+                video_posts.append({
+                    "url": f"https://www.reddit.com{pd.get('permalink', '')}",
+                    "title": pd.get("title", "Reddit video"),
+                    "fallback_url": fallback_url,
+                    "duration": duration,
+                    "score": score,
+                })
+
+            if not video_posts:
+                continue
+
+            # Sort by score, pick from top 5
+            video_posts.sort(key=lambda x: x["score"], reverse=True)
+            chosen = random.choice(video_posts[:5])
+
+            log.info(
+                "Reddit hook from r/%s: %s (score=%d, dur=%ds)",
+                subreddit, chosen["title"][:60], chosen["score"], chosen["duration"],
+            )
+
+            # Download the video
+            raw_path = os.path.join(temp_dir, "hook_reddit_raw.mp4")
+            r = requests.get(chosen["fallback_url"], headers=REDDIT_HEADERS, timeout=60)
+            r.raise_for_status()
+            with open(raw_path, "wb") as f:
+                f.write(r.content)
+
+            if not os.path.exists(raw_path) or os.path.getsize(raw_path) < 10000:
+                log.warning("Reddit download too small, skipping")
+                continue
+
+            # Trim to max 15s
+            trimmed = os.path.join(temp_dir, "hook_raw.mp4")
+            subprocess.run(
+                ["ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+                 "-i", raw_path, "-t", "15", "-c", "copy", trimmed],
+                capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+            )
+            try:
+                os.remove(raw_path)
+            except OSError:
+                pass
+
+            # Extract audio
+            hook_audio = os.path.join(temp_dir, "hook_audio.m4a")
+            extract_hook_audio(trimmed, hook_audio)
+            if not os.path.exists(hook_audio):
+                hook_audio = ""
+
+            # Crop to vertical
+            hook_vertical = os.path.join(temp_dir, "hook_v.mp4")
+            crop_to_vertical(trimmed, hook_vertical)
+            try:
+                os.remove(trimmed)
+            except OSError:
+                pass
+
+            from verify import get_duration
+            duration = get_duration(hook_vertical)
+
+            desc = f"Reddit r/{subreddit}: {chosen['title'][:80]}"
+            log.info("Reddit hook: %.1fs — %s", duration, desc)
+            return hook_vertical, hook_audio, duration, desc
+
+        except Exception as e:
+            log.warning("Reddit r/%s failed: %s", subreddit, str(e)[:200])
+            continue
+
+    return None
+
+
 # ── Pexels Fallback ──────────────────────────────────────────────────────
 
 PEXELS_QUERY_MAP = [
@@ -409,23 +542,28 @@ def get_full_hook(
     temp_dir: str,
 ) -> tuple[str, str, float, str]:
     """
-    Full hook pipeline: YouTube (primary) → Pexels (fallback).
+    Full hook pipeline: Reddit (primary) → YouTube → Pexels (fallback).
     Returns (vertical_clip_path, audio_path, duration, description).
     """
-    # Skip YouTube entirely if cookies are already known to be expired
+    # Try Reddit first — public API, no bot detection, best viral content
+    result = _try_reddit_hook(query, temp_dir)
+    if result:
+        return result
+    log.warning("Reddit failed for '%s', trying YouTube", query)
+
+    # Try YouTube with cookies
     if not _cookies_expired:
         result = _try_youtube_hook(query, temp_dir)
         if result:
             return result
+        if _cookies_expired:
+            log.warning("YouTube cookies expired")
+        else:
+            log.warning("YouTube failed for '%s'", query)
 
-    if _cookies_expired:
-        log.warning("YouTube cookies expired — using Pexels for '%s'", query)
-    else:
-        log.warning("YouTube failed for '%s', trying Pexels fallback", query)
-
-    # Fallback to Pexels
+    # Last resort: Pexels
     result = _try_pexels_hook(query, temp_dir)
     if result:
         return result
 
-    raise RuntimeError(f"No hook found for query: {query} (both YouTube and Pexels failed)")
+    raise RuntimeError(f"No hook found for query: {query} (Reddit, YouTube, and Pexels all failed)")
