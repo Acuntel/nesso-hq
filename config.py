@@ -104,11 +104,12 @@ MUSIC_VOLUME_RATIO = 0.18  # 18% of hook volume (used when no voiceover)
 IMESSAGE_SFX_VOLUME_RATIO = 0.10  # 10% of hook volume
 IMESSAGE_SFX_FADE_AFTER = 3  # only play sfx on first N messages
 
-# ── Pexels API (replaces YouTube for hooks — works from datacenter IPs) ────
+# ── Pexels API (fallback when YouTube is blocked) ─────────────────────────
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
 
-# ── Hook Settings ──────────────────────────────────────────────────────────
+# ── Hook / YouTube Settings ───────────────────────────────────────────────
 MAX_HOOK_CANDIDATES = 3
+YOUTUBE_SEARCH_COUNT = 10
 
 # ── Hook Search Queries ────────────────────────────────────────────────────
 HOOK_SEARCH_QUERIES = [

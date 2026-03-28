@@ -8,5 +8,6 @@ tmp/
 *.png
 !assets/nesso_logo.png
 !assets/psych_sfx.mp3
+!assets/app_screens/*.png
 .DS_Store
 venv/

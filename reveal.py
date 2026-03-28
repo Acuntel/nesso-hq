@@ -1,26 +1,23 @@
 """
 Nesso Content Engine V20 — Nesso Reveal Sequence
 
-New flow (replaces old 3-frame reveal):
-1. Feature text line (emotional hook → app connection)
-2. App screen walkthrough — 3 random screens from the real app, each with
-   a feature callout text overlay at the bottom
-3. Logo + "it's free"
-4. @nesso.app CTA
-
-Total: ~14-16 seconds of app showcase (way more compelling than old 5s reveal)
+Uses REAL app screenshots for the reveal, not Pillow fakes.
+Flow:
+1. Feature text line (2s)
+2. Real app screenshots with feature overlays (2s each)
+3. Logo + "it's free" (2s)
+4. @nesso.app CTA (1.5s)
 """
 
 import logging
 import os
 import random
 import subprocess
-import textwrap
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app_screens import FEATURE_SCREENS
 from config import (
+    ASSETS_DIR,
     BG_COLOR,
     FFMPEG_PRESET,
     FFMPEG_THREADS,
@@ -35,6 +32,32 @@ from config import (
 from verify import get_duration
 
 log = logging.getLogger(__name__)
+
+# ── Real app screenshot paths ────────────────────────────────────────────
+APP_SCREENS_DIR = os.path.join(ASSETS_DIR, "app_screens")
+
+REAL_SCREENS = [
+    {
+        "file": "home.png",
+        "feature_text": "track everyone who matters in one place",
+        "duration": 2.5,
+    },
+    {
+        "file": "home_contacts.png",
+        "feature_text": "see your inner circle at a glance",
+        "duration": 2.0,
+    },
+    {
+        "file": "reach_out.png",
+        "feature_text": "reach out in seconds — text, call, or email",
+        "duration": 2.5,
+    },
+    {
+        "file": "ai_suggestions.png",
+        "feature_text": "AI writes the perfect message for you",
+        "duration": 2.5,
+    },
+]
 
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -72,6 +95,7 @@ def _draw_centered_text(draw, text, y, font, fill=TEXT_COLOR):
 
 
 def _draw_centered_wrapped_text(draw, text, y, font, fill=TEXT_COLOR, max_width=900):
+    import textwrap
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
     if text_width <= max_width:
@@ -87,26 +111,36 @@ def _draw_centered_wrapped_text(draw, text, y, font, fill=TEXT_COLOR, max_width=
     return y
 
 
+def _load_real_screenshot(filename: str) -> Image.Image | None:
+    """Load a real app screenshot and scale to video dimensions."""
+    path = os.path.join(APP_SCREENS_DIR, filename)
+    if not os.path.exists(path):
+        log.warning("App screenshot not found: %s", path)
+        return None
+
+    try:
+        img = Image.open(path).convert("RGB")
+        img = img.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+        return img
+    except Exception as e:
+        log.warning("Failed to load screenshot %s: %s", filename, e)
+        return None
+
+
 def _add_feature_overlay(img: Image.Image, feature_text: str) -> Image.Image:
-    """
-    Add a semi-transparent bottom overlay with feature callout text
-    on top of an app screenshot. Like a caption bar.
-    """
+    """Add a gradient overlay at the bottom with feature text."""
     draw = ImageDraw.Draw(img)
 
-    # Semi-transparent dark gradient at bottom
-    overlay_h = 200
+    # Dark gradient at bottom for text readability
+    overlay_h = 180
     for i in range(overlay_h):
-        alpha = int(220 * (i / overlay_h))
+        alpha = int(240 * (i / overlay_h) ** 1.5)
         y = HEIGHT - overlay_h + i
         draw.line([(0, y), (WIDTH, y)], fill=(0, 0, 0), width=1)
-        # Simulate transparency by drawing increasingly dark lines
-        if i > overlay_h * 0.3:
-            draw.line([(0, y), (WIDTH, y)], fill=(0, 0, 0), width=1)
 
     # Feature text
-    font = _get_font(32, bold=True)
-    text_y = HEIGHT - 130
+    font = _get_font(30, bold=True)
+    text_y = HEIGHT - 100
     _draw_centered_wrapped_text(draw, feature_text, text_y, font, fill=(255, 255, 255), max_width=900)
 
     return img
@@ -140,14 +174,14 @@ def render_reveal_frame_logo() -> Image.Image:
             logo_y = HEIGHT // 2 - logo_size // 2 - 60
             draw.ellipse(
                 (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
-                fill=(0, 122, 255),
+                fill=(232, 212, 207),
             )
     else:
         logo_x = (WIDTH - logo_size) // 2
         logo_y = HEIGHT // 2 - logo_size // 2 - 60
         draw.ellipse(
             (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
-            fill=(0, 122, 255),
+            fill=(232, 212, 207),
         )
 
     font_main = _get_font(36, bold=True)
@@ -171,20 +205,26 @@ def render_reveal_frame_cta() -> Image.Image:
 
 def render_nesso_reveal(output_path: str) -> str:
     """
-    Render the complete Nesso reveal sequence:
+    Render the Nesso reveal using REAL app screenshots.
 
     Frame 1: Feature text line (2s)
-    Frames 2-4: App screenshots with feature overlays (2-2.5s each)
-    Frame 5: Logo + "it's free" (2s)
-    Frame 6: @nesso.app CTA (1.5s)
+    Frames 2-3: Real app screenshots with feature overlays (2-2.5s each)
+    Frame 4: Logo + "it's free" (2s)
+    Frame 5: @nesso.app CTA (1.5s)
 
-    Total: ~13-15 seconds
+    Total: ~10-11 seconds
     """
     temp_dir = os.path.dirname(output_path)
     line = get_reveal_line()
 
-    # Pick 2 random app screens to showcase (keeps reveal tight ~10s total)
-    screens = random.sample(FEATURE_SCREENS, min(2, len(FEATURE_SCREENS)))
+    # Pick 2 random real screenshots
+    available_screens = [s for s in REAL_SCREENS if os.path.exists(os.path.join(APP_SCREENS_DIR, s["file"]))]
+
+    if not available_screens:
+        log.warning("No real app screenshots found, using text-only reveal")
+        available_screens = []
+
+    screens = random.sample(available_screens, min(2, len(available_screens)))
 
     # ── Render all frames ────────────────────────────────────────────
     frames = []
@@ -195,21 +235,22 @@ def render_nesso_reveal(output_path: str) -> str:
     frame_text.save(path_text, "PNG")
     frames.append((path_text, 2.0))
 
-    # Frames 2-4: App screenshots with feature overlays
+    # Frames 2-3: Real app screenshots with feature overlays
     for i, screen in enumerate(screens):
-        app_frame = screen["renderer"]()
-        app_frame = _add_feature_overlay(app_frame, screen["feature_text"])
-        path_screen = os.path.join(temp_dir, f"reveal_{i+1:02d}_app.png")
-        app_frame.save(path_screen, "PNG")
-        frames.append((path_screen, screen["duration"]))
+        app_img = _load_real_screenshot(screen["file"])
+        if app_img:
+            app_img = _add_feature_overlay(app_img, screen["feature_text"])
+            path_screen = os.path.join(temp_dir, f"reveal_{i+1:02d}_app.png")
+            app_img.save(path_screen, "PNG")
+            frames.append((path_screen, screen["duration"]))
 
-    # Frame 5: Logo
+    # Frame 4: Logo
     frame_logo = render_reveal_frame_logo()
     path_logo = os.path.join(temp_dir, "reveal_04_logo.png")
     frame_logo.save(path_logo, "PNG")
     frames.append((path_logo, 2.0))
 
-    # Frame 6: CTA
+    # Frame 5: CTA
     frame_cta = render_reveal_frame_cta()
     path_cta = os.path.join(temp_dir, "reveal_05_cta.png")
     frame_cta.save(path_cta, "PNG")
@@ -222,7 +263,6 @@ def render_nesso_reveal(output_path: str) -> str:
             safe_path = path.replace("'", "'\\''")
             f.write(f"file '{safe_path}'\n")
             f.write(f"duration {dur}\n")
-        # Repeat last frame to avoid black
         last_path = frames[-1][0].replace("'", "'\\''")
         f.write(f"file '{last_path}'\n")
 
@@ -255,5 +295,5 @@ def render_nesso_reveal(output_path: str) -> str:
         raise RuntimeError(f"Reveal render failed: {result.stderr[-500:]}")
 
     reveal_dur = get_duration(output_path)
-    log.info("Reveal rendered: %s (%.1fs) with %d app screens", output_path, reveal_dur, len(screens))
+    log.info("Reveal rendered: %s (%.1fs) with %d real app screens", output_path, reveal_dur, len(screens))
     return output_path
