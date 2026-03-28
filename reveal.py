@@ -318,12 +318,11 @@ def render_nesso_reveal(output_path: str) -> str:
     """
     Render the Nesso reveal using REAL app screenshots.
 
-    Frame 1: Feature text line (2s)
-    Frames 2-3: Real app screenshots with feature overlays (2-2.5s each)
-    Frame 4: Logo + "it's free" (2s)
-    Frame 5: @nesso.app CTA (1.5s)
+    Segment 1: Feature text line (2s)
+    Segments 2-3: 2 app screenshots with pan animation (2.5s each = 5s)
+    Segment 4: Logo + "it's free" + App Store CTA + @nesso.app (2.5s)
 
-    Total: ~10-11 seconds
+    Total: ~10s
     """
     temp_dir = os.path.dirname(output_path)
     line = get_reveal_line()
@@ -342,7 +341,7 @@ def render_nesso_reveal(output_path: str) -> str:
     # We normalize everything to video clips, then concat them all.
     segment_clips = []
 
-    # Segment 1: Opening text (static frame → short video)
+    # Segment 1: Opening text (2s)
     frame_text = render_reveal_frame_text(line)
     path_text = os.path.join(temp_dir, "reveal_00_text.png")
     frame_text.save(path_text, "PNG")
@@ -350,7 +349,7 @@ def render_nesso_reveal(output_path: str) -> str:
     _static_frame_to_clip(path_text, 2.0, clip_text)
     segment_clips.append(clip_text)
 
-    # Segments 2-3: Real app screenshots with PAN animation + feature overlays
+    # Segments 2-3: Real app screenshots with PAN animation (2.5s each)
     for i, screen in enumerate(screens):
         screenshot_path = os.path.join(APP_SCREENS_DIR, screen["file"])
         if os.path.exists(screenshot_path):
@@ -365,21 +364,13 @@ def render_nesso_reveal(output_path: str) -> str:
             )
             segment_clips.append(clip_path)
 
-    # Segment 4: Logo (static frame → short video)
+    # Segment 4: Logo + CTA (2.5s — slightly longer so viewers can read App Store text)
     frame_logo = render_reveal_frame_logo()
     path_logo = os.path.join(temp_dir, "reveal_04_logo.png")
     frame_logo.save(path_logo, "PNG")
     clip_logo = os.path.join(temp_dir, "reveal_04_logo.mp4")
-    _static_frame_to_clip(path_logo, 2.0, clip_logo)
+    _static_frame_to_clip(path_logo, 2.5, clip_logo)
     segment_clips.append(clip_logo)
-
-    # Segment 5: CTA (static frame → short video)
-    frame_cta = render_reveal_frame_cta()
-    path_cta = os.path.join(temp_dir, "reveal_05_cta.png")
-    frame_cta.save(path_cta, "PNG")
-    clip_cta = os.path.join(temp_dir, "reveal_05_cta.mp4")
-    _static_frame_to_clip(path_cta, 1.5, clip_cta)
-    segment_clips.append(clip_cta)
 
     # ── Concat all segment clips ─────────────────────────────────────
     concat_file = os.path.join(temp_dir, "reveal_concat.txt")
@@ -404,7 +395,7 @@ def render_nesso_reveal(output_path: str) -> str:
             os.remove(clip)
         except OSError:
             pass
-    for png in [path_text, path_logo, path_cta]:
+    for png in [path_text, path_logo]:
         try:
             os.remove(png)
         except OSError:

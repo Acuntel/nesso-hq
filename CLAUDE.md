@@ -1,4 +1,4 @@
-# CLAUDE.md -- Nesso Content Engine V20
+# CLAUDE.md -- Nesso Content Engine V21
 
 ## What This Is
 Autonomous short-form video pipeline that generates viral TikTok/Reels/Shorts content to promote Nesso. Triggered via Telegram bot, deployed on Railway. V20 = 20+ iterations of refinement.
