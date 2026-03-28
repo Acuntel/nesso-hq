@@ -111,7 +111,7 @@ def search_pexels(query: str) -> list[dict]:
 
         for video in data.get("videos", []):
             duration = video.get("duration", 0)
-            if duration < 3 or duration > 120:
+            if duration < 6 or duration > 120:
                 continue
 
             # Find the best video file (prefer HD, avoid 4K to save bandwidth)

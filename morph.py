@@ -79,8 +79,13 @@ def morph_and_concat(
         "-i", story_path,
         "-filter_complex",
         (
-            f"[0:v]setpts=PTS-STARTPTS[v0];"
-            f"[1:v]setpts=PTS-STARTPTS[v1];"
+            # Normalize both inputs to same resolution/fps/pixel format before xfade
+            f"[0:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,"
+            f"pad={WIDTH}:{HEIGHT}:-1:-1:color=black,fps={FPS},"
+            f"format=yuv420p,setpts=PTS-STARTPTS[v0];"
+            f"[1:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,"
+            f"pad={WIDTH}:{HEIGHT}:-1:-1:color=black,fps={FPS},"
+            f"format=yuv420p,setpts=PTS-STARTPTS[v1];"
             f"[v0][v1]xfade=transition={transition}:"
             f"duration={effective_morph_dur}:offset={morph_offset}[vout]"
         ),

@@ -183,8 +183,8 @@ def render_nesso_reveal(output_path: str) -> str:
     temp_dir = os.path.dirname(output_path)
     line = get_reveal_line()
 
-    # Pick 3 random app screens to showcase (different features each time)
-    screens = random.sample(FEATURE_SCREENS, min(3, len(FEATURE_SCREENS)))
+    # Pick 2 random app screens to showcase (keeps reveal tight ~10s total)
+    screens = random.sample(FEATURE_SCREENS, min(2, len(FEATURE_SCREENS)))
 
     # ── Render all frames ────────────────────────────────────────────
     frames = []

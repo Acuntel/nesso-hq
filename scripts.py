@@ -246,7 +246,7 @@ def generate_text_story(
     try:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-sonnet-4-6-20250514",
+            model="claude-sonnet-4-20250514",
             max_tokens=1500,
             system=SCRIPT_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],

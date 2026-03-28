@@ -236,14 +236,19 @@ def render_text_story_frames(
         duration = messages[msg_idx].get("delay", 1.2)
         frames.append((frame_path, duration))
 
-    # Enforce minimum 15s total story duration — but NEVER when voiceover
-    # is active, because frame durations must match the VO audio exactly.
+    # Enforce story duration bounds — but NEVER when voiceover is active,
+    # because frame durations must match the VO audio exactly.
     total_dur = sum(d for _, d in frames)
     min_story_dur = 15.0
+    max_story_dur = 25.0  # TikTok sweet spot is 25-35s total (hook + story + reveal)
     if not voiceover_active and total_dur < min_story_dur and total_dur > 0:
         scale = min_story_dur / total_dur
         frames = [(p, d * scale) for p, d in frames]
         log.info("Scaled story delays by %.2fx to reach %.1fs minimum", scale, min_story_dur)
+    elif not voiceover_active and total_dur > max_story_dur:
+        scale = max_story_dur / total_dur
+        frames = [(p, max(0.8, d * scale)) for p, d in frames]
+        log.info("Scaled story delays by %.2fx to cap at %.1fs", scale, max_story_dur)
     elif voiceover_active:
         log.info("Voiceover active — skipping 15s minimum scaling (story=%.1fs)", total_dur)
 
