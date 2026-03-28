@@ -275,12 +275,12 @@ def render_reveal_frame_logo() -> Image.Image:
     _draw_centered_text(draw, "Nesso", text_y + 55, font_brand, fill=(142, 142, 147))
 
     # "Download on the App Store"
-    font_store = _get_font(22, bold=True)
-    _draw_centered_text(draw, "Download on the App Store", text_y + 100, font_store, fill=(200, 200, 200))
+    font_store = _get_font(30, bold=True)
+    _draw_centered_text(draw, "Download on the App Store", text_y + 105, font_store, fill=(255, 255, 255))
 
     # @nesso.app handle
-    font_handle = _get_font(20)
-    _draw_centered_text(draw, "@nesso.app", text_y + 140, font_handle, fill=(142, 142, 147))
+    font_handle = _get_font(24)
+    _draw_centered_text(draw, "@nesso.app", text_y + 155, font_handle, fill=(142, 142, 147))
 
     return img
 

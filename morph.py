@@ -64,55 +64,29 @@ def morph_and_concat(
 
     temp_dir = os.path.dirname(output_path)
 
-    # ── STEP 1: Morph hook → story using xfade ─────────────────────────
-    # Normalize both inputs FIRST as separate files to avoid filter_complex issues
+    # ── STEP 1: Normalize all inputs + create black transition frames ──
     norm_hook = os.path.join(temp_dir, "norm_hook.mp4")
     norm_story = os.path.join(temp_dir, "norm_story.mp4")
     _normalize_video(hook_path, norm_hook)
     _normalize_video(story_path, norm_story)
 
-    # Re-measure normalized durations for accurate offset
-    norm_hook_dur = get_duration(norm_hook)
-
-    # Only use safe transitions that work on all FFmpeg versions
-    safe_transitions = ["fade", "fadeblack", "fadewhite", "dissolve"]
-    transition = get_morph_transition()
-    if transition not in safe_transitions:
-        import random as _rnd
-        transition = _rnd.choice(safe_transitions)
-    log.info("Using morph transition: %s", transition)
-
-    # For fade transitions, use a slightly longer duration for smooth visual
-    is_fade = transition.startswith("fade")
-    effective_morph_dur = max(MORPH_DURATION, 0.5) if is_fade else MORPH_DURATION
-    morph_offset = max(0, norm_hook_dur - effective_morph_dur / 2)
-    morphed_video = os.path.join(temp_dir, "morphed_v.mp4")
-
-    xfade_cmd = [
+    # Create a 0.4s black frame for clean transitions (no xfade needed)
+    black_frame = os.path.join(temp_dir, "black_transition.mp4")
+    black_cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-i", norm_hook,
-        "-i", norm_story,
-        "-filter_complex",
-        (
-            f"[0:v]setpts=PTS-STARTPTS[v0];"
-            f"[1:v]setpts=PTS-STARTPTS[v1];"
-            f"[v0][v1]xfade=transition={transition}:"
-            f"duration={effective_morph_dur}:offset={morph_offset}[vout]"
-        ),
-        "-map", "[vout]",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
+        "-f", "lavfi", "-i",
+        f"color=c=black:s={WIDTH}x{HEIGHT}:r={FPS}:d=0.4",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-preset", FFMPEG_PRESET,
-        morphed_video,
+        black_frame,
     ]
+    subprocess.run(black_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    result = subprocess.run(xfade_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
-    if result.returncode != 0:
-        log.warning("xfade failed on normalized files, falling back to simple concat: %s", result.stderr[-300:])
-        # Use already-normalized files for concat (skip re-normalizing)
-        _safe_concat([norm_hook, norm_story], morphed_video)
+    # Concat: hook → black → story (simple, reliable, works on any FFmpeg)
+    morphed_video = os.path.join(temp_dir, "morphed_v.mp4")
+    _safe_concat([norm_hook, black_frame, norm_story], morphed_video)
+    log.info("Morph: hook → black → story (no xfade)")
 
-    # Clean normalized intermediates
     for f in [norm_hook, norm_story]:
         try:
             os.remove(f)
@@ -123,9 +97,15 @@ def morph_and_concat(
 
     # ── STEP 2: Concat morphed + reveal ────────────────────────────────
     full_video = os.path.join(temp_dir, "full_v.mp4")
-    _concat_with_reveal(morphed_video, reveal_path, full_video)
-
-    # _concat_with_reveal normalizes both inputs, so no need for retry logic
+    # Concat morphed + black + reveal
+    norm_reveal = os.path.join(temp_dir, "norm_reveal.mp4")
+    _normalize_video(reveal_path, norm_reveal)
+    _safe_concat([morphed_video, black_frame, norm_reveal], full_video)
+    for f in [norm_reveal, black_frame]:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
 
     # Measure ACTUAL video duration (not calculated estimate) for audio sync
     actual_video_dur = get_duration(full_video)

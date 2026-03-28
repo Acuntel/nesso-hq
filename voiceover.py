@@ -247,9 +247,7 @@ def generate_voiceover(
         log.warning("Voiceover concat failed: %s", result.stderr[-300:])
         return "", []
 
-    # Drift correction: measure actual concatenated duration and adjust
-    # per_message_durations so their sum matches the real audio length.
-    # Without this, small per-clip measurement errors accumulate (50-200ms).
+    # Drift correction + duration cap
     actual_total_dur = get_duration(concat_path)
     expected_total_dur = sum(per_message_durations)
 
@@ -262,6 +260,34 @@ def generate_voiceover(
                 "VO drift correction: expected=%.3fs, actual=%.3fs, scale=%.4f",
                 expected_total_dur, actual_total_dur, scale,
             )
+
+    # CAP voiceover at 22s max — speed up if too long
+    MAX_VO_DURATION = 22.0
+    actual_total_dur = get_duration(concat_path)
+    if actual_total_dur > MAX_VO_DURATION:
+        speed_factor = actual_total_dur / MAX_VO_DURATION
+        log.info("VO too long (%.1fs), speeding up by %.2fx to cap at %.0fs",
+                 actual_total_dur, speed_factor, MAX_VO_DURATION)
+        sped_up_path = concat_path + ".fast.mp3"
+        speed_cmd = [
+            "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+            "-i", concat_path,
+            "-af", f"atempo={min(speed_factor, 2.0)}",
+            "-c:a", "libmp3lame", "-b:a", "128k",
+            sped_up_path,
+        ]
+        speed_result = subprocess.run(speed_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+        if speed_result.returncode == 0:
+            os.replace(sped_up_path, concat_path)
+            actual_total_dur = get_duration(concat_path)
+            # Scale durations to match new speed
+            per_message_durations = [d / speed_factor for d in per_message_durations]
+        else:
+            log.warning("VO speedup failed: %s", speed_result.stderr[-200:])
+            try:
+                os.remove(sped_up_path)
+            except OSError:
+                pass
 
     log.info(
         "Voiceover generated: %s (%.1fs, %d clips)",

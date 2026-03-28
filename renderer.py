@@ -366,8 +366,12 @@ def render_text_story_frames(
         scale = max_story_dur / total_dur
         frames = [(p, max(0.8, d * scale)) for p, d in frames]
         log.info("Scaled story delays by %.2fx to cap at %.1fs", scale, max_story_dur)
+    elif voiceover_active and total_dur > max_story_dur:
+        scale = max_story_dur / total_dur
+        frames = [(p, max(0.8, d * scale)) for p, d in frames]
+        log.info("Voiceover too long — scaled by %.2fx to %.1fs", scale, max_story_dur)
     elif voiceover_active:
-        log.info("Voiceover active — skipping 15s minimum scaling (story=%.1fs)", total_dur)
+        log.info("Voiceover active (story=%.1fs)", total_dur)
 
     log.info("Rendered %d text story frames (%.1fs total)", len(frames), sum(d for _, d in frames))
     return frames

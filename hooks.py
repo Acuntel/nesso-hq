@@ -163,7 +163,7 @@ def download_youtube_hook(
     """Download a segment from YouTube using cookies."""
     ydl_opts = {
         **_yt_base_opts(),
-        "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+        "format": "best[height<=720]/best",
         "outtmpl": output_path,
         "download_ranges": yt_dlp.utils.download_range_func(
             None, [(start_time, end_time)]
@@ -253,7 +253,8 @@ REDDIT_SUBREDDITS = [
 ]
 
 REDDIT_HEADERS = {
-    "User-Agent": "NessoContentEngine/1.0 (content generation bot)",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
 }
 
 
@@ -321,7 +322,7 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
             # Download with yt-dlp (merges audio+video DASH streams)
             raw_path = os.path.join(temp_dir, "hook_reddit_raw.mp4")
             ydl_opts = {
-                "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+                "format": "best",  # Reddit DASH doesn't support height filters
                 "merge_output_format": "mp4",
                 "quiet": True,
                 "no_warnings": True,
