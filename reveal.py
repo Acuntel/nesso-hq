@@ -146,6 +146,85 @@ def _add_feature_overlay(img: Image.Image, feature_text: str) -> Image.Image:
     return img
 
 
+def _create_pan_frames(screenshot_path: str, temp_dir: str, prefix: str, duration: float = 2.5) -> list[str]:
+    """Create frames that pan down through a screenshot, simulating scrolling."""
+    img = Image.open(screenshot_path).convert("RGB")
+    orig_w, orig_h = img.size
+
+    # Scale width to match video width, keep aspect ratio
+    scale = WIDTH / orig_w
+    new_w = WIDTH
+    new_h = int(orig_h * scale)
+    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    num_frames = int(duration * FPS)
+    frames = []
+
+    if new_h > HEIGHT:
+        max_offset = new_h - HEIGHT
+        for i in range(num_frames):
+            # Ease in-out curve for smooth motion (smoothstep)
+            t = i / max(1, num_frames - 1)
+            t_smooth = t * t * (3 - 2 * t)
+            y_offset = int(t_smooth * max_offset)
+
+            cropped = img.crop((0, y_offset, WIDTH, y_offset + HEIGHT))
+            frame_path = os.path.join(temp_dir, f"{prefix}_{i:04d}.png")
+            cropped.save(frame_path, "PNG")
+            frames.append(frame_path)
+    else:
+        # Image fits in frame, just center it
+        padded = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+        y_offset = (HEIGHT - new_h) // 2
+        padded.paste(img, (0, y_offset))
+        frame_path = os.path.join(temp_dir, f"{prefix}_0000.png")
+        padded.save(frame_path, "PNG")
+        frames = [frame_path] * num_frames
+
+    return frames
+
+
+def _render_pan_clip(screenshot_path: str, feature_text: str, temp_dir: str,
+                     prefix: str, duration: float, output_path: str) -> str:
+    """Render a panning screenshot clip with feature text overlay."""
+    # Generate pan frames
+    pan_frames = _create_pan_frames(screenshot_path, temp_dir, prefix, duration)
+
+    # Add feature overlay to each frame
+    font = _get_font(30, bold=True)
+    for frame_path in pan_frames:
+        frame_img = Image.open(frame_path).convert("RGB")
+        frame_img = _add_feature_overlay(frame_img, feature_text)
+        frame_img.save(frame_path, "PNG")
+
+    # Compile frames into video clip using ffmpeg
+    pattern = os.path.join(temp_dir, f"{prefix}_%04d.png")
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-framerate", str(FPS),
+        "-i", pattern,
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", FFMPEG_PRESET,
+        "-vf", f"scale={WIDTH}:{HEIGHT}",
+        output_path,
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+
+    # Cleanup pan frame images
+    for fp in set(pan_frames):
+        try:
+            os.remove(fp)
+        except OSError:
+            pass
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Pan clip render failed: {result.stderr[-500:]}")
+
+    return output_path
+
+
 def render_reveal_frame_text(line: str) -> Image.Image:
     """Render the opening feature text line."""
     img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
@@ -203,6 +282,26 @@ def render_reveal_frame_cta() -> Image.Image:
     return img
 
 
+def _static_frame_to_clip(image_path: str, duration: float, output_path: str) -> str:
+    """Convert a static PNG frame into a video clip of the given duration."""
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-loop", "1",
+        "-i", image_path,
+        "-t", str(duration),
+        "-r", str(FPS),
+        "-vf", f"scale={WIDTH}:{HEIGHT}",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", FFMPEG_PRESET,
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+    if result.returncode != 0:
+        raise RuntimeError(f"Static frame to clip failed: {result.stderr[-500:]}")
+    return output_path
+
+
 def render_nesso_reveal(output_path: str) -> str:
     """
     Render the Nesso reveal using REAL app screenshots.
@@ -226,64 +325,76 @@ def render_nesso_reveal(output_path: str) -> str:
 
     screens = random.sample(available_screens, min(2, len(available_screens)))
 
-    # ── Render all frames ────────────────────────────────────────────
-    frames = []
+    # ── Render all segments ──────────────────────────────────────────
+    # Static frames use concat demuxer; pan clips are pre-rendered videos.
+    # We normalize everything to video clips, then concat them all.
+    segment_clips = []
 
-    # Frame 1: Opening text
+    # Segment 1: Opening text (static frame → short video)
     frame_text = render_reveal_frame_text(line)
     path_text = os.path.join(temp_dir, "reveal_00_text.png")
     frame_text.save(path_text, "PNG")
-    frames.append((path_text, 2.0))
+    clip_text = os.path.join(temp_dir, "reveal_00_text.mp4")
+    _static_frame_to_clip(path_text, 2.0, clip_text)
+    segment_clips.append(clip_text)
 
-    # Frames 2-3: Real app screenshots with feature overlays
+    # Segments 2-3: Real app screenshots with PAN animation + feature overlays
     for i, screen in enumerate(screens):
-        app_img = _load_real_screenshot(screen["file"])
-        if app_img:
-            app_img = _add_feature_overlay(app_img, screen["feature_text"])
-            path_screen = os.path.join(temp_dir, f"reveal_{i+1:02d}_app.png")
-            app_img.save(path_screen, "PNG")
-            frames.append((path_screen, screen["duration"]))
+        screenshot_path = os.path.join(APP_SCREENS_DIR, screen["file"])
+        if os.path.exists(screenshot_path):
+            clip_path = os.path.join(temp_dir, f"reveal_{i+1:02d}_pan.mp4")
+            _render_pan_clip(
+                screenshot_path=screenshot_path,
+                feature_text=screen["feature_text"],
+                temp_dir=temp_dir,
+                prefix=f"pan_{i+1:02d}",
+                duration=screen["duration"],
+                output_path=clip_path,
+            )
+            segment_clips.append(clip_path)
 
-    # Frame 4: Logo
+    # Segment 4: Logo (static frame → short video)
     frame_logo = render_reveal_frame_logo()
     path_logo = os.path.join(temp_dir, "reveal_04_logo.png")
     frame_logo.save(path_logo, "PNG")
-    frames.append((path_logo, 2.0))
+    clip_logo = os.path.join(temp_dir, "reveal_04_logo.mp4")
+    _static_frame_to_clip(path_logo, 2.0, clip_logo)
+    segment_clips.append(clip_logo)
 
-    # Frame 5: CTA
+    # Segment 5: CTA (static frame → short video)
     frame_cta = render_reveal_frame_cta()
     path_cta = os.path.join(temp_dir, "reveal_05_cta.png")
     frame_cta.save(path_cta, "PNG")
-    frames.append((path_cta, 1.5))
+    clip_cta = os.path.join(temp_dir, "reveal_05_cta.mp4")
+    _static_frame_to_clip(path_cta, 1.5, clip_cta)
+    segment_clips.append(clip_cta)
 
-    # ── Compile to video ─────────────────────────────────────────────
+    # ── Concat all segment clips ─────────────────────────────────────
     concat_file = os.path.join(temp_dir, "reveal_concat.txt")
     with open(concat_file, "w") as f:
-        for path, dur in frames:
-            safe_path = path.replace("'", "'\\''")
+        for clip in segment_clips:
+            safe_path = clip.replace("'", "'\\''")
             f.write(f"file '{safe_path}'\n")
-            f.write(f"duration {dur}\n")
-        last_path = frames[-1][0].replace("'", "'\\''")
-        f.write(f"file '{last_path}'\n")
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-f", "concat", "-safe", "0",
         "-i", concat_file,
-        "-r", str(FPS),
-        "-vf", f"fps={FPS},scale={WIDTH}:{HEIGHT}",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-preset", FFMPEG_PRESET,
+        "-c", "copy",
         output_path,
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    # Cleanup
-    for path, _ in frames:
+    # Cleanup all intermediate files
+    for clip in segment_clips:
         try:
-            os.remove(path)
+            os.remove(clip)
+        except OSError:
+            pass
+    for png in [path_text, path_logo, path_cta]:
+        try:
+            os.remove(png)
         except OSError:
             pass
     try:
@@ -295,5 +406,5 @@ def render_nesso_reveal(output_path: str) -> str:
         raise RuntimeError(f"Reveal render failed: {result.stderr[-500:]}")
 
     reveal_dur = get_duration(output_path)
-    log.info("Reveal rendered: %s (%.1fs) with %d real app screens", output_path, reveal_dur, len(screens))
+    log.info("Reveal rendered: %s (%.1fs) with %d real app screens (pan effect)", output_path, reveal_dur, len(screens))
     return output_path

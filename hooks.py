@@ -240,19 +240,16 @@ def _try_youtube_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] 
 # ── Reddit Hook Source ───────────────────────────────────────────────────
 
 REDDIT_SUBREDDITS = [
-    "nextfuckinglevel",
-    "ThatsInsane",
-    "holdmyredbull",
     "CrazyFuckingVideos",
+    "nextfuckinglevel",
+    "holdmyredbull",
     "SweatyPalms",
     "nonononoyes",
     "WTF",
-    "BeAmazed",
-    "Damnthatsinteresting",
-    "interestingasfuck",
-    "oddlysatisfying",
     "NatureIsFuckingLit",
-    "toptalent",
+    "AbruptChaos",
+    "maybemaybemaybe",
+    "Unexpected",
 ]
 
 REDDIT_HEADERS = {
@@ -262,8 +259,9 @@ REDDIT_HEADERS = {
 
 def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] | None:
     """
-    Get a viral hook clip from Reddit. Uses public JSON API (no auth needed).
-    Picks a random subreddit with extreme/viral video content.
+    Get a viral hook clip from Reddit. Uses public JSON API to find posts,
+    then downloads with yt-dlp (which merges Reddit's separate audio+video
+    DASH streams automatically).
     """
     # Pick 2-3 random subreddits to search
     subs_to_try = random.sample(REDDIT_SUBREDDITS, min(3, len(REDDIT_SUBREDDITS)))
@@ -284,25 +282,26 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
             data = resp.json()
             posts = data.get("data", {}).get("children", [])
 
-            # Filter for video posts with decent engagement
+            # Filter for video posts with high engagement
             video_posts = []
             for post in posts:
                 pd = post.get("data", {})
                 if not pd.get("is_video"):
                     continue
                 score = pd.get("score", 0)
-                if score < 100:
+                if score < 500:
                     continue
                 media = pd.get("media", {})
                 reddit_video = media.get("reddit_video", {}) if media else {}
-                fallback_url = reddit_video.get("fallback_url", "")
                 duration = reddit_video.get("duration", 0)
-                if not fallback_url or duration < 3 or duration > 120:
+                if duration < 3 or duration > 120:
+                    continue
+                permalink = pd.get("permalink", "")
+                if not permalink:
                     continue
                 video_posts.append({
-                    "url": f"https://www.reddit.com{pd.get('permalink', '')}",
+                    "url": f"https://www.reddit.com{permalink}",
                     "title": pd.get("title", "Reddit video"),
-                    "fallback_url": fallback_url,
                     "duration": duration,
                     "score": score,
                 })
@@ -319,15 +318,22 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
                 subreddit, chosen["title"][:60], chosen["score"], chosen["duration"],
             )
 
-            # Download the video
+            # Download with yt-dlp (merges audio+video DASH streams)
             raw_path = os.path.join(temp_dir, "hook_reddit_raw.mp4")
-            r = requests.get(chosen["fallback_url"], headers=REDDIT_HEADERS, timeout=60)
-            r.raise_for_status()
-            with open(raw_path, "wb") as f:
-                f.write(r.content)
+            ydl_opts = {
+                "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+                "merge_output_format": "mp4",
+                "quiet": True,
+                "no_warnings": True,
+                "outtmpl": raw_path,
+                "socket_timeout": 30,
+                "retries": 3,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([chosen["url"]])
 
             if not os.path.exists(raw_path) or os.path.getsize(raw_path) < 10000:
-                log.warning("Reddit download too small, skipping")
+                log.warning("Reddit yt-dlp download too small, skipping")
                 continue
 
             # Trim to max 15s

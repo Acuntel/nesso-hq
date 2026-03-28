@@ -41,13 +41,19 @@ SYSTEM_TEXT_COLOR = (142, 142, 147)            # #8E8E93 — gray
 TEXT_COLOR = (255, 255, 255)                   # White text
 CONTACT_NAME_COLOR = (142, 142, 147)           # Gray for sender name
 
-FONT_SIZE = 32
-CONTACT_FONT_SIZE = 24
-BUBBLE_RADIUS = 18
-BUBBLE_PAD_H = 12     # horizontal padding inside bubble
-BUBBLE_PAD_V = 8      # vertical padding inside bubble
-MESSAGE_GAP = 8        # gap between messages
-MAX_BUBBLE_WIDTH = SAFE_WIDTH - 80  # leave margin for alignment
+FONT_SIZE = 40
+CONTACT_FONT_SIZE = 28
+BUBBLE_RADIUS = 22
+BUBBLE_PAD_H = 16     # horizontal padding inside bubble
+BUBBLE_PAD_V = 12     # vertical padding inside bubble
+MESSAGE_GAP = 12       # gap between messages
+MAX_BUBBLE_WIDTH = SAFE_WIDTH - 60  # leave margin for alignment
+
+# iMessage top bar
+TOP_BAR_HEIGHT = 90
+TOP_BAR_COLOR = (28, 28, 30)         # dark gray bar
+TOP_BAR_TEXT_COLOR = (255, 255, 255)  # white contact name
+TOP_BAR_CHEVRON_COLOR = (0, 122, 255)  # blue back chevron
 
 # ── FFmpeg Railway Defaults ────────────────────────────────────────────────
 FFMPEG_THREADS = "1"
@@ -58,20 +64,12 @@ FFMPEG_TIMEOUT = 120  # seconds
 MORPH_DURATION = 0.3   # seconds
 MORPH_TRANSITION = "fadeblack"  # default, but get_morph_transition() rotates
 
-# Transition pool — all tested safe on Railway FFmpeg
+# Transition pool — only the most compatible ones that work everywhere
 MORPH_TRANSITIONS = [
+    "fade",
     "fadeblack",
     "fadewhite",
     "dissolve",
-    "wipeleft",
-    "wiperight",
-    "wipeup",
-    "circleopen",
-    "circleclose",
-    "radial",
-    "smoothleft",
-    "smoothright",
-    "smoothup",
 ]
 
 _last_transition_index = -1

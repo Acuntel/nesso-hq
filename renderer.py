@@ -35,6 +35,10 @@ from config import (
     SAFE_WIDTH,
     SYSTEM_TEXT_COLOR,
     TEXT_COLOR,
+    TOP_BAR_CHEVRON_COLOR,
+    TOP_BAR_COLOR,
+    TOP_BAR_HEIGHT,
+    TOP_BAR_TEXT_COLOR,
     WIDTH,
 )
 
@@ -72,6 +76,25 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 
     # Ultimate fallback — PIL default
     return ImageFont.load_default()
+
+
+def _get_italic_font(size: int) -> ImageFont.FreeTypeFont:
+    """Get an italic system font for system messages."""
+    italic_paths = [
+        "/System/Library/Fonts/SFProDisplay-RegularItalic.otf",
+        "/System/Library/Fonts/SFProText-RegularItalic.otf",
+        "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
+    ]
+    for path in italic_paths:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    # Fall back to regular font if no italic available
+    return _get_font(size)
 
 
 def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
@@ -117,12 +140,76 @@ def _draw_rounded_rect(
     draw.rounded_rectangle(xy, radius=radius, fill=fill)
 
 
+def _draw_top_bar(
+    draw: ImageDraw.ImageDraw,
+    contact_name: str,
+    bold_font: ImageFont.FreeTypeFont,
+):
+    """Draw an iPhone-style iMessage top bar with contact name and back chevron."""
+    # Dark bar background
+    draw.rectangle(
+        (0, 0, WIDTH, TOP_BAR_HEIGHT),
+        fill=TOP_BAR_COLOR,
+    )
+    # Thin separator line at bottom of bar
+    draw.line(
+        (0, TOP_BAR_HEIGHT, WIDTH, TOP_BAR_HEIGHT),
+        fill=(58, 58, 60),
+        width=1,
+    )
+
+    # Back chevron on left side
+    chevron_font = _get_font(38)
+    draw.text(
+        (SAFE_LEFT - 10, TOP_BAR_HEIGHT // 2 - 20),
+        "\u2039",
+        fill=TOP_BAR_CHEVRON_COLOR,
+        font=chevron_font,
+    )
+
+    # Contact name centered
+    name_width = bold_font.getlength(contact_name)
+    name_x = (WIDTH - name_width) / 2
+    name_y = TOP_BAR_HEIGHT // 2 - CONTACT_FONT_SIZE // 2 - 2
+    draw.text(
+        (name_x, name_y),
+        contact_name,
+        fill=TOP_BAR_TEXT_COLOR,
+        font=bold_font,
+    )
+
+
+def _measure_message_height(
+    msg: dict,
+    font: ImageFont.FreeTypeFont,
+    contact_font: ImageFont.FreeTypeFont,
+    system_font: ImageFont.FreeTypeFont,
+) -> int:
+    """Calculate the pixel height a message will occupy (bubble + gap)."""
+    sender = msg["sender"]
+    is_me = sender == "me"
+    is_system = sender == "system"
+
+    if is_system:
+        return CONTACT_FONT_SIZE + MESSAGE_GAP * 2
+
+    text_max_width = MAX_BUBBLE_WIDTH - BUBBLE_PAD_H * 2
+    lines = _wrap_text(msg["text"], font, text_max_width)
+    line_height = FONT_SIZE + 4
+    text_height = line_height * len(lines)
+    bubble_height = int(text_height + BUBBLE_PAD_V * 2)
+    name_height = 0 if is_me else CONTACT_FONT_SIZE + 4
+
+    return name_height + bubble_height + MESSAGE_GAP
+
+
 def render_message_bubble(
     draw: ImageDraw.ImageDraw,
     msg: dict,
     y_pos: int,
     font: ImageFont.FreeTypeFont,
     contact_font: ImageFont.FreeTypeFont,
+    system_font: ImageFont.FreeTypeFont | None = None,
 ) -> int:
     """
     Draw a single message bubble and return the new y_pos after it.
@@ -133,10 +220,11 @@ def render_message_bubble(
     is_system = sender == "system"
 
     if is_system:
-        # System messages (read receipts, delivered, typing...) — centered gray text
-        text_width = font.getlength(text)
+        # System messages (read receipts, delivered, typing...) — centered, italic, smaller
+        render_font = system_font if system_font else contact_font
+        text_width = render_font.getlength(text)
         x = SAFE_LEFT + (SAFE_WIDTH - text_width) / 2
-        draw.text((x, y_pos), text, fill=SYSTEM_TEXT_COLOR, font=contact_font)
+        draw.text((x, y_pos), text, fill=SYSTEM_TEXT_COLOR, font=render_font)
         return int(y_pos + CONTACT_FONT_SIZE + MESSAGE_GAP * 2)
 
     # Text wrapping
@@ -191,6 +279,14 @@ def render_message_bubble(
     return bubble_y + bubble_height + MESSAGE_GAP
 
 
+def _get_contact_name(messages: list[dict]) -> str:
+    """Extract the contact name from the conversation (first non-me, non-system sender)."""
+    for msg in messages:
+        if msg["sender"] not in ("me", "system"):
+            return msg["sender"]
+    return "best friend"
+
+
 def render_text_story_frames(
     messages: list[dict],
     temp_dir: str,
@@ -199,35 +295,56 @@ def render_text_story_frames(
     """
     Render the text story as a series of PNG frames.
     Each frame shows all messages up to that point.
+    Messages are bottom-aligned like real iMessage.
     Returns list of (frame_path, duration_seconds) tuples.
     """
     font = _get_font(FONT_SIZE)
     contact_font = _get_font(CONTACT_FONT_SIZE, bold=True)
+    system_font = _get_italic_font(CONTACT_FONT_SIZE - 4)
+
+    contact_name = _get_contact_name(messages)
 
     frames = []
+
+    # Content area: below top bar, above safe bottom
+    content_top = TOP_BAR_HEIGHT + 10
+    content_bottom = HEIGHT - SAFE_BOTTOM - 20
 
     for msg_idx in range(len(messages)):
         # Create frame showing messages 0..msg_idx
         img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
         draw = ImageDraw.Draw(img)
 
-        # Calculate total content height to vertically center or bottom-align
-        # Start messages from a reasonable y position
-        y_pos = SAFE_TOP + 40
+        # Draw iMessage top bar
+        _draw_top_bar(draw, contact_name, contact_font)
 
         visible_messages = messages[: msg_idx + 1]
 
         # If too many messages, only show the latest ones that fit
-        # (scroll effect — older messages slide up)
-        max_visible = _count_fitting_messages(visible_messages, font, contact_font)
+        max_visible = _count_fitting_messages(visible_messages, font, contact_font, system_font)
         if max_visible < len(visible_messages):
             visible_messages = visible_messages[-max_visible:]
 
+        # Calculate total height of all visible messages to bottom-align
+        total_content_height = sum(
+            _measure_message_height(msg, font, contact_font, system_font)
+            for msg in visible_messages
+        )
+
+        # Start y_pos so messages end near the bottom of the content area
+        available_height = content_bottom - content_top
+        if total_content_height < available_height:
+            # Bottom-align: push messages down so last message is near bottom
+            y_pos = content_bottom - total_content_height
+        else:
+            # Content overflows — start from top of content area
+            y_pos = content_top
+
         for msg in visible_messages:
-            y_pos = render_message_bubble(draw, msg, y_pos, font, contact_font)
+            y_pos = render_message_bubble(draw, msg, y_pos, font, contact_font, system_font)
 
             # Safety: don't render past safe bottom
-            if y_pos > HEIGHT - SAFE_BOTTOM - 20:
+            if y_pos > content_bottom:
                 break
 
         frame_path = os.path.join(temp_dir, f"frame_{msg_idx:04d}.png")
@@ -260,25 +377,16 @@ def _count_fitting_messages(
     messages: list[dict],
     font: ImageFont.FreeTypeFont,
     contact_font: ImageFont.FreeTypeFont,
+    system_font: ImageFont.FreeTypeFont | None = None,
 ) -> int:
     """Count how many messages fit in the safe zone (bottom-up)."""
-    available_height = HEIGHT - SAFE_TOP - SAFE_BOTTOM - 80
+    available_height = HEIGHT - TOP_BAR_HEIGHT - SAFE_BOTTOM - 40
     total_height = 0
 
-    for i, msg in enumerate(reversed(messages)):
-        is_me = msg["sender"] == "me"
-        is_system = msg["sender"] == "system"
+    s_font = system_font if system_font else contact_font
 
-        if is_system:
-            total_height += CONTACT_FONT_SIZE + MESSAGE_GAP * 2
-        else:
-            text_max_width = MAX_BUBBLE_WIDTH - BUBBLE_PAD_H * 2
-            lines = _wrap_text(msg["text"], font, text_max_width)
-            line_height = FONT_SIZE + 4
-            text_height = line_height * len(lines)
-            bubble_height = text_height + BUBBLE_PAD_V * 2
-            name_height = 0 if is_me else CONTACT_FONT_SIZE + 4
-            total_height += name_height + bubble_height + MESSAGE_GAP
+    for i, msg in enumerate(reversed(messages)):
+        total_height += _measure_message_height(msg, font, contact_font, s_font)
 
         if total_height > available_height:
             return i  # return count of messages that fit
