@@ -1,15 +1,17 @@
 """
-Nesso Content Engine V20 — Nesso Reveal Sequence
+Nesso Content Engine V21 — Animated Reveal Sequence
 
-Uses REAL app screenshots for the reveal, not Pillow fakes.
-Flow:
-1. Feature text line (2s)
-2. 2 app screenshots with pan (2.5s each = 5s)
-3. Logo + "it's free" + "Download on the App Store" + @nesso.app (2.5s)
-Total: ~10s
+Frame-by-frame animation using Pillow — no Remotion/Node.js needed.
+Every frame is unique (animated), compiled to video via FFmpeg.
+
+Flow (5s total):
+1. Feature text fade-in, word by word (1.5s)
+2. App screenshot with Ken Burns zoom (1.5s)
+3. Logo scale-up + "it's free" cascade + @nesso.app (2.0s)
 """
 
 import logging
+import math
 import os
 import random
 import subprocess
@@ -18,14 +20,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import (
     ASSETS_DIR,
-    BG_COLOR,
     FFMPEG_PRESET,
     FFMPEG_THREADS,
     FFMPEG_TIMEOUT,
     FPS,
     HEIGHT,
     NESSO_LOGO_PATH,
-    TEXT_COLOR,
     WIDTH,
     get_reveal_line,
 )
@@ -33,35 +33,11 @@ from verify import get_duration
 
 log = logging.getLogger(__name__)
 
-# ── Real app screenshot paths ────────────────────────────────────────────
 APP_SCREENS_DIR = os.path.join(ASSETS_DIR, "app_screens")
-
-REAL_SCREENS = [
-    {
-        "file": "home.png",
-        "feature_text": "never forget the people who matter",
-        "duration": 2.5,
-    },
-    {
-        "file": "home_contacts.png",
-        "feature_text": "see when friendships are fading",
-        "duration": 2.5,
-    },
-    {
-        "file": "reach_out.png",
-        "feature_text": "reach out in one tap",
-        "duration": 2.5,
-    },
-    {
-        "file": "ai_suggestions.png",
-        "feature_text": "AI writes the perfect message",
-        "duration": 2.5,
-    },
-]
+APP_SCREENSHOTS = ["home.png", "home_contacts.png", "reach_out.png", "ai_suggestions.png"]
 
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Get a system font."""
     font_paths = [
         "/System/Library/Fonts/SFProDisplay-Regular.otf",
         "/System/Library/Fonts/SFNS.ttf",
@@ -75,7 +51,6 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         ]
         font_paths = bold_paths + font_paths
-
     for path in font_paths:
         if os.path.exists(path):
             try:
@@ -85,319 +60,322 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def _draw_centered_text(draw, text, y, font, fill=TEXT_COLOR):
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    x = (WIDTH - text_width) / 2
-    draw.text((x, y), text, fill=fill, font=font)
-    return int(y + text_height + 10)
+def _ease_out_cubic(t: float) -> float:
+    """Ease-out cubic — fast start, smooth landing."""
+    return 1 - (1 - t) ** 3
 
 
-def _draw_centered_wrapped_text(draw, text, y, font, fill=TEXT_COLOR, max_width=900):
+def _ease_in_out(t: float) -> float:
+    """Smoothstep ease in-out."""
+    return t * t * (3 - 2 * t)
+
+
+def _lerp_color(c1: tuple, c2: tuple, t: float) -> tuple:
+    """Linearly interpolate between two RGB colors."""
+    t = max(0.0, min(1.0, t))
+    return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
+
+
+def _draw_gradient_bg(draw: ImageDraw.ImageDraw):
+    """Draw the subtle dark gradient background."""
+    for y in range(HEIGHT):
+        t = y / HEIGHT
+        r = int(5 + 15 * t)
+        g = int(3 + 10 * t)
+        b = int(8 + 12 * t)
+        draw.line([(0, y), (WIDTH, y)], fill=(r, g, b))
+
+
+def _wrap_text_lines(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+    """Wrap text into lines that fit within max_width."""
     import textwrap
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    if text_width <= max_width:
-        return _draw_centered_text(draw, text, y, font, fill)
-
     avg_char_width = font.getlength("m")
     chars_per_line = max(1, int(max_width / avg_char_width))
-    lines = textwrap.wrap(text, width=chars_per_line)
-    line_height = font.size + 8
-    for line in lines:
-        _draw_centered_text(draw, line, y, font, fill)
-        y += line_height
-    return y
+    return textwrap.wrap(text, width=chars_per_line) or [text]
 
 
-def _load_real_screenshot(filename: str) -> Image.Image | None:
-    """Load a real app screenshot and scale to video dimensions."""
-    path = os.path.join(APP_SCREENS_DIR, filename)
-    if not os.path.exists(path):
-        log.warning("App screenshot not found: %s", path)
-        return None
+# ── Segment 1: Feature Text Fade-In ─────────────────────────────────────
 
-    try:
-        img = Image.open(path).convert("RGB")
-        img = img.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-        return img
-    except Exception as e:
-        log.warning("Failed to load screenshot %s: %s", filename, e)
-        return None
-
-
-def _add_feature_overlay(img: Image.Image, feature_text: str) -> Image.Image:
-    """Add a gradient overlay at the bottom with feature text."""
-    draw = ImageDraw.Draw(img)
-
-    # Dark gradient at bottom for text readability
-    overlay_h = 180
-    for i in range(overlay_h):
-        alpha = int(240 * (i / overlay_h) ** 1.5)
-        y = HEIGHT - overlay_h + i
-        draw.line([(0, y), (WIDTH, y)], fill=(0, 0, 0), width=1)
-
-    # Feature text
-    font = _get_font(30, bold=True)
-    text_y = HEIGHT - 100
-    _draw_centered_wrapped_text(draw, feature_text, text_y, font, fill=(255, 255, 255), max_width=900)
-
-    return img
-
-
-def _create_pan_frames(screenshot_path: str, temp_dir: str, prefix: str, duration: float = 2.5) -> list[str]:
-    """Create frames that pan down through a screenshot, simulating scrolling."""
-    img = Image.open(screenshot_path).convert("RGB")
-    orig_w, orig_h = img.size
-
-    # Scale width to match video width, keep aspect ratio
-    scale = WIDTH / orig_w
-    new_w = WIDTH
-    new_h = int(orig_h * scale)
-    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
+def _render_text_fadein_frames(line: str, temp_dir: str, duration: float = 1.5) -> list[str]:
+    """
+    Render the feature text line with a word-by-word fade-in effect.
+    Each word appears sequentially with a smooth opacity ramp.
+    """
     num_frames = int(duration * FPS)
+    font = _get_font(44, bold=True)
+    words = line.split()
     frames = []
 
-    if new_h > HEIGHT:
-        max_offset = new_h - HEIGHT
-        for i in range(num_frames):
-            # Ease in-out curve for smooth motion (smoothstep)
-            t = i / max(1, num_frames - 1)
-            t_smooth = t * t * (3 - 2 * t)
-            y_offset = int(t_smooth * max_offset)
+    # Background color for "invisible" text (matches gradient at center)
+    bg_at_center = (12, 10, 16)
+    text_color = (255, 255, 255)
 
-            cropped = img.crop((0, y_offset, WIDTH, y_offset + HEIGHT))
-            frame_path = os.path.join(temp_dir, f"{prefix}_{i:04d}.png")
-            cropped.save(frame_path, "PNG")
-            frames.append(frame_path)
-    else:
-        # Image fits in frame, just center it
-        padded = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
-        y_offset = (HEIGHT - new_h) // 2
-        padded.paste(img, (0, y_offset))
-        frame_path = os.path.join(temp_dir, f"{prefix}_0000.png")
-        padded.save(frame_path, "PNG")
-        frames = [frame_path] * num_frames
+    for frame_idx in range(num_frames):
+        t = frame_idx / max(1, num_frames - 1)  # 0.0 → 1.0
+
+        img = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        _draw_gradient_bg(draw)
+
+        # Calculate how many words should be visible at this point
+        # Each word fades in over ~0.15s, staggered
+        lines = _wrap_text_lines(line, font, 900)
+        line_height = font.size + 10
+        total_text_height = line_height * len(lines)
+        y_start = HEIGHT // 2 - total_text_height // 2
+
+        # Track word index across wrapped lines
+        word_idx_global = 0
+        for li, text_line in enumerate(lines):
+            line_words = text_line.split()
+            # Measure total line width for centering
+            full_line_width = font.getlength(text_line)
+            x = (WIDTH - full_line_width) / 2
+            y = y_start + li * line_height
+
+            for wi, word in enumerate(line_words):
+                # Each word starts appearing at a staggered time
+                word_start = word_idx_global / max(1, len(words)) * 0.7  # 70% of duration for stagger
+                word_t = max(0.0, min(1.0, (t - word_start) / 0.3))  # 0.3 = fade duration per word
+                word_t = _ease_out_cubic(word_t)
+
+                # Interpolate color from background to white
+                color = _lerp_color(bg_at_center, text_color, word_t)
+                draw.text((x, y), word, fill=color, font=font)
+
+                # Advance x position
+                word_width = font.getlength(word + " ")
+                x += word_width
+                word_idx_global += 1
+
+        frame_path = os.path.join(temp_dir, f"reveal_text_{frame_idx:04d}.png")
+        img.save(frame_path, "PNG")
+        frames.append(frame_path)
 
     return frames
 
 
-def _render_pan_clip(screenshot_path: str, feature_text: str, temp_dir: str,
-                     prefix: str, duration: float, output_path: str) -> str:
-    """Render a panning screenshot clip with feature text overlay."""
-    # Generate pan frames
-    pan_frames = _create_pan_frames(screenshot_path, temp_dir, prefix, duration)
+# ── Segment 2: App Screenshot with Ken Burns Zoom ───────────────────────
 
-    # Add feature overlay to each frame
-    font = _get_font(30, bold=True)
-    for frame_path in pan_frames:
-        frame_img = Image.open(frame_path).convert("RGB")
-        frame_img = _add_feature_overlay(frame_img, feature_text)
-        frame_img.save(frame_path, "PNG")
+def _render_screenshot_zoom_frames(temp_dir: str, duration: float = 1.5) -> list[str]:
+    """
+    Render a real app screenshot with a slow Ken Burns zoom-in effect.
+    Falls back to skipping this segment if no screenshots exist.
+    """
+    # Find an available screenshot
+    available = [f for f in APP_SCREENSHOTS if os.path.exists(os.path.join(APP_SCREENS_DIR, f))]
+    if not available:
+        return []  # skip this segment
 
-    # Compile frames into video clip using ffmpeg
-    pattern = os.path.join(temp_dir, f"{prefix}_%04d.png")
-    cmd = [
-        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-framerate", str(FPS),
-        "-i", pattern,
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-preset", FFMPEG_PRESET,
-        "-vf", f"scale={WIDTH}:{HEIGHT}",
-        output_path,
-    ]
+    chosen = random.choice(available)
+    screenshot = Image.open(os.path.join(APP_SCREENS_DIR, chosen)).convert("RGB")
+    screenshot = screenshot.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+    num_frames = int(duration * FPS)
+    frames = []
 
-    # Cleanup pan frame images
-    for fp in set(pan_frames):
-        try:
-            os.remove(fp)
-        except OSError:
-            pass
+    # Zoom from 100% to 108% — subtle but visible motion
+    zoom_start = 1.0
+    zoom_end = 1.08
 
-    if result.returncode != 0:
-        raise RuntimeError(f"Pan clip render failed: {result.stderr[-500:]}")
+    # Feature text for this screenshot
+    feature_texts = {
+        "home.png": "never forget the people who matter",
+        "home_contacts.png": "see when friendships are fading",
+        "reach_out.png": "reach out before it's too late",
+        "ai_suggestions.png": "AI writes the perfect message",
+    }
+    feature_text = feature_texts.get(chosen, "")
+    overlay_font = _get_font(30, bold=True)
 
-    return output_path
+    for frame_idx in range(num_frames):
+        t = frame_idx / max(1, num_frames - 1)
+        t_smooth = _ease_in_out(t)
+
+        # Calculate zoom level
+        zoom = zoom_start + (zoom_end - zoom_start) * t_smooth
+        new_w = int(WIDTH * zoom)
+        new_h = int(HEIGHT * zoom)
+
+        # Zoom from center
+        zoomed = screenshot.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        crop_x = (new_w - WIDTH) // 2
+        crop_y = (new_h - HEIGHT) // 2
+        cropped = zoomed.crop((crop_x, crop_y, crop_x + WIDTH, crop_y + HEIGHT))
+
+        # Add dark gradient overlay at bottom for text
+        draw = ImageDraw.Draw(cropped)
+        overlay_h = 200
+        for i in range(overlay_h):
+            alpha = int(220 * (i / overlay_h) ** 1.8)
+            y = HEIGHT - overlay_h + i
+            draw.line([(0, y), (WIDTH, y)], fill=(0, 0, 0), width=1)
+
+        # Feature text at bottom — fade in during second half
+        if feature_text:
+            text_opacity = max(0.0, min(1.0, (t - 0.3) / 0.4))
+            text_opacity = _ease_out_cubic(text_opacity)
+            color = _lerp_color((0, 0, 0), (255, 255, 255), text_opacity)
+            bbox = draw.textbbox((0, 0), feature_text, font=overlay_font)
+            tw = bbox[2] - bbox[0]
+            tx = (WIDTH - tw) / 2
+            draw.text((tx, HEIGHT - 90), feature_text, fill=color, font=overlay_font)
+
+        frame_path = os.path.join(temp_dir, f"reveal_screen_{frame_idx:04d}.png")
+        cropped.save(frame_path, "PNG")
+        frames.append(frame_path)
+
+    return frames
 
 
-def render_reveal_frame_text(line: str) -> Image.Image:
-    """Render the opening feature text line."""
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
-    draw = ImageDraw.Draw(img)
-    font = _get_font(42, bold=True)
-    y_start = HEIGHT // 2 - 40
-    _draw_centered_wrapped_text(draw, line, y_start, font, max_width=900)
-    return img
+# ── Segment 3: Logo Scale-Up + Cascade CTA ──────────────────────────────
 
+def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[str]:
+    """
+    Animated logo reveal:
+    - Logo scales from 60% to 100% with ease-out bounce
+    - "it's free" fades in after logo lands
+    - @nesso.app fades in last
+    """
+    num_frames = int(duration * FPS)
+    frames = []
 
-def render_reveal_frame_logo() -> Image.Image:
-    """Render the logo + 'it's free' + App Store CTA frame."""
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    logo_size = 320
-    logo_y_center = HEIGHT // 2 - 100
-
+    # Load logo
+    logo_img = None
+    logo_target_size = 280
     if os.path.exists(NESSO_LOGO_PATH):
         try:
-            logo = Image.open(NESSO_LOGO_PATH).convert("RGBA")
-            logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
-            logo_x = (WIDTH - logo_size) // 2
-            logo_y = logo_y_center - logo_size // 2
-            img.paste(logo, (logo_x, logo_y), logo)
+            logo_img = Image.open(NESSO_LOGO_PATH).convert("RGBA")
         except Exception:
-            logo_x = (WIDTH - logo_size) // 2
-            logo_y = logo_y_center - logo_size // 2
+            pass
+
+    font_main = _get_font(44, bold=True)
+    font_handle = _get_font(24)
+
+    bg_at_center = (12, 10, 16)
+
+    for frame_idx in range(num_frames):
+        t = frame_idx / max(1, num_frames - 1)
+
+        img = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        _draw_gradient_bg(draw)
+
+        logo_y_center = HEIGHT // 2 - 80
+
+        # Logo animation: scale 60% → 100% with ease-out (0.0 → 0.5 of timeline)
+        logo_t = min(1.0, t / 0.45)
+        logo_t = _ease_out_cubic(logo_t)
+        current_logo_size = int(logo_target_size * (0.6 + 0.4 * logo_t))
+
+        if logo_img:
+            logo_resized = logo_img.resize(
+                (current_logo_size, current_logo_size),
+                Image.Resampling.LANCZOS,
+            )
+            logo_x = (WIDTH - current_logo_size) // 2
+            logo_y = logo_y_center - current_logo_size // 2
+            img.paste(logo_resized, (logo_x, logo_y), logo_resized)
+        else:
+            # Fallback circle
+            logo_x = (WIDTH - current_logo_size) // 2
+            logo_y = logo_y_center - current_logo_size // 2
             draw.ellipse(
-                (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
+                (logo_x, logo_y, logo_x + current_logo_size, logo_y + current_logo_size),
                 fill=(232, 212, 207),
             )
-    else:
-        logo_x = (WIDTH - logo_size) // 2
-        logo_y = logo_y_center - logo_size // 2
-        draw.ellipse(
-            (logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
-            fill=(232, 212, 207),
+
+        text_base_y = logo_y_center + logo_target_size // 2 + 25
+
+        # "it's free" — fades in at t=0.4 → 0.7
+        free_t = max(0.0, min(1.0, (t - 0.4) / 0.3))
+        free_t = _ease_out_cubic(free_t)
+        free_color = _lerp_color(bg_at_center, (255, 255, 255), free_t)
+        free_text = "it's free"
+        free_width = font_main.getlength(free_text)
+        draw.text(
+            ((WIDTH - free_width) / 2, text_base_y),
+            free_text, fill=free_color, font=font_main,
         )
 
-    # "it's free" — large
-    text_y = logo_y_center + logo_size // 2 + 20
-    font_main = _get_font(42, bold=True)
-    _draw_centered_text(draw, "it's free", text_y, font_main)
+        # @nesso.app — fades in at t=0.6 → 0.9
+        handle_t = max(0.0, min(1.0, (t - 0.6) / 0.3))
+        handle_t = _ease_out_cubic(handle_t)
+        handle_color = _lerp_color(bg_at_center, (142, 142, 147), handle_t)
+        handle_text = "@nesso.app"
+        handle_width = font_handle.getlength(handle_text)
+        draw.text(
+            ((WIDTH - handle_width) / 2, text_base_y + 60),
+            handle_text, fill=handle_color, font=font_handle,
+        )
 
-    # "Nesso" brand name
-    font_brand = _get_font(28)
-    _draw_centered_text(draw, "Nesso", text_y + 55, font_brand, fill=(142, 142, 147))
+        frame_path = os.path.join(temp_dir, f"reveal_logo_{frame_idx:04d}.png")
+        img.save(frame_path, "PNG")
+        frames.append(frame_path)
 
-    # "Download on the App Store"
-    font_store = _get_font(30, bold=True)
-    _draw_centered_text(draw, "Download on the App Store", text_y + 105, font_store, fill=(255, 255, 255))
-
-    # @nesso.app handle
-    font_handle = _get_font(24)
-    _draw_centered_text(draw, "@nesso.app", text_y + 155, font_handle, fill=(142, 142, 147))
-
-    return img
+    return frames
 
 
-def render_reveal_frame_cta() -> Image.Image:
-    """Render the final @nesso.app CTA screen."""
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
-    draw = ImageDraw.Draw(img)
-    font = _get_font(36, bold=True)
-    _draw_centered_text(draw, "@nesso.app", HEIGHT // 2 - 20, font)
-    return img
-
-
-def _static_frame_to_clip(image_path: str, duration: float, output_path: str) -> str:
-    """Convert a static PNG frame into a video clip of the given duration."""
-    cmd = [
-        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-loop", "1",
-        "-i", image_path,
-        "-t", str(duration),
-        "-r", str(FPS),
-        "-vf", f"scale={WIDTH}:{HEIGHT}",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-preset", FFMPEG_PRESET,
-        output_path,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
-    if result.returncode != 0:
-        raise RuntimeError(f"Static frame to clip failed: {result.stderr[-500:]}")
-    return output_path
-
+# ── Main Entry Point ────────────────────────────────────────────────────
 
 def render_nesso_reveal(output_path: str) -> str:
     """
-    Render the Nesso reveal using REAL app screenshots.
+    Render the animated Nesso reveal sequence.
 
-    Segment 1: Feature text line (2s)
-    Segments 2-3: 2 app screenshots with pan animation (2.5s each = 5s)
-    Segment 4: Logo + "it's free" + App Store CTA + @nesso.app (2.5s)
+    Segment 1: Feature text word-by-word fade-in (1.5s)
+    Segment 2: App screenshot Ken Burns zoom (1.5s) — skipped if no screenshots
+    Segment 3: Logo scale-up + "it's free" cascade + @nesso.app (2.0s)
 
-    Total: ~10s
+    Total: 3.5-5.0s depending on screenshot availability.
+    All frames are unique (animated) — no static frame duplication.
     """
     temp_dir = os.path.dirname(output_path)
     line = get_reveal_line()
 
-    # Pick 2 random real screenshots
-    available_screens = [s for s in REAL_SCREENS if os.path.exists(os.path.join(APP_SCREENS_DIR, s["file"]))]
+    all_frames = []
 
-    if not available_screens:
-        log.warning("No real app screenshots found, using text-only reveal")
-        available_screens = []
+    # Segment 1: Text fade-in (1.5s)
+    text_frames = _render_text_fadein_frames(line, temp_dir, duration=1.5)
+    all_frames.extend(text_frames)
 
-    screens = random.sample(available_screens, min(2, len(available_screens)))
+    # Segment 2: App screenshot zoom (1.5s) — optional
+    screenshot_frames = _render_screenshot_zoom_frames(temp_dir, duration=1.5)
+    all_frames.extend(screenshot_frames)
 
-    # ── Render all segments ──────────────────────────────────────────
-    # Static frames use concat demuxer; pan clips are pre-rendered videos.
-    # We normalize everything to video clips, then concat them all.
-    segment_clips = []
+    # Segment 3: Logo cascade (2.0s)
+    logo_frames = _render_logo_cascade_frames(temp_dir, duration=2.0)
+    all_frames.extend(logo_frames)
 
-    # Segment 1: Opening text (2s)
-    frame_text = render_reveal_frame_text(line)
-    path_text = os.path.join(temp_dir, "reveal_00_text.png")
-    frame_text.save(path_text, "PNG")
-    clip_text = os.path.join(temp_dir, "reveal_00_text.mp4")
-    _static_frame_to_clip(path_text, 2.0, clip_text)
-    segment_clips.append(clip_text)
+    if not all_frames:
+        raise RuntimeError("No reveal frames generated")
 
-    # Segments 2-3: Real app screenshots with PAN animation (2.5s each)
-    for i, screen in enumerate(screens):
-        screenshot_path = os.path.join(APP_SCREENS_DIR, screen["file"])
-        if os.path.exists(screenshot_path):
-            clip_path = os.path.join(temp_dir, f"reveal_{i+1:02d}_pan.mp4")
-            _render_pan_clip(
-                screenshot_path=screenshot_path,
-                feature_text=screen["feature_text"],
-                temp_dir=temp_dir,
-                prefix=f"pan_{i+1:02d}",
-                duration=screen["duration"],
-                output_path=clip_path,
-            )
-            segment_clips.append(clip_path)
-
-    # Segment 4: Logo + CTA (2.5s — slightly longer so viewers can read App Store text)
-    frame_logo = render_reveal_frame_logo()
-    path_logo = os.path.join(temp_dir, "reveal_04_logo.png")
-    frame_logo.save(path_logo, "PNG")
-    clip_logo = os.path.join(temp_dir, "reveal_04_logo.mp4")
-    _static_frame_to_clip(path_logo, 2.5, clip_logo)
-    segment_clips.append(clip_logo)
-
-    # ── Concat all segment clips ─────────────────────────────────────
-    concat_file = os.path.join(temp_dir, "reveal_concat.txt")
+    # Compile all frames to video via FFmpeg
+    concat_file = os.path.join(temp_dir, "reveal_frames.txt")
     with open(concat_file, "w") as f:
-        for clip in segment_clips:
-            safe_path = clip.replace("'", "'\\''")
-            f.write(f"file '{safe_path}'\n")
+        for fp in all_frames:
+            safe = fp.replace("'", "'\\''")
+            f.write(f"file '{safe}'\nduration {1/FPS}\n")
+        # Repeat last frame
+        safe = all_frames[-1].replace("'", "'\\''")
+        f.write(f"file '{safe}'\n")
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-f", "concat", "-safe", "0",
         "-i", concat_file,
-        "-c", "copy",
+        "-vf", f"fps={FPS}",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", FFMPEG_PRESET,
         output_path,
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    # Cleanup all intermediate files
-    for clip in segment_clips:
+    # Cleanup all frame PNGs
+    for fp in all_frames:
         try:
-            os.remove(clip)
-        except OSError:
-            pass
-    for png in [path_text, path_logo]:
-        try:
-            os.remove(png)
+            os.remove(fp)
         except OSError:
             pass
     try:
@@ -409,5 +387,9 @@ def render_nesso_reveal(output_path: str) -> str:
         raise RuntimeError(f"Reveal render failed: {result.stderr[-500:]}")
 
     reveal_dur = get_duration(output_path)
-    log.info("Reveal rendered: %s (%.1fs) with %d real app screens (pan effect)", output_path, reveal_dur, len(screens))
+    log.info(
+        "Reveal rendered: %s (%.1fs, %d frames, %s screenshot)",
+        output_path, reveal_dur, len(all_frames),
+        "with" if screenshot_frames else "no",
+    )
     return output_path
