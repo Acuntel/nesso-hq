@@ -1,8 +1,8 @@
 """
 Nesso Content Engine V21 — Animated Reveal Sequence
 
-Frame-by-frame animation using Pillow — no Remotion/Node.js needed.
-Every frame is unique (animated), compiled to video via FFmpeg.
+Primary: Remotion (React → Chromium → MP4) for professional motion graphics.
+Fallback: Pillow frame-by-frame animation if Remotion service unavailable.
 
 Flow (5s total):
 1. Feature text fade-in, word by word (1.5s)
@@ -16,6 +16,7 @@ import os
 import random
 import subprocess
 
+import requests as http_requests
 from PIL import Image, ImageDraw, ImageFont
 
 from config import (
@@ -318,19 +319,72 @@ def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[st
 
 # ── Main Entry Point ────────────────────────────────────────────────────
 
-def render_nesso_reveal(output_path: str) -> str:
-    """
-    Render the animated Nesso reveal sequence.
+REMOTION_URL = os.environ.get("REMOTION_URL", "")  # e.g. http://remotion-reveal.railway.internal:3100
 
-    Segment 1: Feature text word-by-word fade-in (1.5s)
-    Segment 2: App screenshot Ken Burns zoom (1.5s) — skipped if no screenshots
-    Segment 3: Logo scale-up + "it's free" cascade + @nesso.app (2.0s)
 
-    Total: 3.5-5.0s depending on screenshot availability.
-    All frames are unique (animated) — no static frame duplication.
-    """
+def _try_remotion_reveal(output_path: str, line: str) -> bool:
+    """Try rendering via the Remotion microservice. Returns True on success."""
+    if not REMOTION_URL:
+        return False
+
+    # Check for app screenshot to pass
+    available = [f for f in APP_SCREENSHOTS if os.path.exists(os.path.join(APP_SCREENS_DIR, f))]
+    screenshot_url = ""
+    if available:
+        # Remotion needs a URL or base64 — for Railway internal, use file:// or serve it
+        # For now, skip screenshot in Remotion (logo + text is the main value)
+        pass
+
+    # Encode logo as data URL if it exists
+    logo_url = ""
+    if os.path.exists(NESSO_LOGO_PATH):
+        import base64
+        with open(NESSO_LOGO_PATH, "rb") as f:
+            logo_b64 = base64.b64encode(f.read()).decode()
+        logo_url = f"data:image/png;base64,{logo_b64}"
+
+    payload = {
+        "headline": line,
+        "logoUrl": logo_url,
+        "screenshotUrl": screenshot_url,
+        "subtitleText": "it's free",
+        "handleText": "@nesso.app",
+        "accentColor": "#E8D4CF",
+        "fps": FPS,
+        "durationSeconds": 5.0,
+    }
+
+    try:
+        resp = http_requests.post(
+            f"{REMOTION_URL}/render",
+            json=payload,
+            timeout=60,
+            stream=True,
+        )
+        if resp.status_code != 200:
+            log.warning("Remotion returned %d: %s", resp.status_code, resp.text[:200])
+            return False
+
+        with open(output_path, "wb") as f:
+            for chunk in resp.iter_content(8192):
+                f.write(chunk)
+
+        dur = get_duration(output_path)
+        if dur < 1.0:
+            log.warning("Remotion output too short (%.1fs), falling back to Pillow", dur)
+            return False
+
+        log.info("Remotion reveal rendered: %.1fs", dur)
+        return True
+
+    except Exception as e:
+        log.warning("Remotion reveal failed, falling back to Pillow: %s", e)
+        return False
+
+
+def _pillow_reveal(output_path: str, line: str) -> str:
+    """Pillow-based fallback reveal renderer (frame-by-frame animation)."""
     temp_dir = os.path.dirname(output_path)
-    line = get_reveal_line()
 
     all_frames = []
 
@@ -349,13 +403,11 @@ def render_nesso_reveal(output_path: str) -> str:
     if not all_frames:
         raise RuntimeError("No reveal frames generated")
 
-    # Compile all frames to video via FFmpeg
     concat_file = os.path.join(temp_dir, "reveal_frames.txt")
     with open(concat_file, "w") as f:
         for fp in all_frames:
             safe = fp.replace("'", "'\\''")
             f.write(f"file '{safe}'\nduration {1/FPS}\n")
-        # Repeat last frame
         safe = all_frames[-1].replace("'", "'\\''")
         f.write(f"file '{safe}'\n")
 
@@ -372,7 +424,6 @@ def render_nesso_reveal(output_path: str) -> str:
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    # Cleanup all frame PNGs
     for fp in all_frames:
         try:
             os.remove(fp)
@@ -386,10 +437,27 @@ def render_nesso_reveal(output_path: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"Reveal render failed: {result.stderr[-500:]}")
 
+    return output_path
+
+
+def render_nesso_reveal(output_path: str) -> str:
+    """
+    Render the animated Nesso reveal sequence.
+
+    Tries Remotion microservice first (professional motion graphics with
+    spring physics, CSS easing, anti-aliased text, ambient glow).
+    Falls back to Pillow frame-by-frame animation if Remotion unavailable.
+    """
+    line = get_reveal_line()
+
+    # Try Remotion first
+    if _try_remotion_reveal(output_path, line):
+        return output_path
+
+    # Fallback to Pillow
+    log.info("Using Pillow fallback for reveal")
+    _pillow_reveal(output_path, line)
+
     reveal_dur = get_duration(output_path)
-    log.info(
-        "Reveal rendered: %s (%.1fs, %d frames, %s screenshot)",
-        output_path, reveal_dur, len(all_frames),
-        "with" if screenshot_frames else "no",
-    )
+    log.info("Reveal rendered (Pillow): %s (%.1fs)", output_path, reveal_dur)
     return output_path
