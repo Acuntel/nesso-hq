@@ -1,13 +1,12 @@
 """
-Nesso Content Engine V20 — Morph Transition (Wants and Needs Style)
+Nesso Content Engine V21 — Morph Transition + Audio Mix
 
-The PSYCH sound effect plays at the exact frame where the hook ends
-and the text story begins. Uses FFmpeg xfade for seamless visual morph.
+Simple concat approach: hook → black frame → story → black frame → reveal
+Reliable on all FFmpeg versions. No xfade dependency.
 """
 
 import logging
 import os
-import random
 import subprocess
 
 from config import (
@@ -16,13 +15,17 @@ from config import (
     FFMPEG_TIMEOUT,
     FPS,
     HEIGHT,
+    HOOK_AUDIO_FADEOUT,
+    IMESSAGE_RECV_SFX,
+    IMESSAGE_SEND_SFX,
+    IMESSAGE_SFX_FADE_AFTER,
+    IMESSAGE_SFX_VOLUME,
     MORPH_DURATION,
-    MORPH_TRANSITION,
+    MUSIC_PRE_MORPH_OFFSET,
     MUSIC_VOLUME_RATIO,
     MUSIC_VOLUME_WITH_VO,
     VOICEOVER_VOLUME,
     WIDTH,
-    get_morph_transition,
 )
 from verify import get_duration
 
@@ -38,17 +41,18 @@ def morph_and_concat(
     music_path: str,
     output_path: str,
     voiceover_path: str = "",
+    message_timings: list[dict] | None = None,
 ) -> str:
     """
-    Full video assembly with morph transition:
-    Hook (with audio) → MORPH (psych sfx) → Story (with voiceover + music) → Reveal
+    Full video assembly:
+    Hook → black frame → Story → black frame → Reveal
 
-    Audio layers:
-    1. Hook original audio (full volume) during hook
-    2. PSYCH sfx at morph point (overlaps 0.2s on each side)
-    3. Voiceover during text story (85% volume) — if available
-    4. Lo-fi music during text story (12% with VO, 18% without)
-    5. Silence/fade during reveal
+    Audio layers (5-layer mix):
+    1. Hook original audio (full volume, fade out last 1.0s)
+    2. PSYCH sfx at morph point
+    3. Voiceover during text story (85% volume)
+    4. Lo-fi music (12% with VO, 18% without, starts 1.0s before morph)
+    5. iMessage send/receive SFX (first 3 messages only)
     """
     hook_dur = get_duration(hook_path)
     story_dur = get_duration(story_path)
@@ -64,28 +68,28 @@ def morph_and_concat(
 
     temp_dir = os.path.dirname(output_path)
 
-    # ── STEP 1: Normalize all inputs + create black transition frames ──
+    # ── STEP 1: Normalize all inputs ──────────────────────────────────
     norm_hook = os.path.join(temp_dir, "norm_hook.mp4")
     norm_story = os.path.join(temp_dir, "norm_story.mp4")
     _normalize_video(hook_path, norm_hook)
     _normalize_video(story_path, norm_story)
 
-    # Create a 0.4s black frame for clean transitions (no xfade needed)
+    # Create a short black frame for transitions (0.3s — short enough to not lose viewers)
     black_frame = os.path.join(temp_dir, "black_transition.mp4")
     black_cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-f", "lavfi", "-i",
-        f"color=c=black:s={WIDTH}x{HEIGHT}:r={FPS}:d=0.4",
+        f"color=c=black:s={WIDTH}x{HEIGHT}:r={FPS}:d=0.3",
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-preset", FFMPEG_PRESET,
         black_frame,
     ]
     subprocess.run(black_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    # Concat: hook → black → story (simple, reliable, works on any FFmpeg)
+    # Concat: hook → black → story
     morphed_video = os.path.join(temp_dir, "morphed_v.mp4")
     _safe_concat([norm_hook, black_frame, norm_story], morphed_video)
-    log.info("Morph: hook → black → story (no xfade)")
+    log.info("Morph: hook → black → story")
 
     for f in [norm_hook, norm_story]:
         try:
@@ -93,11 +97,8 @@ def morph_and_concat(
         except OSError:
             pass
 
-    morphed_dur = get_duration(morphed_video)
-
     # ── STEP 2: Concat morphed + reveal ────────────────────────────────
     full_video = os.path.join(temp_dir, "full_v.mp4")
-    # Concat morphed + black + reveal
     norm_reveal = os.path.join(temp_dir, "norm_reveal.mp4")
     _normalize_video(reveal_path, norm_reveal)
     _safe_concat([morphed_video, black_frame, norm_reveal], full_video)
@@ -107,11 +108,9 @@ def morph_and_concat(
         except OSError:
             pass
 
-    # Measure ACTUAL video duration (not calculated estimate) for audio sync
     actual_video_dur = get_duration(full_video)
     log.info("Full video (before audio): %.1fs", actual_video_dur)
 
-    # Clean intermediate
     try:
         os.remove(morphed_video)
     except OSError:
@@ -130,11 +129,10 @@ def morph_and_concat(
         morph_dur=MORPH_DURATION,
         output_path=full_audio,
         actual_video_dur=actual_video_dur,
+        message_timings=message_timings,
     )
 
     # ── STEP 4: Mux video + audio ─────────────────────────────────────
-    # NO -shortest: we want the full video (including reveal) even if audio
-    # is slightly shorter. -t trims audio to match video, not the reverse.
     mux_cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", full_video,
@@ -147,7 +145,6 @@ def morph_and_concat(
 
     result = subprocess.run(mux_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    # Clean intermediates
     for f in [full_video, full_audio]:
         try:
             os.remove(f)
@@ -162,10 +159,7 @@ def morph_and_concat(
 
 
 def _normalize_video(input_path: str, output_path: str) -> str:
-    """
-    Re-encode a video to exactly 1080x1920, 30fps, yuv420p, libx264.
-    This guarantees any two normalized videos can be concatenated or xfaded.
-    """
+    """Re-encode to exactly 1080x1920, 30fps, yuv420p, libx264."""
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", input_path,
@@ -187,10 +181,7 @@ def _normalize_video(input_path: str, output_path: str) -> str:
 
 
 def _safe_concat(paths: list[str], output_path: str) -> str:
-    """
-    Concatenate videos that have ALREADY been normalized to identical params.
-    Uses -c copy since all inputs are guaranteed to match.
-    """
+    """Concatenate normalized videos using -c copy."""
     temp_dir = os.path.dirname(output_path)
     concat_file = os.path.join(temp_dir, "safe_concat.txt")
 
@@ -219,44 +210,6 @@ def _safe_concat(paths: list[str], output_path: str) -> str:
     return output_path
 
 
-def _simple_concat_video(path_a: str, path_b: str, output_path: str) -> str:
-    """Normalize both inputs then concat. Cannot fail due to stream mismatch."""
-    temp_dir = os.path.dirname(output_path)
-    norm_a = os.path.join(temp_dir, "norm_a.mp4")
-    norm_b = os.path.join(temp_dir, "norm_b.mp4")
-
-    _normalize_video(path_a, norm_a)
-    _normalize_video(path_b, norm_b)
-    _safe_concat([norm_a, norm_b], output_path)
-
-    for f in [norm_a, norm_b]:
-        try:
-            os.remove(f)
-        except OSError:
-            pass
-
-    return output_path
-
-
-def _concat_with_reveal(video_path: str, reveal_path: str, output_path: str) -> str:
-    """Normalize both inputs then concat with reveal."""
-    temp_dir = os.path.dirname(output_path)
-    norm_v = os.path.join(temp_dir, "norm_morphed.mp4")
-    norm_r = os.path.join(temp_dir, "norm_reveal.mp4")
-
-    _normalize_video(video_path, norm_v)
-    _normalize_video(reveal_path, norm_r)
-    _safe_concat([norm_v, norm_r], output_path)
-
-    for f in [norm_v, norm_r]:
-        try:
-            os.remove(f)
-        except OSError:
-            pass
-
-    return output_path
-
-
 def _build_audio_track(
     hook_audio_path: str,
     psych_sfx_path: str,
@@ -268,52 +221,48 @@ def _build_audio_track(
     morph_dur: float,
     output_path: str,
     actual_video_dur: float = 0,
+    message_timings: list[dict] | None = None,
 ) -> str:
     """
-    Build the complete audio track:
-    - Hook audio at full volume (0 → hook_dur)
-    - PSYCH sfx at morph point
-    - Voiceover during story (85% volume) — if available
-    - Background music during story (12% with VO, 18% without)
-    - Fade out during reveal
+    Build the complete 5-layer audio track:
+    1. Hook audio (full volume, fade out last 1.0s)
+    2. PSYCH sfx at morph point
+    3. Voiceover during story (85% volume)
+    4. Background music (12% with VO, 18% without, starts 1.0s before morph)
+    5. iMessage send/receive SFX (first 3 messages)
     """
     calculated_dur = hook_dur + story_dur + reveal_dur - morph_dur
-    # Use actual video duration if available; otherwise fall back to calculated
     total_dur = actual_video_dur if actual_video_dur > 0 else calculated_dur
     if actual_video_dur > 0 and abs(actual_video_dur - calculated_dur) > 0.5:
         log.info(
             "Audio track using actual video dur %.1fs (calculated was %.1fs)",
             actual_video_dur, calculated_dur,
         )
-    music_start = hook_dur - morph_dur / 2
+    music_start = max(0, hook_dur - MUSIC_PRE_MORPH_OFFSET)
 
     has_voiceover = voiceover_path and os.path.exists(voiceover_path)
-
-    # Use lower music volume when voiceover is present
     effective_music_vol = MUSIC_VOLUME_WITH_VO if has_voiceover else MUSIC_VOLUME_RATIO
 
-    # Build filter_complex for audio mixing
     inputs = []
     filter_parts = []
     stream_idx = 0
 
-    # Hook audio
+    # Layer 1: Hook audio
     has_hook_audio = hook_audio_path and os.path.exists(hook_audio_path)
     if has_hook_audio:
         inputs.extend(["-i", hook_audio_path])
         filter_parts.append(
             f"[{stream_idx}:a]atrim=0:{hook_dur},asetpts=PTS-STARTPTS,"
-            f"afade=t=out:st={hook_dur - 0.3}:d=0.3[hook_a]"
+            f"afade=t=out:st={hook_dur - HOOK_AUDIO_FADEOUT}:d={HOOK_AUDIO_FADEOUT}[hook_a]"
         )
         stream_idx += 1
     else:
-        # Generate silence for hook duration
         filter_parts.append(
             f"anullsrc=r=44100:cl=stereo[hook_null];"
             f"[hook_null]atrim=0:{hook_dur}[hook_a]"
         )
 
-    # PSYCH sfx
+    # Layer 2: PSYCH sfx
     has_psych = psych_sfx_path and os.path.exists(psych_sfx_path)
     if has_psych:
         inputs.extend(["-i", psych_sfx_path])
@@ -323,7 +272,7 @@ def _build_audio_track(
         )
         stream_idx += 1
 
-    # Voiceover (during story section)
+    # Layer 3: Voiceover
     if has_voiceover:
         inputs.extend(["-i", voiceover_path])
         vo_delay_ms = int(music_start * 1000)
@@ -334,7 +283,7 @@ def _build_audio_track(
         )
         stream_idx += 1
 
-    # Background music
+    # Layer 4: Background music
     has_music = music_path and os.path.exists(music_path)
     if has_music:
         inputs.extend(["-i", music_path])
@@ -348,7 +297,37 @@ def _build_audio_track(
         )
         stream_idx += 1
 
-    # Mix all audio streams
+    # Layer 5: iMessage send/receive SFX (first N messages only)
+    has_send_sfx = os.path.exists(IMESSAGE_SEND_SFX)
+    has_recv_sfx = os.path.exists(IMESSAGE_RECV_SFX)
+    imsg_labels = []
+
+    if message_timings and (has_send_sfx or has_recv_sfx):
+        sfx_count = 0
+        for mt in message_timings:
+            if sfx_count >= IMESSAGE_SFX_FADE_AFTER:
+                break
+            if mt.get("sender") == "system":
+                continue
+
+            is_me = mt.get("sender") == "me"
+            sfx_path = IMESSAGE_SEND_SFX if is_me else IMESSAGE_RECV_SFX
+            if not os.path.exists(sfx_path):
+                continue
+
+            msg_time_ms = int((music_start + mt.get("cumulative_time", 0)) * 1000)
+            label = f"imsg_{sfx_count}"
+
+            inputs.extend(["-i", sfx_path])
+            filter_parts.append(
+                f"[{stream_idx}:a]volume={IMESSAGE_SFX_VOLUME},"
+                f"adelay={msg_time_ms}|{msg_time_ms}[{label}]"
+            )
+            imsg_labels.append(f"[{label}]")
+            stream_idx += 1
+            sfx_count += 1
+
+    # Mix all layers
     mix_inputs = "[hook_a]"
     mix_count = 1
     if has_psych:
@@ -359,6 +338,9 @@ def _build_audio_track(
         mix_count += 1
     if has_music:
         mix_inputs += "[music_a]"
+        mix_count += 1
+    for label in imsg_labels:
+        mix_inputs += label
         mix_count += 1
 
     filter_parts.append(
@@ -380,10 +362,9 @@ def _build_audio_track(
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
     if result.returncode != 0:
         log.warning("Audio mix failed, generating silent track: %s", result.stderr[-300:])
-        # Fallback: silent audio
         cmd_silent = [
             "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-            "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
             "-t", str(total_dur),
             "-c:a", "aac", "-b:a", "128k",
             output_path,

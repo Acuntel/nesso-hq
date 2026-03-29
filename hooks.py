@@ -391,7 +391,7 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
             # Download with yt-dlp (merges audio+video DASH streams)
             raw_path = os.path.join(temp_dir, "hook_reddit_raw.mp4")
             ydl_opts = {
-                "format": "best",  # Reddit DASH doesn't support height filters
+                "format": "bestvideo+bestaudio/bestvideo/best",
                 "merge_output_format": "mp4",
                 "quiet": True,
                 "no_warnings": True,
