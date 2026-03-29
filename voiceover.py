@@ -158,8 +158,16 @@ def generate_voiceover(
         fallback_delay = msg.get("delay", 1.2)
 
         if not speech_text:
-            # System message (read receipt, typing...) — generate 1.5s silence
-            silence_dur = 1.5
+            # Smart system message timing — different durations for different indicators
+            sys_text = msg.get("text", "").lower()
+            if "read" in sys_text:
+                silence_dur = 2.0  # "Read 1:23 AM" — let the weight of being read sink in
+            elif "typing" in sys_text:
+                silence_dur = 1.0  # "typing..." — brief anticipation
+            elif "delivered" in sys_text:
+                silence_dur = 1.5  # standard delivery confirmation
+            else:
+                silence_dur = 1.5  # default for unknown system messages
             result = _generate_silence_robust(silence_dur, clip_path)
             clip_paths.append(result)
             per_message_durations.append(silence_dur)
@@ -170,11 +178,15 @@ def generate_voiceover(
             sender = msg.get("sender", "")
             voice_id = ELEVENLABS_VOICE_ID if sender == "me" else ELEVENLABS_VOICE_ID_2
 
+            # Use expressive model for emotional knife messages (late in the conversation)
+            is_knife_message = i >= 5 and msg.get("sender") != "system"
+            tts_model = "eleven_multilingual_v2" if is_knife_message else "eleven_turbo_v2_5"
+
             # Generate TTS via ElevenLabs API
             audio_generator = client.text_to_speech.convert(
                 voice_id=voice_id,
                 text=speech_text,
-                model_id="eleven_turbo_v2_5",
+                model_id=tts_model,
                 output_format="mp3_44100_128",
             )
 
@@ -192,8 +204,16 @@ def generate_voiceover(
                 per_message_durations.append(fallback_delay)
                 continue
 
-            # Add 0.3s buffer so text lingers slightly after speech ends
-            per_message_durations.append(clip_dur + 0.3)
+            # Variable buffer — heavier messages linger longer
+            word_count = len(speech_text.split())
+            original_delay = msg.get("delay", 1.2)
+            if word_count <= 4:
+                buffer = 0.2  # short messages, quick pace
+            elif original_delay >= 2.0:
+                buffer = 0.4  # gut-punch messages linger
+            else:
+                buffer = 0.3  # default
+            per_message_durations.append(clip_dur + buffer)
             clip_paths.append(clip_path)
 
             log.debug("VO clip %d: %.1fs for '%s'", i, clip_dur, speech_text[:40])

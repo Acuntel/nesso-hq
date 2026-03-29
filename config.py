@@ -15,6 +15,12 @@ PSYCH_SFX_PATH = os.path.join(ASSETS_DIR, "psych_sfx.mp3")
 NESSO_LOGO_PATH = os.path.join(ASSETS_DIR, "nesso_logo.png")
 IMESSAGE_SEND_SFX = os.path.join(ASSETS_DIR, "imessage_sounds", "send.mp3")
 IMESSAGE_RECV_SFX = os.path.join(ASSETS_DIR, "imessage_sounds", "receive.mp3")
+BUNDLED_MUSIC_DIR = os.path.join(ASSETS_DIR, "music")
+
+# ── Typing Indicator ─────────────────────────────────────────────────────
+TYPING_INDICATOR_DURATION = 0.6  # seconds to show "..." bubble before received message
+TYPING_BUBBLE_COLOR = (28, 28, 30)  # same as OTHER_BUBBLE_COLOR
+TYPING_DOT_COLOR = (142, 142, 147)  # gray dots
 
 # ── Video Specs ────────────────────────────────────────────────────────────
 WIDTH = 1080
@@ -61,15 +67,18 @@ FFMPEG_PRESET = "ultrafast"
 FFMPEG_TIMEOUT = 120  # seconds
 
 # ── Morph ──────────────────────────────────────────────────────────────────
-MORPH_DURATION = 0.3   # seconds
-MORPH_TRANSITION = "fadeblack"  # default, but get_morph_transition() rotates
+MORPH_DURATION = 0.4   # seconds for cross-dissolve transitions
+MORPH_TRANSITION = "fade"  # default — fade cross-dissolves without going black
+MORPH_FADEBLACK_DURATION = 0.4  # keep fadeblack short — long fadeblack = black frame = viewer swipes
 
-# Transition pool — only the most compatible ones that work everywhere
+# Transition pool — fade and dissolve preferred (no black frames)
+# fadeblack/fadewhite kept but short duration prevents the "video ended" effect
 MORPH_TRANSITIONS = [
     "fade",
-    "fadeblack",
-    "fadewhite",
+    "fade",
     "dissolve",
+    "dissolve",
+    "fadeblack",
 ]
 
 _last_transition_index = -1
@@ -85,37 +94,13 @@ def get_morph_transition() -> str:
     _last_transition_index = idx
     return MORPH_TRANSITIONS[idx]
 
-# ── Hook Text Overlay ─────────────────────────────────────────────────────
-HOOK_TEXT_TEMPLATES = [
-    "INSANE {category} 😱🔥",
-    "NO WAY THIS HAPPENED 💀",
-    "WAIT FOR IT... 🤯",
-    "HOW DID THIS HAPPEN 😱",
-    "THIS IS ACTUALLY INSANE 💀🔥",
-    "BRO WHAT 😭💀",
-    "NOBODY EXPECTED THIS 🤯",
-    "I CAN'T BELIEVE THIS 😱",
-    "THIS CHANGES EVERYTHING 🔥",
-    "WATCH TILL THE END 👀",
-]
-
-# Category-specific hook text (maps hook_category to more specific text)
-HOOK_CATEGORY_TEXT = {
-    "crash": ["INSANE CRASH 😱🔥", "HOW DID HE SURVIVE 💀", "CRAZY SAVE 🤯"],
-    "extreme_heights": ["DON'T LOOK DOWN 😱", "ABSOLUTE MADMAN 💀🔥", "NOPE NOPE NOPE 🤯"],
-    "explosion": ["BOOM 💥😱", "THAT ESCALATED FAST 🔥", "WAIT FOR THE EXPLOSION 💀"],
-    "extreme_sports": ["INSANE SKILLS 🔥", "HE ACTUALLY DID IT 😱", "FULL SEND 💀🤯"],
-    "nature": ["NATURE IS SCARY 😱", "RUN. NOW. 💀🔥", "CAUGHT ON CAMERA 🤯"],
-    "viral": ["NO WAY THIS IS REAL 😱", "WAIT FOR IT 🤯🔥", "BRO WHAT 💀"],
-}
-
 # Second ElevenLabs voice for "friend" messages
 ELEVENLABS_VOICE_ID_2 = os.environ.get("ELEVENLABS_VOICE_ID_2", "21m00Tcm4TlvDq8ikWAM")  # Rachel voice
 
-# ── Reveal ─────────────────────────────────────────────────────────────────
-REVEAL_TEXT_DURATION = 2.0   # single feature line
-REVEAL_DURATION = 2.0        # logo + "it's free"
-BLACK_SCREEN_DURATION = 1.0  # @nesso.app CTA
+# ── Reveal (3s total — any longer and viewers swipe) ──────────────────────
+REVEAL_TEXT_DURATION = 1.5   # single feature line
+REVEAL_DURATION = 1.5        # logo + "it's free"
+BLACK_SCREEN_DURATION = 0.0  # KILLED — no separate CTA frame
 
 # ── ElevenLabs TTS Voiceover ─────────────────────────────────────────────
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
@@ -126,11 +111,18 @@ MUSIC_VOLUME_WITH_VO = 0.12   # lower music when voiceover is playing
 
 # ── Music ──────────────────────────────────────────────────────────────────
 MUSIC_VOLUME_RATIO = 0.18  # 18% of hook volume (used when no voiceover)
-IMESSAGE_SFX_VOLUME_RATIO = 0.10  # 10% of hook volume
+IMESSAGE_SFX_VOLUME = 0.25  # iMessage send/receive SFX volume
 IMESSAGE_SFX_FADE_AFTER = 3  # only play sfx on first N messages
 
-# ── Pexels API (fallback when YouTube is blocked) ─────────────────────────
-PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
+# ── Hook Audio ────────────────────────────────────────────────────────────
+HOOK_AUDIO_FADEOUT = 1.0  # fade out hook audio over last 1.0s (was 0.3s — too abrupt)
+
+# ── Music Start Offset ────────────────────────────────────────────────────
+MUSIC_PRE_MORPH_OFFSET = 1.0  # start music 1.0s before morph point (smooth audio bridge)
+
+# ── Message Delay Bounds ──────────────────────────────────────────────────
+MIN_MESSAGE_DELAY = 0.8
+MAX_MESSAGE_DELAY = 3.0
 
 # ── Hook / YouTube Settings ───────────────────────────────────────────────
 MAX_HOOK_CANDIDATES = 3
@@ -175,35 +167,15 @@ HOOK_SEARCH_QUERIES = [
     "tornado caught on camera close",
     "volcano eruption close up footage",
     "shark encounter caught on gopro",
-    # Food & Cooking Fails
-    "cooking fail fire kitchen",
-    "gordon ramsay disgusting food",
-    "satisfying food cutting compilation",
-    "cake decorating fail vs expectation",
-    "street food satisfying compilation",
-    # Gaming & Internet Culture
-    "most insane gaming moment ever",
-    "streamer freakout compilation",
-    "speedrun impossible trick shot",
-    "VR fail compilation hilarious",
     # Sports Highlights
-    "most insane sports play ever",
-    "crowd reaction incredible goal",
     "last second buzzer beater compilation",
-    "referee worst call ever",
-    # Satisfying & Oddly Satisfying
-    "most satisfying video compilation",
-    "hydraulic press crushing things",
-    "perfect fit satisfying compilation",
-    "domino chain reaction incredible",
-    # Viral / AI / Unbelievable
-    "most insane video on the internet",
-    "AI generated video unbelievable",
+    "crowd reaction incredible goal",
+    "most insane sports play ever",
+    # Viral / Unbelievable (high-signal only)
     "impossible moments caught on camera",
     "luckiest people alive compilation",
     "one in a million caught on camera",
     "security camera unbelievable footage",
-    "drone footage incredible discovery",
 ]
 
 
@@ -219,22 +191,18 @@ def get_random_hook_query(exclude: list[str] | None = None) -> str:
 # Each line ties directly to the friendship drift emotion in the text convo.
 # Single feature > feature list. Feels like a personal recommendation.
 NESSO_REVEAL_LINES = [
-    "there's an app that reminds you before this happens",
-    "Nesso caught me before I became the friend who disappeared",
-    "one reminder could have saved this conversation",
-    "imagine getting a reminder before you forget your best friend exists — that's Nesso",
-    "this is why I downloaded Nesso — it texts you before it's too late",
-    "Nesso literally nudges you before your friendships go silent",
-    "what if your phone reminded you to be a better friend",
-    "Nesso knew I was about to lose my best friend before I did",
-    "the app that won't let you become a stranger to the people you love",
-    "one notification. that's all it would have taken.",
-    "Nesso is basically a friendship insurance policy and it's free",
-    "your phone tracks your screen time but not your friendships — Nesso does",
-    "I almost let my best friendship die. Nesso didn't let me.",
+    "one notification would have changed everything",
+    "your phone won't let you forget a meeting but it'll let you forget your best friend",
+    "one reminder. that's all it would have taken.",
+    "what if your phone actually cared about your friendships",
     "the difference between staying close and drifting apart is one reminder",
-    "Nesso pings you before the awkward 'hey stranger' text becomes necessary",
-    "friendships don't end with a fight. they end with silence. Nesso breaks the silence.",
+    "friendships don't end with a fight. they end with silence.",
+    "this didn't have to happen",
+    "your phone tracks your screen time but not your friendships",
+    "imagine if something reminded you before it was too late",
+    "one notification away from never having this conversation",
+    "the people you love are one forgotten text away from becoming strangers",
+    "nobody warns you when a friendship is dying",
 ]
 
 _last_reveal_index = -1
@@ -265,27 +233,21 @@ def get_hook_category(query: str) -> str:
         return "extreme_sports"
     if any(w in q for w in ["lightning", "bear", "dog", "animal", "wave", "tornado", "ocean", "volcano", "shark"]):
         return "nature"
-    if any(w in q for w in ["cooking", "food", "gordon", "cake", "kitchen", "street food"]):
-        return "viral"
-    if any(w in q for w in ["gaming", "streamer", "speedrun", "vr fail"]):
-        return "viral"
     if any(w in q for w in ["sports", "goal", "buzzer", "referee"]):
         return "extreme_sports"
-    if any(w in q for w in ["satisfying", "hydraulic", "domino", "perfect fit"]):
-        return "viral"
     return "viral"
 
 
 # ── Caption Templates ─────────────────────────────────────────────────────
 TIKTOK_HASHTAGS = [
     "#friendship", "#texting", "#relatable", "#bestfriend",
-    "#groupchat", "#nesso", "#fyp",
+    "#groupchat", "#nesso",
 ]
 
 TIKTOK_NICHE_HASHTAGS = [
     "#friendshipgoals", "#growingup", "#adulting", "#realtalk",
-    "#latenight", "#deepthoughts", "#phonecall", "#missyou",
-    "#bff", "#squad", "#drifting", "#textconvo",
+    "#latenight", "#deepthoughts", "#missyou",
+    "#drifting", "#textconvo", "#2amthoughts",
 ]
 
 # Category-specific hashtags — mixed into captions based on hook type
@@ -300,8 +262,8 @@ CATEGORY_HASHTAGS = {
 
 IG_HASHTAGS = [
     "#friendship", "#bestfriend", "#relatable", "#texting",
-    "#groupchat", "#nesso", "#viral", "#reels", "#trending",
-    "#friendshipquotes", "#adulting", "#growingup", "#realtalk",
+    "#groupchat", "#nesso", "#friendshipquotes",
+    "#adulting", "#growingup", "#realtalk",
     "#missyou", "#latenight",
 ]
 
@@ -331,11 +293,14 @@ IG_CAPTION_HOOKS = [
 ]
 
 IG_PIN_COMMENTS = [
-    "when's the last time you actually called your best friend? 👀",
-    "name the friend you haven't talked to in months 👇",
-    "be honest... how long since you hung out with your closest friend?",
-    "tag them before this becomes your story too 💔",
-    "the group chat is watching this rn and nobody's saying anything 💀",
+    "type the name of someone you've been meaning to text 👇",
+    "how many months? be honest.",
+    "if you screenshot this you HAVE to send it to them",
+    "tag them before this becomes your story too",
+    "the group chat is watching this rn and nobody's saying anything",
+    "name one person you've been avoiding reaching out to 👇",
+    "be honest... when's the last time you actually called your best friend?",
+    "if you thought of someone while watching this, that's your sign",
 ]
 
 

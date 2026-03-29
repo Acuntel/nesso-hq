@@ -39,6 +39,9 @@ from config import (
     TOP_BAR_COLOR,
     TOP_BAR_HEIGHT,
     TOP_BAR_TEXT_COLOR,
+    TYPING_BUBBLE_COLOR,
+    TYPING_DOT_COLOR,
+    TYPING_INDICATOR_DURATION,
     WIDTH,
 )
 
@@ -144,6 +147,7 @@ def _draw_top_bar(
     draw: ImageDraw.ImageDraw,
     contact_name: str,
     bold_font: ImageFont.FreeTypeFont,
+    timestamp: str = "",
 ):
     """Draw an iPhone-style iMessage top bar with contact name and back chevron."""
     # Dark bar background
@@ -178,6 +182,61 @@ def _draw_top_bar(
         font=bold_font,
     )
 
+    # Late-night timestamp on right side (consistent across all frames)
+    if timestamp:
+        time_font = _get_font(18)
+        ts_width = time_font.getlength(timestamp)
+        draw.text(
+            (WIDTH - SAFE_LEFT - ts_width, name_y + 4),
+            timestamp,
+            fill=(142, 142, 147),
+            font=time_font,
+        )
+
+
+def _draw_typing_indicator(
+    draw: ImageDraw.ImageDraw,
+    y_pos: int,
+    contact_font: ImageFont.FreeTypeFont,
+    sender_name: str,
+) -> int:
+    """Draw a typing indicator bubble (three dots) for incoming messages."""
+    # Contact name
+    draw.text(
+        (SAFE_LEFT + 8, y_pos),
+        sender_name,
+        fill=CONTACT_NAME_COLOR,
+        font=contact_font,
+    )
+    name_height = CONTACT_FONT_SIZE + 4
+    bubble_y = y_pos + name_height
+
+    # Small bubble with three dots
+    bubble_width = 80
+    bubble_height = 44
+    bubble_x = SAFE_LEFT
+
+    _draw_rounded_rect(
+        draw,
+        (bubble_x, bubble_y, bubble_x + bubble_width, bubble_y + bubble_height),
+        BUBBLE_RADIUS,
+        TYPING_BUBBLE_COLOR,
+    )
+
+    # Three dots
+    dot_radius = 5
+    dot_y = bubble_y + bubble_height // 2
+    dot_start_x = bubble_x + 20
+    dot_gap = 16
+    for j in range(3):
+        cx = dot_start_x + j * dot_gap
+        draw.ellipse(
+            (cx - dot_radius, dot_y - dot_radius, cx + dot_radius, dot_y + dot_radius),
+            fill=TYPING_DOT_COLOR,
+        )
+
+    return bubble_y + bubble_height + MESSAGE_GAP
+
 
 def _measure_message_height(
     msg: dict,
@@ -210,6 +269,7 @@ def render_message_bubble(
     font: ImageFont.FreeTypeFont,
     contact_font: ImageFont.FreeTypeFont,
     system_font: ImageFont.FreeTypeFont | None = None,
+    show_delivered: bool = False,
 ) -> int:
     """
     Draw a single message bubble and return the new y_pos after it.
@@ -276,6 +336,16 @@ def render_message_bubble(
         draw.text((text_x, text_y), line, fill=TEXT_COLOR, font=font)
         text_y += line_height
 
+    # Show "Delivered" status below the bubble if requested
+    if show_delivered and is_me:
+        status_font = system_font if system_font else contact_font
+        status_text = "Delivered"
+        status_width = status_font.getlength(status_text)
+        status_x = SAFE_LEFT + SAFE_WIDTH - status_width
+        status_y = bubble_y + bubble_height + 4
+        draw.text((status_x, status_y), status_text, fill=SYSTEM_TEXT_COLOR, font=status_font)
+        return int(status_y + CONTACT_FONT_SIZE + MESSAGE_GAP)
+
     return bubble_y + bubble_height + MESSAGE_GAP
 
 
@@ -306,58 +376,109 @@ def render_text_story_frames(
 
     frames = []
 
+    # Generate timestamp once for consistency across all frames
+    import random as _ts_rnd
+    _ts_hour = _ts_rnd.choice([11, 12, 1, 2, 3])
+    _ts_minute = _ts_rnd.randint(0, 59)
+    _ts_ampm = "AM" if _ts_hour <= 3 else "PM"
+    if _ts_hour == 12:
+        _ts_ampm = "AM"
+    frame_timestamp = f"{_ts_hour}:{_ts_minute:02d} {_ts_ampm}"
+
     # Content area: below top bar, above safe bottom
     content_top = TOP_BAR_HEIGHT + 10
     content_bottom = HEIGHT - SAFE_BOTTOM - 20
 
+    frame_count = 0
     for msg_idx in range(len(messages)):
-        # Create frame showing messages 0..msg_idx
+        current_msg = messages[msg_idx]
+        is_incoming = current_msg["sender"] not in ("me", "system")
+
+        # Insert typing indicator frame BEFORE incoming messages
+        # Skip when voiceover is active — typing frames would desync audio from visuals
+        if is_incoming and msg_idx > 0 and not voiceover_active:
+            # Render typing indicator frame — shows all messages up to msg_idx-1 plus typing bubble
+            img_typing = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
+            draw_typing = ImageDraw.Draw(img_typing)
+            _draw_top_bar(draw_typing, contact_name, contact_font, frame_timestamp)
+
+            visible_messages = messages[:msg_idx]
+            max_visible = _count_fitting_messages(visible_messages, font, contact_font, system_font)
+            if max_visible < len(visible_messages):
+                visible_messages = visible_messages[-max_visible:]
+
+            total_content_height = sum(
+                _measure_message_height(msg, font, contact_font, system_font)
+                for msg in visible_messages
+            )
+            # Add space for typing indicator
+            typing_height = CONTACT_FONT_SIZE + 4 + 44 + MESSAGE_GAP
+            total_with_typing = total_content_height + typing_height
+
+            available_height = content_bottom - content_top
+            if total_with_typing < available_height:
+                y_pos = content_bottom - total_with_typing
+            else:
+                y_pos = content_top
+
+            for msg in visible_messages:
+                y_pos = render_message_bubble(draw_typing, msg, y_pos, font, contact_font, system_font)
+                if y_pos > content_bottom - typing_height:
+                    break
+
+            # Draw typing indicator at the bottom
+            _draw_typing_indicator(draw_typing, y_pos, contact_font, current_msg["sender"])
+
+            typing_path = os.path.join(temp_dir, f"frame_{frame_count:04d}.png")
+            img_typing.save(typing_path, "PNG")
+            frames.append((typing_path, TYPING_INDICATOR_DURATION))
+            frame_count += 1
+
+        # Render the actual message frame (shows all messages up to msg_idx)
         img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
         draw = ImageDraw.Draw(img)
+        _draw_top_bar(draw, contact_name, contact_font, frame_timestamp)
 
-        # Draw iMessage top bar
-        _draw_top_bar(draw, contact_name, contact_font)
-
-        visible_messages = messages[: msg_idx + 1]
-
-        # If too many messages, only show the latest ones that fit
+        visible_messages = messages[:msg_idx + 1]
         max_visible = _count_fitting_messages(visible_messages, font, contact_font, system_font)
         if max_visible < len(visible_messages):
             visible_messages = visible_messages[-max_visible:]
 
-        # Calculate total height of all visible messages to bottom-align
         total_content_height = sum(
             _measure_message_height(msg, font, contact_font, system_font)
             for msg in visible_messages
         )
 
-        # Start y_pos so messages end near the bottom of the content area
         available_height = content_bottom - content_top
         if total_content_height < available_height:
-            # Bottom-align: push messages down so last message is near bottom
-            y_pos = content_bottom - total_content_height
+            fill_ratio = total_content_height / available_height
+            if fill_ratio < 0.35:
+                # Few messages — place in upper-center zone so they're immediately visible
+                # Not dead center (looks weird), but high enough to avoid "lost in black void"
+                y_pos = content_top + int(available_height * 0.3)
+            else:
+                # Enough messages — bottom-align like real iMessage
+                y_pos = content_bottom - total_content_height
         else:
-            # Content overflows — start from top of content area
             y_pos = content_top
 
         for msg in visible_messages:
             y_pos = render_message_bubble(draw, msg, y_pos, font, contact_font, system_font)
-
-            # Safety: don't render past safe bottom
             if y_pos > content_bottom:
                 break
 
-        frame_path = os.path.join(temp_dir, f"frame_{msg_idx:04d}.png")
+        frame_path = os.path.join(temp_dir, f"frame_{frame_count:04d}.png")
         img.save(frame_path, "PNG")
 
         duration = messages[msg_idx].get("delay", 1.2)
         frames.append((frame_path, duration))
+        frame_count += 1
 
     # Enforce story duration bounds — but NEVER when voiceover is active,
     # because frame durations must match the VO audio exactly.
     total_dur = sum(d for _, d in frames)
-    min_story_dur = 15.0
-    max_story_dur = 25.0  # TikTok sweet spot is 25-35s total (hook + story + reveal)
+    min_story_dur = 12.0
+    max_story_dur = 20.0  # Target 25-33s total (10s hook + 12-20s story + 3s reveal)
     if not voiceover_active and total_dur < min_story_dur and total_dur > 0:
         scale = min_story_dur / total_dur
         frames = [(p, d * scale) for p, d in frames]

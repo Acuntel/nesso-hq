@@ -1,8 +1,8 @@
 """
-Nesso Content Engine V20 — Hook Video Sourcing
+Nesso Content Engine V21 — Hook Video Sourcing
 
-Primary: YouTube via yt-dlp with cookie authentication (bypasses bot detection).
-Fallback: Pexels API (free stock video, always works from datacenter IPs).
+Primary: Reddit (category-aware subreddit selection, top posts, quality ranking).
+Fallback: YouTube via yt-dlp with cookie authentication.
 """
 
 import base64
@@ -22,7 +22,6 @@ from config import (
     HEIGHT,
     HOOK_SEARCH_QUERIES,
     MAX_HOOK_CANDIDATES,
-    PEXELS_API_KEY,
     WIDTH,
     YOUTUBE_SEARCH_COUNT,
 )
@@ -239,16 +238,22 @@ def _try_youtube_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] 
 
 # ── Reddit Hook Source ───────────────────────────────────────────────────
 
-REDDIT_SUBREDDITS = [
+# Map hook categories to the most relevant subreddits for that content
+# ORDER MATTERS — first subs are tried first, put highest-adrenaline first
+REDDIT_SUBREDDIT_MAP = {
+    "crash": ["CrazyFuckingVideos", "AbruptChaos", "IdiotsInCars", "nonononoyes"],
+    "extreme_heights": ["CrazyFuckingVideos", "SweatyPalms", "nextfuckinglevel", "holdmyredbull"],
+    "explosion": ["CrazyFuckingVideos", "AbruptChaos", "nextfuckinglevel", "shockwave"],
+    "extreme_sports": ["CrazyFuckingVideos", "nextfuckinglevel", "holdmyredbull", "AbruptChaos"],
+    "nature": ["CrazyFuckingVideos", "natureismetal", "NatureIsFuckingLit", "SweatyPalms"],
+    "viral": ["CrazyFuckingVideos", "AbruptChaos", "nextfuckinglevel", "Unexpected"],
+}
+
+# Fallback list — high-adrenaline only, no "mildly interesting" subs
+REDDIT_SUBREDDITS_FALLBACK = [
     "CrazyFuckingVideos",
-    "nextfuckinglevel",
-    "holdmyredbull",
-    "SweatyPalms",
-    "nonononoyes",
-    "WTF",
-    "NatureIsFuckingLit",
     "AbruptChaos",
-    "maybemaybemaybe",
+    "nextfuckinglevel",
     "Unexpected",
 ]
 
@@ -258,21 +263,73 @@ REDDIT_HEADERS = {
 }
 
 
+def _extract_best_segment(input_path: str, output_path: str, total_duration: float) -> str:
+    """
+    Extract the best 8-15s segment from a video.
+
+    Heuristic: Reddit viral videos usually have the payoff in the first 40%.
+    For short videos (< 20s), take the whole thing (trimmed to 15s).
+    For longer videos, start at 10-25% of the way in to skip buildup.
+    """
+    max_clip = 10.0
+
+    if total_duration <= 20:
+        # Short video — beginning likely has the action
+        start = 0
+    elif total_duration <= 40:
+        # Medium — skip the first few seconds of buildup
+        start = max(0, total_duration * 0.1)
+    else:
+        # Longer video — the peak is likely 15-35% in
+        start = total_duration * random.uniform(0.15, 0.30)
+
+    # Don't overshoot the end
+    available = total_duration - start
+    clip_dur = min(max_clip, available)
+
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-ss", str(round(start, 1)),
+        "-i", input_path,
+        "-t", str(round(clip_dur, 1)),
+        "-c", "copy",
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+    if result.returncode != 0:
+        # Fallback: just take first 15s
+        cmd_fallback = [
+            "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+            "-i", input_path, "-t", str(max_clip), "-c", "copy", output_path,
+        ]
+        subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+
+    return output_path
+
+
 def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] | None:
     """
-    Get a viral hook clip from Reddit. Uses public JSON API to find posts,
-    then downloads with yt-dlp (which merges Reddit's separate audio+video
-    DASH streams automatically).
+    Get a viral hook clip from Reddit. Uses top posts (proven viral, not just trending).
+    Maps query category to relevant subreddits for higher-quality clip selection.
     """
-    # Pick 2-3 random subreddits to search
-    subs_to_try = random.sample(REDDIT_SUBREDDITS, min(3, len(REDDIT_SUBREDDITS)))
+    from config import get_hook_category
+    hook_category = get_hook_category(query)
+
+    # Pick subreddits relevant to the hook category
+    category_subs = REDDIT_SUBREDDIT_MAP.get(hook_category, REDDIT_SUBREDDITS_FALLBACK)
+    # Try 3 subs: 2 from category + 1 wildcard for variety
+    subs_to_try = random.sample(category_subs, min(2, len(category_subs)))
+    wildcard = random.choice(REDDIT_SUBREDDITS_FALLBACK)
+    if wildcard not in subs_to_try:
+        subs_to_try.append(wildcard)
 
     for subreddit in subs_to_try:
         try:
-            # Fetch hot posts with video
+            # Use "top" endpoint with time filter — proven viral, not just trending
+            time_filter = random.choice(["day", "week"])
             resp = requests.get(
-                f"https://www.reddit.com/r/{subreddit}/hot.json",
-                params={"limit": 25},
+                f"https://www.reddit.com/r/{subreddit}/top.json",
+                params={"limit": 50, "t": time_filter},
                 headers=REDDIT_HEADERS,
                 timeout=15,
             )
@@ -290,12 +347,14 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
                 if not pd.get("is_video"):
                     continue
                 score = pd.get("score", 0)
-                if score < 500:
+                if score < 2000:
                     continue
                 media = pd.get("media", {})
                 reddit_video = media.get("reddit_video", {}) if media else {}
                 duration = reddit_video.get("duration", 0)
-                if duration < 3 or duration > 120:
+                # Sweet spot: 8-60s — long enough to have a peak moment,
+                # short enough that the first 15s likely contains it
+                if duration < 8 or duration > 60:
                     continue
                 permalink = pd.get("permalink", "")
                 if not permalink:
@@ -305,18 +364,27 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
                     "title": pd.get("title", "Reddit video"),
                     "duration": duration,
                     "score": score,
+                    "upvote_ratio": pd.get("upvote_ratio", 0.5),
+                    "num_comments": pd.get("num_comments", 0),
                 })
 
             if not video_posts:
                 continue
 
-            # Sort by score, pick from top 5
-            video_posts.sort(key=lambda x: x["score"], reverse=True)
-            chosen = random.choice(video_posts[:5])
+            # Rank by engagement quality: high score + high upvote ratio + comments
+            # This finds clips people genuinely loved, not just rage-bait
+            for vp in video_posts:
+                vp["quality_score"] = (
+                    vp["score"] * vp["upvote_ratio"]
+                    + vp["num_comments"] * 10
+                )
+            video_posts.sort(key=lambda x: x["quality_score"], reverse=True)
+            chosen = random.choice(video_posts[:3])
 
             log.info(
-                "Reddit hook from r/%s: %s (score=%d, dur=%ds)",
-                subreddit, chosen["title"][:60], chosen["score"], chosen["duration"],
+                "Reddit hook from r/%s (top/%s): %s (score=%d, ratio=%.2f, dur=%ds)",
+                subreddit, time_filter, chosen["title"][:60],
+                chosen["score"], chosen["upvote_ratio"], chosen["duration"],
             )
 
             # Download with yt-dlp (merges audio+video DASH streams)
@@ -337,13 +405,9 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
                 log.warning("Reddit yt-dlp download too small, skipping")
                 continue
 
-            # Trim to max 15s
+            # Smart segment extraction: pick the best 8-15s window
             trimmed = os.path.join(temp_dir, "hook_raw.mp4")
-            subprocess.run(
-                ["ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-                 "-i", raw_path, "-t", "15", "-c", "copy", trimmed],
-                capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
-            )
+            _extract_best_segment(raw_path, trimmed, chosen["duration"])
             try:
                 os.remove(raw_path)
             except OSError:
@@ -377,129 +441,6 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
     return None
 
 
-# ── Pexels Fallback ──────────────────────────────────────────────────────
-
-PEXELS_QUERY_MAP = [
-    (["car crash", "dashcam", "near miss", "close call"], "car crash accident"),
-    (["motorcycle", "truck"], "motorcycle speed racing"),
-    (["cliff", "jumping"], "cliff jumping ocean"),
-    (["base jump", "bungee"], "skydiving extreme"),
-    (["climbing", "boulder", "wingsuit"], "rock climbing mountain"),
-    (["demolition", "building", "implosion"], "demolition building"),
-    (["fireworks"], "fireworks night sky"),
-    (["explosion", "gender reveal"], "explosion fire"),
-    (["ski", "snowboard"], "snowboarding skiing mountain"),
-    (["surfing", "big wave", "wipeout"], "surfing big wave ocean"),
-    (["parkour"], "parkour urban"),
-    (["skateboard"], "skateboarding tricks"),
-    (["bmx"], "bmx jump extreme"),
-    (["lightning"], "lightning storm dramatic"),
-    (["bear", "animal", "dog"], "wild animals nature"),
-    (["ocean wave", "tsunami"], "ocean waves crashing"),
-    (["tornado"], "tornado storm"),
-    (["volcano"], "volcano eruption lava"),
-    (["shark"], "underwater ocean"),
-    (["satisfying", "hydraulic"], "satisfying slow motion"),
-    (["drone", "aerial"], "drone aerial view"),
-    (["sports", "goal", "buzzer"], "sports goal celebration"),
-]
-
-
-def _map_to_pexels_query(query: str) -> str:
-    q = query.lower()
-    for keywords, pexels_q in PEXELS_QUERY_MAP:
-        if any(kw in q for kw in keywords):
-            return pexels_q
-    cleaned = q.replace("caught on camera", "").replace("compilation", "").strip()
-    return cleaned or "extreme action"
-
-
-def _try_pexels_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] | None:
-    """Fallback: get a hook from Pexels."""
-    if not PEXELS_API_KEY:
-        log.warning("PEXELS_API_KEY not set — cannot use Pexels fallback")
-        return None
-
-    pexels_query = _map_to_pexels_query(query)
-
-    try:
-        resp = requests.get(
-            "https://api.pexels.com/videos/search",
-            params={"query": pexels_query, "per_page": 15, "size": "medium"},
-            headers={"Authorization": PEXELS_API_KEY},
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            return None
-
-        data = resp.json()
-        candidates = []
-        for video in data.get("videos", []):
-            dur = video.get("duration", 0)
-            if dur < 6 or dur > 120:
-                continue
-            best_file = None
-            for vf in video.get("video_files", []):
-                h = vf.get("height", 0)
-                if 720 <= h <= 1920:
-                    if best_file is None or h > best_file.get("height", 0):
-                        best_file = vf
-            if not best_file and video.get("video_files"):
-                best_file = video["video_files"][0]
-            if best_file:
-                candidates.append({
-                    "download_url": best_file["link"],
-                    "duration": dur,
-                    "title": pexels_query,
-                })
-
-        if not candidates:
-            return None
-
-        chosen = random.choice(candidates[:3])
-
-        # Download
-        raw_path = os.path.join(temp_dir, "hook_pexels_raw.mp4")
-        r = requests.get(chosen["download_url"], stream=True, timeout=60)
-        r.raise_for_status()
-        with open(raw_path, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
-
-        # Trim
-        trimmed = os.path.join(temp_dir, "hook_raw.mp4")
-        subprocess.run(
-            ["ffmpeg", "-y", "-threads", FFMPEG_THREADS, "-i", raw_path, "-t", "15", "-c", "copy", trimmed],
-            capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
-        )
-        try:
-            os.remove(raw_path)
-        except OSError:
-            pass
-
-        hook_audio = os.path.join(temp_dir, "hook_audio.m4a")
-        extract_hook_audio(trimmed, hook_audio)
-        if not os.path.exists(hook_audio):
-            hook_audio = ""
-
-        hook_vertical = os.path.join(temp_dir, "hook_v.mp4")
-        crop_to_vertical(trimmed, hook_vertical)
-        try:
-            os.remove(trimmed)
-        except OSError:
-            pass
-
-        from verify import get_duration
-        duration = get_duration(hook_vertical)
-        desc = f"Pexels: {chosen['title']}"
-        log.info("Pexels hook: %.1fs — %s", duration, desc)
-        return hook_vertical, hook_audio, duration, desc
-
-    except Exception as e:
-        log.warning("Pexels fallback failed: %s", e)
-        return None
-
-
 # ── Shared Utilities ─────────────────────────────────────────────────────
 
 
@@ -515,7 +456,7 @@ def crop_to_vertical(input_path: str, output_path: str) -> str:
         ),
         "-preset", FFMPEG_PRESET,
         "-an",
-        "-t", "15",
+        "-t", "10",
         output_path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
@@ -541,98 +482,6 @@ def extract_hook_audio(input_path: str, output_path: str) -> str:
     return output_path
 
 
-# ── Hook Text Overlay ────────────────────────────────────────────────────
-
-
-def _overlay_hook_text(input_path: str, output_path: str, description: str, hook_category: str = "viral") -> str:
-    """
-    Overlay large scroll-stopping text on the hook video.
-    Uses PNG overlay approach (render text once → FFmpeg overlay filter) — fast.
-    """
-    from PIL import Image, ImageDraw, ImageFont
-    import random as _random
-    import textwrap
-
-    from config import HOOK_CATEGORY_TEXT, HOOK_TEXT_TEMPLATES
-    category_texts = HOOK_CATEGORY_TEXT.get(hook_category, HOOK_TEXT_TEMPLATES)
-    hook_text = _random.choice(category_texts)
-
-    temp_dir = os.path.dirname(output_path)
-
-    # Get bold font at 64px
-    font_paths = [
-        "/System/Library/Fonts/SFProDisplay-Bold.otf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    ]
-    font = None
-    for fp in font_paths:
-        if os.path.exists(fp):
-            try:
-                font = ImageFont.truetype(fp, 64)
-                break
-            except Exception:
-                continue
-    if not font:
-        font = ImageFont.load_default()
-
-    # Get actual video dimensions
-    from verify import get_resolution
-    res = get_resolution(input_path)
-    vid_w, vid_h = res if res else (WIDTH, HEIGHT)
-
-    # Render text overlay as transparent PNG matching video dimensions
-    overlay = Image.new("RGBA", (vid_w, vid_h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-
-    lines = textwrap.wrap(hook_text, width=18)
-    y = 140  # top area, below status bar
-
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-        x = (vid_w - tw) / 2
-
-        # Black stroke (4px thick outline)
-        for dx in range(-4, 5):
-            for dy in range(-4, 5):
-                if abs(dx) + abs(dy) > 0:
-                    draw.text((x + dx, y + dy), line, fill=(0, 0, 0, 255), font=font)
-        # White text on top
-        draw.text((x, y), line, fill=(255, 255, 255, 255), font=font)
-        y += th + 12
-
-    overlay_path = os.path.join(temp_dir, "hook_text_overlay.png")
-    overlay.save(overlay_path, "PNG")
-
-    # Use FFmpeg overlay filter — one pass, fast
-    cmd = [
-        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-i", input_path,
-        "-i", overlay_path,
-        "-filter_complex", "[0:v][1:v]overlay=0:0[vout]",
-        "-map", "[vout]",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-preset", FFMPEG_PRESET,
-        "-an",
-        output_path,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
-
-    try:
-        os.remove(overlay_path)
-    except OSError:
-        pass
-
-    if result.returncode != 0:
-        log.warning("Hook text overlay failed, using original: %s", result.stderr[-200:])
-        import shutil
-        shutil.copy2(input_path, output_path)
-
-    return output_path
-
-
 # ── Main Entry Point ─────────────────────────────────────────────────────
 
 
@@ -641,7 +490,7 @@ def get_full_hook(
     temp_dir: str,
 ) -> tuple[str, str, float, str]:
     """
-    Full hook pipeline: Reddit (primary) → YouTube → Pexels (fallback).
+    Full hook pipeline: Reddit (primary) → YouTube (fallback).
     Returns (vertical_clip_path, audio_path, duration, description).
     """
     # Try Reddit first — public API, no bot detection, best viral content
@@ -658,23 +507,14 @@ def get_full_hook(
                 else:
                     log.warning("YouTube failed for '%s'", query)
 
-        # Last resort: Pexels
-        if not result:
-            result = _try_pexels_hook(query, temp_dir)
-
     if not result:
-        raise RuntimeError(f"No hook found for query: {query} (Reddit, YouTube, and Pexels all failed)")
+        raise RuntimeError(f"No hook found for query: {query} (Reddit and YouTube both failed)")
 
-    # Add scroll-stopping text overlay to hook
-    from config import get_hook_category
-    hook_category = get_hook_category(query)
     clip_path, audio_path, duration, desc = result
-    hook_with_text = os.path.join(temp_dir, "hook_text.mp4")
-    _overlay_hook_text(clip_path, hook_with_text, desc, hook_category)
-    # Replace the original clip with the text-overlaid version
-    try:
-        os.remove(clip_path)
-    except OSError:
-        pass
 
-    return hook_with_text, audio_path, duration, desc
+    # Enforce minimum 5s hook duration
+    if duration < 5.0:
+        log.warning("Hook too short (%.1fs < 5s), rejecting: %s", duration, desc)
+        raise RuntimeError(f"Hook too short: {duration:.1f}s for '{desc}' (minimum 5s)")
+
+    return clip_path, audio_path, duration, desc

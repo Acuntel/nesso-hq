@@ -1,141 +1,378 @@
 [
   [
-    {"sender": "me", "text": "I just scrolled to the bottom of our group chat and the last real message is from october", "delay": 2.5},
-    {"sender": "best friend", "text": "wdym it's still active", "delay": 1.5},
-    {"sender": "me", "text": "dude the last message is you saying 'lol' to something no one responded to", "delay": 2.5},
-    {"sender": "best friend", "text": "...", "delay": 2.5},
-    {"sender": "best friend", "text": "wait fr?", "delay": 1.5},
-    {"sender": "best friend", "text": "typing...", "delay": 3.0},
-    {"sender": "best friend", "text": "idk what happened to us tbh", "delay": 2.0},
-    {"sender": "me", "text": "me neither", "delay": 1.5},
-    {"sender": "system", "text": "Read 11:47 PM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "I just scrolled to the bottom of our group chat and the last real message is from october",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "wdym it's still active", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "dude the last message is you saying 'lol' to something no one responded to",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "...", "delay": 2.5 },
+    { "sender": "best friend", "text": "wait fr?", "delay": 1.5 },
+    { "sender": "best friend", "text": "typing...", "delay": 3.0 },
+    {
+      "sender": "best friend",
+      "text": "idk what happened to us tbh",
+      "delay": 2.0
+    },
+    { "sender": "me", "text": "me neither", "delay": 1.5 },
+    { "sender": "system", "text": "Read 11:47 PM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "I just realized I forgot sarah's birthday and it was LAST WEEK", "delay": 2.5},
-    {"sender": "best friend", "text": "bro she posted about it and everything", "delay": 1.5},
-    {"sender": "me", "text": "we used to celebrate together every single year", "delay": 2.0},
-    {"sender": "me", "text": "now I didn't even know the DATE", "delay": 2.0},
-    {"sender": "best friend", "text": "tbh I only knew because instagram reminded me", "delay": 2.0},
-    {"sender": "me", "text": "that's literally worse", "delay": 1.5},
-    {"sender": "me", "text": "we need a reminder app for our friendships not just our calendars", "delay": 2.5},
-    {"sender": "system", "text": "Delivered", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "I just realized I forgot sarah's birthday and it was LAST WEEK",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "bro she posted about it and everything",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "we used to celebrate together every single year",
+      "delay": 2.0
+    },
+    { "sender": "me", "text": "now I didn't even know the DATE", "delay": 2.0 },
+    {
+      "sender": "best friend",
+      "text": "tbh I only knew because instagram reminded me",
+      "delay": 2.0
+    },
+    { "sender": "me", "text": "that's literally worse", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "an app remembered her birthday before either of us did. let that sink in.",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "...", "delay": 2.0 },
+    { "sender": "system", "text": "Read 11:52 PM", "delay": 2.5 }
   ],
   [
-    {"sender": "me", "text": "I have 500 contacts in my phone and I could call maybe 4 of them rn", "delay": 2.5},
-    {"sender": "best friend", "text": "4 is generous lol", "delay": 1.5},
-    {"sender": "me", "text": "ngl that hit me weird", "delay": 2.0},
-    {"sender": "me", "text": "like when did we go from having 15 close friends to 3", "delay": 2.5},
-    {"sender": "best friend", "text": "after college", "delay": 1.5},
-    {"sender": "me", "text": "yeah but nobody warned us that would happen", "delay": 2.0},
-    {"sender": "best friend", "text": "would it have mattered", "delay": 2.0},
-    {"sender": "me", "text": "...", "delay": 2.5},
-    {"sender": "system", "text": "Read 1:23 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "I have 500 contacts in my phone and I could call maybe 4 of them rn",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "4 is generous lol", "delay": 1.5 },
+    { "sender": "me", "text": "ngl that hit me weird", "delay": 2.0 },
+    {
+      "sender": "me",
+      "text": "like when did we go from having 15 close friends to 3",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "after college", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "yeah but nobody warned us that would happen",
+      "delay": 2.0
+    },
+    { "sender": "best friend", "text": "would it have mattered", "delay": 2.0 },
+    { "sender": "me", "text": "...", "delay": 2.5 },
+    { "sender": "system", "text": "Read 1:23 AM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "the last picture I have with jake is from 2022 and we said we'd be friends forever", "delay": 3.0},
-    {"sender": "best friend", "text": "jake from high school?", "delay": 1.5},
-    {"sender": "me", "text": "yeah. 'friends forever' lasted about 3 years", "delay": 2.0},
-    {"sender": "best friend", "text": "I mean you guys just drifted right", "delay": 1.5},
-    {"sender": "me", "text": "did we drift or did we both just stop trying at the same time", "delay": 3.0},
-    {"sender": "best friend", "text": "...", "delay": 2.5},
-    {"sender": "system", "text": "typing...", "delay": 3.5}
+    {
+      "sender": "me",
+      "text": "the last picture I have with jake is from 2022 and we said we'd be friends forever",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "jake from high school?", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "yeah. 'friends forever' lasted about 3 years",
+      "delay": 2.0
+    },
+    {
+      "sender": "best friend",
+      "text": "I mean you guys just drifted right",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "did we drift or did we both just stop trying at the same time",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "...", "delay": 2.5 },
+    { "sender": "system", "text": "typing...", "delay": 3.5 }
   ],
   [
-    {"sender": "me", "text": "I counted how many times we said 'we should hang out soon' this year. it's eleven.", "delay": 3.0},
-    {"sender": "best friend", "text": "ok and?", "delay": 1.2},
-    {"sender": "me", "text": "we hung out zero times", "delay": 2.0},
-    {"sender": "best friend", "text": "...", "delay": 2.5},
-    {"sender": "me", "text": "ELEVEN TIMES we said it and didn't mean it once", "delay": 2.5},
-    {"sender": "best friend", "text": "ok that actually stings", "delay": 2.0},
-    {"sender": "me", "text": "it should", "delay": 1.5},
-    {"sender": "system", "text": "Read 12:04 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "I counted how many times we said 'we should hang out soon' this year. it's eleven.",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "ok and?", "delay": 1.2 },
+    { "sender": "me", "text": "we hung out zero times", "delay": 2.0 },
+    { "sender": "best friend", "text": "...", "delay": 2.5 },
+    {
+      "sender": "me",
+      "text": "ELEVEN TIMES we said it and didn't mean it once",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "ok that actually stings",
+      "delay": 2.0
+    },
+    { "sender": "me", "text": "it should", "delay": 1.5 },
+    { "sender": "system", "text": "Read 12:04 AM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "I used to be alex's first call for everything. now I find out about his life from instagram stories", "delay": 3.0},
-    {"sender": "best friend", "text": "bruh it's 1am why are we doing this", "delay": 1.5},
-    {"sender": "me", "text": "because I just saw his story and realized I'm basically a fan account at this point", "delay": 2.5},
-    {"sender": "best friend", "text": "tbh I think that happens to everyone", "delay": 2.0},
-    {"sender": "me", "text": "does that make it better or worse", "delay": 2.0},
-    {"sender": "best friend", "text": "typing...", "delay": 3.0},
-    {"sender": "system", "text": "Read 1:14 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "I used to be alex's first call for everything. now I find out about his life from instagram stories",
+      "delay": 3.0
+    },
+    {
+      "sender": "best friend",
+      "text": "bruh it's 1am why are we doing this",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "because I just saw his story and realized I'm basically a fan account at this point",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "tbh I think that happens to everyone",
+      "delay": 2.0
+    },
+    {
+      "sender": "me",
+      "text": "does that make it better or worse",
+      "delay": 2.0
+    },
+    { "sender": "best friend", "text": "typing...", "delay": 3.0 },
+    { "sender": "system", "text": "Read 1:14 AM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "ok new fear just dropped. open your texts and scroll down.", "delay": 2.5},
-    {"sender": "best friend", "text": "ok why", "delay": 1.2},
-    {"sender": "me", "text": "how far do you scroll before you find someone you actually talk to regularly", "delay": 2.5},
-    {"sender": "best friend", "text": "...", "delay": 2.5},
-    {"sender": "best friend", "text": "bro I just scrolled past like 30 conversations", "delay": 2.0},
-    {"sender": "me", "text": "all people you used to talk to every day right", "delay": 2.0},
-    {"sender": "best friend", "text": "yeah", "delay": 1.2},
-    {"sender": "me", "text": "yeah", "delay": 1.5},
-    {"sender": "system", "text": "Read 2:17 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "ok new fear just dropped. open your texts and scroll down.",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "ok why", "delay": 1.2 },
+    {
+      "sender": "me",
+      "text": "how far do you scroll before you find someone you actually talk to regularly",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "...", "delay": 2.5 },
+    {
+      "sender": "best friend",
+      "text": "bro I just scrolled past like 30 conversations",
+      "delay": 2.0
+    },
+    {
+      "sender": "me",
+      "text": "all people you used to talk to every day right",
+      "delay": 2.0
+    },
+    { "sender": "best friend", "text": "yeah", "delay": 1.2 },
+    { "sender": "me", "text": "yeah", "delay": 1.5 },
+    { "sender": "system", "text": "Read 2:17 AM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "when's the last time you made a new REAL friend. not an acquaintance. a 2am-phone-call friend.", "delay": 3.0},
-    {"sender": "best friend", "text": "probably college?", "delay": 1.5},
-    {"sender": "me", "text": "that was 4 years ago", "delay": 2.0},
-    {"sender": "me", "text": "we haven't made a real friend in 4 years and we're losing the ones we had", "delay": 3.0},
-    {"sender": "best friend", "text": "why did you have to say it like that", "delay": 2.0},
-    {"sender": "me", "text": "because someone had to", "delay": 1.5},
-    {"sender": "system", "text": "Delivered", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "when's the last time you made a new REAL friend. not an acquaintance. a 2am-phone-call friend.",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "probably college?", "delay": 1.5 },
+    { "sender": "me", "text": "that was 4 years ago", "delay": 2.0 },
+    {
+      "sender": "me",
+      "text": "we haven't made a real friend in 4 years and we're losing the ones we had",
+      "delay": 3.0
+    },
+    {
+      "sender": "best friend",
+      "text": "why did you have to say it like that",
+      "delay": 2.0
+    },
+    { "sender": "me", "text": "because someone had to", "delay": 1.5 },
+    { "sender": "system", "text": "Delivered", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "I just realized I only text people on their birthday and that's literally the only reason I reach out", "delay": 3.0},
-    {"sender": "best friend", "text": "bro that's literally everyone", "delay": 1.5},
-    {"sender": "me", "text": "that's the problem. we only reach out when there's an excuse", "delay": 2.5},
-    {"sender": "best friend", "text": "what are we supposed to do just text people for no reason?", "delay": 2.0},
-    {"sender": "me", "text": "...yeah? that's literally what friends do?", "delay": 2.0},
-    {"sender": "best friend", "text": "typing...", "delay": 3.0},
-    {"sender": "system", "text": "Read 11:31 PM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "I just realized I only text people on their birthday and that's literally the only reason I reach out",
+      "delay": 3.0
+    },
+    {
+      "sender": "best friend",
+      "text": "bro that's literally everyone",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "that's the problem. we only reach out when there's an excuse",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "what are we supposed to do just text people for no reason?",
+      "delay": 2.0
+    },
+    {
+      "sender": "me",
+      "text": "...yeah? that's literally what friends do?",
+      "delay": 2.0
+    },
+    { "sender": "best friend", "text": "typing...", "delay": 3.0 },
+    { "sender": "system", "text": "Read 11:31 PM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "pov: you replaced actually hanging out with sending tiktoks to each other and called it friendship", "delay": 3.0},
-    {"sender": "best friend", "text": "lmao what", "delay": 1.2},
-    {"sender": "me", "text": "I'm serious. I send you a reel and that counts as keeping in touch now", "delay": 2.0},
-    {"sender": "best friend", "text": "I mean yeah but that's just how it is", "delay": 1.5},
-    {"sender": "me", "text": "we used to drive to each other's houses at midnight for no reason", "delay": 2.5},
-    {"sender": "me", "text": "now we send a reel and call it friendship", "delay": 2.0},
-    {"sender": "best friend", "text": "ok that one hurt", "delay": 2.0},
-    {"sender": "system", "text": "typing...", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "pov: you replaced actually hanging out with sending tiktoks to each other and called it friendship",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "lmao what", "delay": 1.2 },
+    {
+      "sender": "me",
+      "text": "I'm serious. I send you a reel and that counts as keeping in touch now",
+      "delay": 2.0
+    },
+    {
+      "sender": "best friend",
+      "text": "I mean yeah but that's just how it is",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "we used to drive to each other's houses at midnight for no reason",
+      "delay": 2.5
+    },
+    {
+      "sender": "me",
+      "text": "now we send a reel and call it friendship",
+      "delay": 2.0
+    },
+    { "sender": "best friend", "text": "ok that one hurt", "delay": 2.0 },
+    { "sender": "system", "text": "typing...", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "my last 10 phone calls are all work or my mom. not a single friend.", "delay": 2.5},
-    {"sender": "best friend", "text": "...same", "delay": 2.0},
-    {"sender": "me", "text": "remember when we used to FaceTime for like 3 hours doing nothing", "delay": 2.5},
-    {"sender": "me", "text": "now I can't even commit to a 5 min phone call", "delay": 2.0},
-    {"sender": "best friend", "text": "it's because we're all busy", "delay": 1.5},
-    {"sender": "me", "text": "are we busy or are we just comfortable being alone", "delay": 2.5},
-    {"sender": "best friend", "text": "...", "delay": 2.5},
-    {"sender": "system", "text": "Read 1:08 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "my last 10 phone calls are all work or my mom. not a single friend.",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "...same", "delay": 2.0 },
+    {
+      "sender": "me",
+      "text": "remember when we used to FaceTime for like 3 hours doing nothing",
+      "delay": 2.5
+    },
+    {
+      "sender": "me",
+      "text": "now I can't even commit to a 5 min phone call",
+      "delay": 2.0
+    },
+    {
+      "sender": "best friend",
+      "text": "it's because we're all busy",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "are we busy or are we just comfortable being alone",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "...", "delay": 2.5 },
+    { "sender": "system", "text": "Read 1:08 AM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "be honest... if I disappeared for a month would you even notice", "delay": 2.5},
-    {"sender": "best friend", "text": "bro what kind of question is that", "delay": 1.5},
-    {"sender": "me", "text": "a real one. because marcus disappeared for 3 months and I just realized yesterday", "delay": 3.0},
-    {"sender": "best friend", "text": "wait actually?", "delay": 1.5},
-    {"sender": "me", "text": "yeah. 3 months. and I didn't even notice because we were never talking anyway", "delay": 2.5},
-    {"sender": "best friend", "text": "that's actually terrifying", "delay": 2.0},
-    {"sender": "me", "text": "now think about who's not noticing YOU right now", "delay": 2.5},
-    {"sender": "system", "text": "Delivered", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "be honest... if I disappeared for a month would you even notice",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "bro what kind of question is that",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "a real one. because marcus disappeared for 3 months and I just realized yesterday",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "wait actually?", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "yeah. 3 months. and I didn't even notice because we were never talking anyway",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "that's actually terrifying",
+      "delay": 2.0
+    },
+    {
+      "sender": "me",
+      "text": "now think about who's not noticing YOU right now",
+      "delay": 2.5
+    },
+    { "sender": "system", "text": "Delivered", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "how many people think you're their close friend right now. give me a number.", "delay": 2.5},
-    {"sender": "best friend", "text": "idk maybe like 5?", "delay": 1.5},
-    {"sender": "me", "text": "now how many of those 5 have you actually talked to this month", "delay": 2.5},
-    {"sender": "best friend", "text": "...", "delay": 2.5},
-    {"sender": "me", "text": "exactly. they think you're close but you're already gone", "delay": 2.5},
-    {"sender": "best friend", "text": "why are you like this at 1am", "delay": 1.5},
-    {"sender": "me", "text": "because nobody says it during the day", "delay": 2.0},
-    {"sender": "system", "text": "Read 1:42 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "how many people think you're their close friend right now. give me a number.",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "idk maybe like 5?", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "now how many of those 5 have you actually talked to this month",
+      "delay": 2.5
+    },
+    { "sender": "best friend", "text": "...", "delay": 2.5 },
+    {
+      "sender": "me",
+      "text": "exactly. they think you're close but you're already gone",
+      "delay": 2.5
+    },
+    {
+      "sender": "best friend",
+      "text": "why are you like this at 1am",
+      "delay": 1.5
+    },
+    {
+      "sender": "me",
+      "text": "because nobody says it during the day",
+      "delay": 2.0
+    },
+    { "sender": "system", "text": "Read 1:42 AM", "delay": 3.0 }
   ],
   [
-    {"sender": "me", "text": "my phone autocorrects 'let's hang' to 'let's reschedule' and honestly that's the most accurate thing it's ever done", "delay": 3.0},
-    {"sender": "best friend", "text": "LMAO stop", "delay": 1.2},
-    {"sender": "me", "text": "I'm not joking tho. we've rescheduled the same hangout 4 times", "delay": 2.0},
-    {"sender": "best friend", "text": "ok but we're both busy", "delay": 1.5},
-    {"sender": "me", "text": "we're not busy. we're just used to not seeing each other", "delay": 2.5},
-    {"sender": "me", "text": "there's a difference", "delay": 1.5},
-    {"sender": "best friend", "text": "typing...", "delay": 3.0},
-    {"sender": "system", "text": "Read 12:38 AM", "delay": 3.0}
+    {
+      "sender": "me",
+      "text": "my phone autocorrects 'let's hang' to 'let's reschedule' and honestly that's the most accurate thing it's ever done",
+      "delay": 3.0
+    },
+    { "sender": "best friend", "text": "LMAO stop", "delay": 1.2 },
+    {
+      "sender": "me",
+      "text": "I'm not joking tho. we've rescheduled the same hangout 4 times",
+      "delay": 2.0
+    },
+    { "sender": "best friend", "text": "ok but we're both busy", "delay": 1.5 },
+    {
+      "sender": "me",
+      "text": "we're not busy. we're just used to not seeing each other",
+      "delay": 2.5
+    },
+    { "sender": "me", "text": "there's a difference", "delay": 1.5 },
+    { "sender": "best friend", "text": "typing...", "delay": 3.0 },
+    { "sender": "system", "text": "Read 12:38 AM", "delay": 3.0 }
   ]
 ]

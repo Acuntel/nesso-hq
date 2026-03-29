@@ -163,7 +163,18 @@ def render_single_video(
             music_path = ""
             log.warning("[%s] No background music — proceeding without", render_id)
 
-        # ── STEP 8: Morph + concat + audio ────────────────────────────
+        # ── STEP 8: Build message timings for iMessage SFX ─────────
+        # Calculate cumulative time offsets for each message in the story
+        msg_timings = []
+        cumulative = 0.0
+        for msg in messages:
+            msg_timings.append({
+                "sender": msg.get("sender", ""),
+                "cumulative_time": cumulative,
+            })
+            cumulative += msg.get("delay", 1.2)
+
+        # ── STEP 9: Morph + concat + audio ────────────────────────────
         concat_video = os.path.join(render_dir, "concat.mp4")
         morph_and_concat(
             hook_path=hook_path,
@@ -174,6 +185,7 @@ def render_single_video(
             music_path=music_path,
             output_path=concat_video,
             voiceover_path=vo_path,
+            message_timings=msg_timings,
         )
 
         # Clean intermediates
@@ -184,7 +196,7 @@ def render_single_video(
                 except OSError:
                     pass
 
-        # ── STEP 9: Final encode ──────────────────────────────────────
+        # ── STEP 10: Final encode ─────────────────────────────────────
         output_path = os.path.join(render_dir, f"nesso_{render_id}.mp4")
         import subprocess
         cmd = [
@@ -212,7 +224,7 @@ def render_single_video(
         except OSError:
             pass
 
-        # ── STEP 10: Verify final output ──────────────────────────────
+        # ── STEP 11: Verify final output ──────────────────────────────
         # Note: hook_path and story_video are already deleted at this point.
         # Only verify the final output — the health check on deleted files was dead code.
         if not verify_clip(output_path):
@@ -221,17 +233,9 @@ def render_single_video(
         result["output_path"] = output_path
         result["duration"] = get_duration(output_path)
 
-        # Extract a story theme from the script for captions
-        story_theme = ""
-        for msg in messages:
-            text = msg.get("text", "")
-            if msg.get("sender") == "me" and len(text) > 30:
-                story_theme = text
-                break
-
-        # Generate captions with category-aware hashtags
-        result["tiktok_caption"] = generate_tiktok_caption(story_theme, hook_category)
-        result["ig_caption"] = generate_ig_caption(story_theme, hook_category)
+        # Use curated caption hooks — script messages don't work as standalone captions
+        result["tiktok_caption"] = generate_tiktok_caption("", hook_category)
+        result["ig_caption"] = generate_ig_caption("", hook_category)
         result["ig_pin_comment"] = generate_ig_pin_comment()
 
         log.info(
