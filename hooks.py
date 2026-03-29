@@ -239,22 +239,24 @@ def _try_youtube_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] 
 # ── Reddit Hook Source ───────────────────────────────────────────────────
 
 # Map hook categories to the most relevant subreddits for that content
-# ORDER MATTERS — first subs are tried first, put highest-adrenaline first
+# NOTE: CrazyFuckingVideos is NSFW and often blocked from datacenter IPs
+# Put reliable subs first, NSFW subs last as bonus attempts
 REDDIT_SUBREDDIT_MAP = {
-    "crash": ["CrazyFuckingVideos", "AbruptChaos", "IdiotsInCars", "nonononoyes"],
-    "extreme_heights": ["CrazyFuckingVideos", "SweatyPalms", "nextfuckinglevel", "holdmyredbull"],
-    "explosion": ["CrazyFuckingVideos", "AbruptChaos", "nextfuckinglevel", "shockwave"],
-    "extreme_sports": ["CrazyFuckingVideos", "nextfuckinglevel", "holdmyredbull", "AbruptChaos"],
-    "nature": ["CrazyFuckingVideos", "natureismetal", "NatureIsFuckingLit", "SweatyPalms"],
-    "viral": ["CrazyFuckingVideos", "AbruptChaos", "nextfuckinglevel", "Unexpected"],
+    "crash": ["nextfuckinglevel", "AbruptChaos", "IdiotsInCars", "nonononoyes", "CrazyFuckingVideos"],
+    "extreme_heights": ["nextfuckinglevel", "SweatyPalms", "holdmyredbull", "CrazyFuckingVideos"],
+    "explosion": ["nextfuckinglevel", "AbruptChaos", "Unexpected", "CrazyFuckingVideos"],
+    "extreme_sports": ["nextfuckinglevel", "holdmyredbull", "AbruptChaos", "CrazyFuckingVideos"],
+    "nature": ["nextfuckinglevel", "natureismetal", "NatureIsFuckingLit", "SweatyPalms"],
+    "viral": ["nextfuckinglevel", "AbruptChaos", "Unexpected", "maybemaybemaybe"],
 }
 
-# Fallback list — high-adrenaline only, no "mildly interesting" subs
+# Fallback list — reliable subs that work from datacenter IPs
 REDDIT_SUBREDDITS_FALLBACK = [
-    "CrazyFuckingVideos",
-    "AbruptChaos",
     "nextfuckinglevel",
+    "AbruptChaos",
     "Unexpected",
+    "holdmyredbull",
+    "maybemaybemaybe",
 ]
 
 REDDIT_HEADERS = {
@@ -317,8 +319,8 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
 
     # Pick subreddits relevant to the hook category
     category_subs = REDDIT_SUBREDDIT_MAP.get(hook_category, REDDIT_SUBREDDITS_FALLBACK)
-    # Try 3 subs: 2 from category + 1 wildcard for variety
-    subs_to_try = random.sample(category_subs, min(2, len(category_subs)))
+    # Try 4 subs: 3 from category + 1 wildcard for variety
+    subs_to_try = random.sample(category_subs, min(3, len(category_subs)))
     wildcard = random.choice(REDDIT_SUBREDDITS_FALLBACK)
     if wildcard not in subs_to_try:
         subs_to_try.append(wildcard)
@@ -326,7 +328,7 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
     for subreddit in subs_to_try:
         try:
             # Use "top" endpoint with time filter — proven viral, not just trending
-            time_filter = random.choice(["day", "week"])
+            time_filter = random.choice(["day", "week", "month"])
             resp = requests.get(
                 f"https://www.reddit.com/r/{subreddit}/top.json",
                 params={"limit": 50, "t": time_filter},
@@ -347,14 +349,13 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
                 if not pd.get("is_video"):
                     continue
                 score = pd.get("score", 0)
-                if score < 2000:
+                if score < 500:
                     continue
                 media = pd.get("media", {})
                 reddit_video = media.get("reddit_video", {}) if media else {}
                 duration = reddit_video.get("duration", 0)
-                # Sweet spot: 8-60s — long enough to have a peak moment,
-                # short enough that the first 15s likely contains it
-                if duration < 8 or duration > 60:
+                # Accept 5-90s videos — wider net, smart segment extraction handles trimming
+                if duration < 5 or duration > 90:
                     continue
                 permalink = pd.get("permalink", "")
                 if not permalink:
@@ -441,6 +442,103 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
     return None
 
 
+# ── Pexels Last-Resort Fallback ─────────────────────────────────────────
+
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
+
+PEXELS_QUERY_MAP = {
+    "crash": "car crash accident",
+    "extreme_heights": "cliff jumping extreme",
+    "explosion": "explosion fire",
+    "extreme_sports": "extreme sports action",
+    "nature": "wild animals nature",
+    "viral": "extreme action",
+}
+
+
+def _try_pexels_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] | None:
+    """Last-resort fallback: stock video from Pexels. Not viral but prevents total failure."""
+    if not PEXELS_API_KEY:
+        log.warning("PEXELS_API_KEY not set — cannot use Pexels fallback")
+        return None
+
+    from config import get_hook_category
+    hook_category = get_hook_category(query)
+    pexels_query = PEXELS_QUERY_MAP.get(hook_category, "extreme action")
+
+    try:
+        resp = requests.get(
+            "https://api.pexels.com/videos/search",
+            params={"query": pexels_query, "per_page": 15, "size": "medium"},
+            headers={"Authorization": PEXELS_API_KEY},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+
+        data = resp.json()
+        candidates = []
+        for video in data.get("videos", []):
+            dur = video.get("duration", 0)
+            if dur < 6 or dur > 60:
+                continue
+            best_file = None
+            for vf in video.get("video_files", []):
+                h = vf.get("height", 0)
+                if 360 <= h <= 1920:
+                    if best_file is None or h > best_file.get("height", 0):
+                        best_file = vf
+            if not best_file and video.get("video_files"):
+                best_file = video["video_files"][0]
+            if best_file:
+                candidates.append({
+                    "download_url": best_file["link"],
+                    "duration": dur,
+                    "title": pexels_query,
+                })
+
+        if not candidates:
+            return None
+
+        chosen = random.choice(candidates[:5])
+
+        raw_path = os.path.join(temp_dir, "hook_pexels_raw.mp4")
+        r = requests.get(chosen["download_url"], stream=True, timeout=60)
+        r.raise_for_status()
+        with open(raw_path, "wb") as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
+
+        trimmed = os.path.join(temp_dir, "hook_raw.mp4")
+        _extract_best_segment(raw_path, trimmed, chosen["duration"])
+        try:
+            os.remove(raw_path)
+        except OSError:
+            pass
+
+        hook_audio = os.path.join(temp_dir, "hook_audio.m4a")
+        extract_hook_audio(trimmed, hook_audio)
+        if not os.path.exists(hook_audio):
+            hook_audio = ""
+
+        hook_vertical = os.path.join(temp_dir, "hook_v.mp4")
+        crop_to_vertical(trimmed, hook_vertical)
+        try:
+            os.remove(trimmed)
+        except OSError:
+            pass
+
+        from verify import get_duration
+        duration = get_duration(hook_vertical)
+        desc = f"Pexels: {chosen['title']}"
+        log.info("Pexels hook (last resort): %.1fs — %s", duration, desc)
+        return hook_vertical, hook_audio, duration, desc
+
+    except Exception as e:
+        log.warning("Pexels fallback failed: %s", e)
+        return None
+
+
 # ── Shared Utilities ─────────────────────────────────────────────────────
 
 
@@ -507,8 +605,13 @@ def get_full_hook(
                 else:
                     log.warning("YouTube failed for '%s'", query)
 
+    # Last resort: Pexels (stock video isn't viral, but better than total failure)
     if not result:
-        raise RuntimeError(f"No hook found for query: {query} (Reddit and YouTube both failed)")
+        log.warning("Reddit + YouTube both failed, trying Pexels last resort")
+        result = _try_pexels_hook(query, temp_dir)
+
+    if not result:
+        raise RuntimeError(f"No hook found for query: {query} (all sources failed)")
 
     clip_path, audio_path, duration, desc = result
 
