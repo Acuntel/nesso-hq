@@ -1,10 +1,13 @@
 """
-Nesso Content Engine V20 — Clip Verification & Pipeline Health
+Nesso Content Engine V21 — Clip Verification & Pipeline Health
 """
 
 import json
+import logging
 import os
 import subprocess
+
+log = logging.getLogger(__name__)
 
 
 def verify_clip(filepath: str) -> bool:
@@ -13,9 +16,12 @@ def verify_clip(filepath: str) -> bool:
     Returns True only if clip is usable.
     """
     if not os.path.exists(filepath):
+        log.warning("verify_clip: file does not exist: %s", filepath)
         return False
 
-    if os.path.getsize(filepath) < 10000:  # < 10KB = corrupt
+    size = os.path.getsize(filepath)
+    if size < 10000:  # < 10KB = corrupt
+        log.warning("verify_clip: file too small (%d bytes): %s", size, filepath)
         return False
 
     try:
@@ -32,8 +38,14 @@ def verify_clip(filepath: str) -> bool:
         )
         duration = float(data.get("format", {}).get("duration", 0))
 
+        if not has_video:
+            log.warning("verify_clip: no video stream in %s", filepath)
+        if duration <= 0.5:
+            log.warning("verify_clip: duration too short (%.2fs) in %s", duration, filepath)
+
         return has_video and duration > 0.5
-    except Exception:
+    except Exception as e:
+        log.warning("verify_clip: ffprobe failed for %s: %s", filepath, e)
         return False
 
 
@@ -110,8 +122,10 @@ def check_pipeline_health(
 def verify_audio(filepath: str) -> bool:
     """Check that an audio file exists and has an audio stream."""
     if not os.path.exists(filepath):
+        log.warning("verify_audio: file does not exist: %s", filepath)
         return False
     if os.path.getsize(filepath) < 1000:
+        log.warning("verify_audio: file too small: %s", filepath)
         return False
     try:
         result = subprocess.run(
@@ -120,9 +134,13 @@ def verify_audio(filepath: str) -> bool:
             capture_output=True, text=True, timeout=15,
         )
         data = json.loads(result.stdout)
-        return any(
+        has_audio = any(
             s.get("codec_type") == "audio"
             for s in data.get("streams", [])
         )
-    except Exception:
+        if not has_audio:
+            log.warning("verify_audio: no audio stream in %s", filepath)
+        return has_audio
+    except Exception as e:
+        log.warning("verify_audio: ffprobe failed for %s: %s", filepath, e)
         return False

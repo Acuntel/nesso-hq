@@ -156,6 +156,9 @@ def render_single_video(
         reveal_video = os.path.join(render_dir, "reveal.mp4")
         render_nesso_reveal(reveal_video)
 
+        if not verify_clip(reveal_video):
+            raise RuntimeError("Reveal video failed verification — Pillow and Remotion both failed")
+
         # ── STEP 7: Download background music ─────────────────────────
         music_path = os.path.join(render_dir, "music.mp3")
         download_background_music(music_path, exclude_queries=exclude_queries)

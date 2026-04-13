@@ -230,15 +230,50 @@ def get_fallback_script() -> list[dict]:
         return _validate_messages(script)
     except Exception as e:
         log.error("Failed to load fallback scripts: %s", e)
-        # Ultimate fallback — hardcoded minimal script
-        return [
-            {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 1.5},
-            {"sender": "best friend", "text": "that's not true lol", "delay": 1.0},
-            {"sender": "me", "text": "ok name 5 people you've actually talked to this month. not texted. TALKED.", "delay": 2.0},
-            {"sender": "best friend", "text": "...", "delay": 1.5},
-            {"sender": "me", "text": "exactly", "delay": 1.0},
-            {"sender": "best friend", "text": "idk what happened tbh", "delay": 1.5},
-            {"sender": "me", "text": "nothing happened. that's the whole problem.", "delay": 2.0},
-            {"sender": "me", "text": "we just stopped trying and called it growing up", "delay": 2.0},
-            {"sender": "system", "text": "Read 11:47 PM", "delay": 2.5},
-        ]
+        # Ultimate fallback — rotate through multiple hardcoded scripts
+        return random.choice(HARDCODED_FALLBACKS)
+
+
+HARDCODED_FALLBACKS = [
+    [
+        {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 1.5},
+        {"sender": "best friend", "text": "that's not true lol", "delay": 1.0},
+        {"sender": "me", "text": "ok name 5 people you've actually talked to this month. not texted. TALKED.", "delay": 2.0},
+        {"sender": "best friend", "text": "...", "delay": 1.5},
+        {"sender": "me", "text": "exactly", "delay": 1.0},
+        {"sender": "best friend", "text": "idk what happened tbh", "delay": 1.5},
+        {"sender": "me", "text": "nothing happened. that's the whole problem.", "delay": 2.0},
+        {"sender": "me", "text": "we just stopped trying and called it growing up", "delay": 2.0},
+        {"sender": "system", "text": "Read 11:47 PM", "delay": 2.5},
+    ],
+    [
+        {"sender": "me", "text": "be honest. when's the last time you texted me first", "delay": 2.0},
+        {"sender": "best friend", "text": "what are you talking about I text you all the time", "delay": 1.5},
+        {"sender": "me", "text": "scroll up", "delay": 1.5},
+        {"sender": "best friend", "text": "...", "delay": 2.0},
+        {"sender": "best friend", "text": "ok that's actually crazy", "delay": 1.5},
+        {"sender": "me", "text": "every single conversation for the last 4 months starts with me", "delay": 2.5},
+        {"sender": "me", "text": "I stopped texting first for a week to see what would happen and you literally didn't notice", "delay": 2.5},
+        {"sender": "system", "text": "Delivered", "delay": 2.5},
+    ],
+    [
+        {"sender": "me", "text": "ok new fear just dropped", "delay": 1.2},
+        {"sender": "best friend", "text": "what now", "delay": 1.0},
+        {"sender": "me", "text": "I've known your birthday was coming up for 2 weeks and I still almost forgot", "delay": 2.5},
+        {"sender": "best friend", "text": "bro we literally have a tradition", "delay": 1.5},
+        {"sender": "me", "text": "HAD a tradition", "delay": 2.0},
+        {"sender": "me", "text": "the worst part is I only remembered because instagram reminded me. not my brain. an app.", "delay": 2.5},
+        {"sender": "best friend", "text": "...", "delay": 2.0},
+        {"sender": "system", "text": "Read 11:58 PM", "delay": 2.5},
+    ],
+    [
+        {"sender": "me", "text": "I just scrolled past 30 conversations in my texts before I found someone I actually talk to", "delay": 2.0},
+        {"sender": "best friend", "text": "that's dramatic lol", "delay": 1.0},
+        {"sender": "me", "text": "no I literally counted", "delay": 1.5},
+        {"sender": "me", "text": "30 people I used to talk to every single day", "delay": 2.0},
+        {"sender": "best friend", "text": "ok when you put it like that", "delay": 1.5},
+        {"sender": "me", "text": "we went from 3 hour facetime calls to not even knowing each other's ringtone", "delay": 2.5},
+        {"sender": "best friend", "text": "idk what to say to that tbh", "delay": 1.5},
+        {"sender": "system", "text": "Read 1:23 AM", "delay": 2.5},
+    ],
+]

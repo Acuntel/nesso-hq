@@ -3,6 +3,13 @@ Nesso Content Engine V21 — Morph Transition + Audio Mix
 
 Simple concat approach: hook → black frame → story → black frame → reveal
 Reliable on all FFmpeg versions. No xfade dependency.
+
+Timeline (video):
+  [0, hook_dur] hook
+  [hook_dur, hook_dur+0.3] black frame
+  [hook_dur+0.3, hook_dur+0.3+story_dur] story
+  [hook_dur+0.3+story_dur, hook_dur+0.6+story_dur] black frame
+  [hook_dur+0.6+story_dur, hook_dur+0.6+story_dur+reveal_dur] reveal
 """
 
 import logging
@@ -20,7 +27,6 @@ from config import (
     IMESSAGE_SEND_SFX,
     IMESSAGE_SFX_FADE_AFTER,
     IMESSAGE_SFX_VOLUME,
-    MORPH_DURATION,
     MUSIC_PRE_MORPH_OFFSET,
     MUSIC_VOLUME_RATIO,
     MUSIC_VOLUME_WITH_VO,
@@ -30,6 +36,9 @@ from config import (
 from verify import get_duration
 
 log = logging.getLogger(__name__)
+
+# Duration of the black transition frame between segments (must match _safe_concat usage)
+BLACK_FRAME_DUR = 0.3
 
 
 def morph_and_concat(
@@ -126,7 +135,6 @@ def morph_and_concat(
         hook_dur=hook_dur,
         story_dur=story_dur,
         reveal_dur=reveal_dur,
-        morph_dur=MORPH_DURATION,
         output_path=full_audio,
         actual_video_dur=actual_video_dur,
         message_timings=message_timings,
@@ -218,7 +226,6 @@ def _build_audio_track(
     hook_dur: float,
     story_dur: float,
     reveal_dur: float,
-    morph_dur: float,
     output_path: str,
     actual_video_dur: float = 0,
     message_timings: list[dict] | None = None,
@@ -231,14 +238,19 @@ def _build_audio_track(
     4. Background music (12% with VO, 18% without, starts 1.0s before morph)
     5. iMessage send/receive SFX (first 3 messages)
     """
-    calculated_dur = hook_dur + story_dur + reveal_dur - morph_dur
+    # V21 concat timeline: hook + black(0.3) + story + black(0.3) + reveal
+    calculated_dur = hook_dur + BLACK_FRAME_DUR + story_dur + BLACK_FRAME_DUR + reveal_dur
     total_dur = actual_video_dur if actual_video_dur > 0 else calculated_dur
     if actual_video_dur > 0 and abs(actual_video_dur - calculated_dur) > 0.5:
         log.info(
             "Audio track using actual video dur %.1fs (calculated was %.1fs)",
             actual_video_dur, calculated_dur,
         )
-    music_start = max(0, hook_dur - MUSIC_PRE_MORPH_OFFSET)
+
+    # Story visuals start after hook + black frame gap
+    story_start = hook_dur + BLACK_FRAME_DUR
+    # Music bridges the transition — starts before story visuals appear
+    music_start = max(0, story_start - MUSIC_PRE_MORPH_OFFSET)
 
     has_voiceover = voiceover_path and os.path.exists(voiceover_path)
     effective_music_vol = MUSIC_VOLUME_WITH_VO if has_voiceover else MUSIC_VOLUME_RATIO
@@ -272,10 +284,10 @@ def _build_audio_track(
         )
         stream_idx += 1
 
-    # Layer 3: Voiceover
+    # Layer 3: Voiceover — starts when story visuals begin (after black frame)
     if has_voiceover:
         inputs.extend(["-i", voiceover_path])
-        vo_delay_ms = int(music_start * 1000)
+        vo_delay_ms = int(story_start * 1000)
         filter_parts.append(
             f"[{stream_idx}:a]volume={VOICEOVER_VOLUME},"
             f"afade=t=in:st=0:d=0.3,"
@@ -315,7 +327,7 @@ def _build_audio_track(
             if not os.path.exists(sfx_path):
                 continue
 
-            msg_time_ms = int((music_start + mt.get("cumulative_time", 0)) * 1000)
+            msg_time_ms = int((story_start + mt.get("cumulative_time", 0)) * 1000)
             label = f"imsg_{sfx_count}"
 
             inputs.extend(["-i", sfx_path])
