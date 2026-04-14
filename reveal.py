@@ -4,10 +4,10 @@ Nesso Content Engine V21 — Animated Reveal Sequence
 Primary: Remotion (React → Chromium → MP4) for professional motion graphics.
 Fallback: Pillow frame-by-frame animation if Remotion service unavailable.
 
-Flow (5s total):
+Flow (~8s total):
 1. Feature text fade-in, word by word (1.5s)
-2. App screenshot with Ken Burns zoom (1.5s)
-3. Logo scale-up + "it's free" cascade + @nesso.app (2.0s)
+2. Nesso app walkthrough — 4 screens, caption overlay, slow zoom (5.0s)
+3. Logo + "it's free" + @nesso.app CTA (1.5s)
 """
 
 import logging
@@ -103,7 +103,7 @@ def _render_text_fadein_frames(line: str, temp_dir: str, duration: float = 1.5) 
     Each word appears sequentially with a smooth opacity ramp.
     """
     num_frames = int(duration * FPS)
-    font = _get_font(44, bold=True)
+    font = _get_font(56, bold=True)
     words = line.split()
     frames = []
 
@@ -156,104 +156,126 @@ def _render_text_fadein_frames(line: str, temp_dir: str, duration: float = 1.5) 
     return frames
 
 
-# ── Segment 2: App Screenshot with Ken Burns Zoom ───────────────────────
+# ── Segment 2: Nesso App Walkthrough ────────────────────────────────────
 
-def _render_screenshot_zoom_frames(temp_dir: str, duration: float = 1.5) -> list[str]:
-    """
-    Render a real app screenshot with a slow Ken Burns zoom-in effect.
-    Falls back to skipping this segment if no screenshots exist.
-    """
-    # Find an available screenshot
-    available = [f for f in APP_SCREENSHOTS if os.path.exists(os.path.join(APP_SCREENS_DIR, f))]
-    if not available:
-        return []  # skip this segment
+# Ordered walkthrough — each screen shows a core feature, with caption
+# that ties directly to the friendship-drift emotion in the text story.
+WALKTHROUGH_SCREENS = [
+    ("home.png", "never forget the people who matter"),
+    ("home_contacts.png", "see when friendships are fading"),
+    ("reach_out.png", "reach out before it's too late"),
+    ("ai_suggestions.png", "AI writes the perfect message"),
+]
 
-    chosen = random.choice(available)
-    screenshot = Image.open(os.path.join(APP_SCREENS_DIR, chosen)).convert("RGB")
+
+def _render_single_screen_frames(
+    screen_path: str,
+    caption: str,
+    num_frames: int,
+    temp_dir: str,
+    frame_prefix: str,
+) -> list[str]:
+    """Render frames for a single walkthrough screen with subtle zoom + caption."""
+    screenshot = Image.open(screen_path).convert("RGB")
     screenshot = screenshot.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 
-    num_frames = int(duration * FPS)
-    frames = []
-
-    # Zoom from 100% to 108% — subtle but visible motion
-    zoom_start = 1.0
+    zoom_start = 1.02
     zoom_end = 1.08
+    overlay_font = _get_font(40, bold=True)
 
-    # Feature text for this screenshot
-    feature_texts = {
-        "home.png": "never forget the people who matter",
-        "home_contacts.png": "see when friendships are fading",
-        "reach_out.png": "reach out before it's too late",
-        "ai_suggestions.png": "AI writes the perfect message",
-    }
-    feature_text = feature_texts.get(chosen, "")
-    overlay_font = _get_font(30, bold=True)
-
+    frames = []
     for frame_idx in range(num_frames):
         t = frame_idx / max(1, num_frames - 1)
         t_smooth = _ease_in_out(t)
 
-        # Calculate zoom level
         zoom = zoom_start + (zoom_end - zoom_start) * t_smooth
         new_w = int(WIDTH * zoom)
         new_h = int(HEIGHT * zoom)
 
-        # Zoom from center
         zoomed = screenshot.resize((new_w, new_h), Image.Resampling.LANCZOS)
         crop_x = (new_w - WIDTH) // 2
         crop_y = (new_h - HEIGHT) // 2
         cropped = zoomed.crop((crop_x, crop_y, crop_x + WIDTH, crop_y + HEIGHT))
 
-        # Add dark gradient overlay at bottom for text
+        # Solid dark band at bottom for caption readability
         draw = ImageDraw.Draw(cropped)
-        overlay_h = 200
-        for i in range(overlay_h):
-            alpha = int(220 * (i / overlay_h) ** 1.8)
-            y = HEIGHT - overlay_h + i
-            draw.line([(0, y), (WIDTH, y)], fill=(0, 0, 0), width=1)
+        band_h = 240
+        band_top = HEIGHT - band_h
+        draw.rectangle((0, band_top, WIDTH, HEIGHT), fill=(0, 0, 0))
 
-        # Feature text at bottom — fade in during second half
-        if feature_text:
-            text_opacity = max(0.0, min(1.0, (t - 0.3) / 0.4))
-            text_opacity = _ease_out_cubic(text_opacity)
-            color = _lerp_color((0, 0, 0), (255, 255, 255), text_opacity)
-            bbox = draw.textbbox((0, 0), feature_text, font=overlay_font)
-            tw = bbox[2] - bbox[0]
+        # Caption fades in quickly, holds full opacity
+        text_opacity = max(0.0, min(1.0, t / 0.3))
+        text_opacity = _ease_out_cubic(text_opacity)
+        brightness = int(255 * text_opacity)
+        color = (brightness, brightness, brightness)
+
+        # Wrap caption if too wide
+        lines = _wrap_text_lines(caption, overlay_font, 900)
+        line_height = overlay_font.size + 8
+        total_h = line_height * len(lines)
+        y_start = band_top + (band_h - total_h) // 2
+        for li, text_line in enumerate(lines):
+            tw = overlay_font.getlength(text_line)
             tx = (WIDTH - tw) / 2
-            draw.text((tx, HEIGHT - 90), feature_text, fill=color, font=overlay_font)
+            ty = y_start + li * line_height
+            draw.text((tx, ty), text_line, fill=color, font=overlay_font)
 
-        frame_path = os.path.join(temp_dir, f"reveal_screen_{frame_idx:04d}.png")
+        frame_path = os.path.join(temp_dir, f"{frame_prefix}_{frame_idx:04d}.png")
         cropped.save(frame_path, "PNG")
         frames.append(frame_path)
 
     return frames
 
 
+def _render_app_walkthrough_frames(temp_dir: str, duration: float = 5.0) -> list[str]:
+    """
+    Render a full Nesso app walkthrough — 4 screens in sequence, each with
+    a caption tying back to the friendship drift emotion.
+    """
+    available = [
+        (f, cap) for f, cap in WALKTHROUGH_SCREENS
+        if os.path.exists(os.path.join(APP_SCREENS_DIR, f))
+    ]
+    if not available:
+        return []
+
+    frames_per_screen = int((duration * FPS) / len(available))
+    all_frames: list[str] = []
+
+    for i, (screen_file, caption) in enumerate(available):
+        screen_path = os.path.join(APP_SCREENS_DIR, screen_file)
+        screen_frames = _render_single_screen_frames(
+            screen_path, caption, frames_per_screen, temp_dir,
+            frame_prefix=f"reveal_walk_{i:02d}",
+        )
+        all_frames.extend(screen_frames)
+
+    return all_frames
+
+
 # ── Segment 3: Logo Scale-Up + Cascade CTA ──────────────────────────────
 
-def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[str]:
+def _render_logo_cascade_frames(temp_dir: str, duration: float = 1.5) -> list[str]:
     """
     Animated logo reveal:
-    - Logo scales from 60% to 100% with ease-out bounce
-    - "it's free" fades in after logo lands
-    - @nesso.app fades in last
+    - Logo scales from 75% to 100% with ease-out
+    - "it's free" appears bright immediately alongside logo
+    - @nesso.app fades in shortly after
     """
     num_frames = int(duration * FPS)
     frames = []
 
-    # Load logo
+    # Load logo — scaled up for visibility
     logo_img = None
-    logo_target_size = 280
+    logo_target_size = 360
     if os.path.exists(NESSO_LOGO_PATH):
         try:
             logo_img = Image.open(NESSO_LOGO_PATH).convert("RGBA")
         except Exception:
             pass
 
-    font_main = _get_font(44, bold=True)
-    font_handle = _get_font(24)
-
-    bg_at_center = (12, 10, 16)
+    font_main = _get_font(72, bold=True)
+    font_handle = _get_font(40, bold=True)
 
     for frame_idx in range(num_frames):
         t = frame_idx / max(1, num_frames - 1)
@@ -262,12 +284,13 @@ def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[st
         draw = ImageDraw.Draw(img)
         _draw_gradient_bg(draw)
 
-        logo_y_center = HEIGHT // 2 - 80
+        # Push logo higher so there's room below for text
+        logo_y_center = HEIGHT // 2 - 160
 
-        # Logo animation: scale 60% → 100% with ease-out (0.0 → 0.5 of timeline)
-        logo_t = min(1.0, t / 0.45)
+        # Logo animation: scale 75% → 100% with ease-out
+        logo_t = min(1.0, t / 0.4)
         logo_t = _ease_out_cubic(logo_t)
-        current_logo_size = int(logo_target_size * (0.6 + 0.4 * logo_t))
+        current_logo_size = int(logo_target_size * (0.75 + 0.25 * logo_t))
 
         if logo_img:
             logo_resized = logo_img.resize(
@@ -278,7 +301,6 @@ def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[st
             logo_y = logo_y_center - current_logo_size // 2
             img.paste(logo_resized, (logo_x, logo_y), logo_resized)
         else:
-            # Fallback circle
             logo_x = (WIDTH - current_logo_size) // 2
             logo_y = logo_y_center - current_logo_size // 2
             draw.ellipse(
@@ -286,12 +308,13 @@ def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[st
                 fill=(232, 212, 207),
             )
 
-        text_base_y = logo_y_center + logo_target_size // 2 + 25
+        text_base_y = logo_y_center + logo_target_size // 2 + 50
 
-        # "it's free" — fades in at t=0.4 → 0.7
-        free_t = max(0.0, min(1.0, (t - 0.4) / 0.3))
+        # "it's free" — fades in FAST at t=0.15 → 0.4 (pure white for contrast)
+        free_t = max(0.0, min(1.0, (t - 0.15) / 0.25))
         free_t = _ease_out_cubic(free_t)
-        free_color = _lerp_color(bg_at_center, (255, 255, 255), free_t)
+        free_brightness = int(255 * free_t)
+        free_color = (free_brightness, free_brightness, free_brightness)
         free_text = "it's free"
         free_width = font_main.getlength(free_text)
         draw.text(
@@ -299,14 +322,20 @@ def _render_logo_cascade_frames(temp_dir: str, duration: float = 2.0) -> list[st
             free_text, fill=free_color, font=font_main,
         )
 
-        # @nesso.app — fades in at t=0.6 → 0.9
-        handle_t = max(0.0, min(1.0, (t - 0.6) / 0.3))
+        # @nesso.app — fades in at t=0.4 → 0.65, warm accent color
+        handle_t = max(0.0, min(1.0, (t - 0.4) / 0.25))
         handle_t = _ease_out_cubic(handle_t)
-        handle_color = _lerp_color(bg_at_center, (142, 142, 147), handle_t)
+        handle_brightness = int(handle_t * 255)
+        # Warm peach tone matching Nesso brand
+        handle_color = (
+            int(232 * handle_t),
+            int(212 * handle_t),
+            int(207 * handle_t),
+        )
         handle_text = "@nesso.app"
         handle_width = font_handle.getlength(handle_text)
         draw.text(
-            ((WIDTH - handle_width) / 2, text_base_y + 60),
+            ((WIDTH - handle_width) / 2, text_base_y + 110),
             handle_text, fill=handle_color, font=font_handle,
         )
 
@@ -383,21 +412,27 @@ def _try_remotion_reveal(output_path: str, line: str) -> bool:
 
 
 def _pillow_reveal(output_path: str, line: str) -> str:
-    """Pillow-based fallback reveal renderer (frame-by-frame animation)."""
+    """Pillow-based fallback reveal renderer (frame-by-frame animation).
+
+    Structure (~8s total):
+      1. Feature text fade-in (1.5s) — "this didn't have to happen"
+      2. Nesso app walkthrough — 4 screens with captions (5.0s)
+      3. Logo + "it's free" + @nesso.app CTA (1.5s)
+    """
     temp_dir = os.path.dirname(output_path)
 
     all_frames = []
 
-    # Segment 1: Text fade-in (1.5s)
+    # Segment 1: Text fade-in
     text_frames = _render_text_fadein_frames(line, temp_dir, duration=1.5)
     all_frames.extend(text_frames)
 
-    # Segment 2: App screenshot zoom (1.5s) — optional
-    screenshot_frames = _render_screenshot_zoom_frames(temp_dir, duration=1.5)
-    all_frames.extend(screenshot_frames)
+    # Segment 2: App walkthrough (4 screens × ~1.25s each)
+    walkthrough_frames = _render_app_walkthrough_frames(temp_dir, duration=5.0)
+    all_frames.extend(walkthrough_frames)
 
-    # Segment 3: Logo cascade (2.0s)
-    logo_frames = _render_logo_cascade_frames(temp_dir, duration=2.0)
+    # Segment 3: Logo + CTA
+    logo_frames = _render_logo_cascade_frames(temp_dir, duration=1.5)
     all_frames.extend(logo_frames)
 
     if not all_frames:

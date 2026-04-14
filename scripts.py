@@ -77,7 +77,7 @@ EXAMPLE 1 — THE AUDIT:
   {"sender": "me", "text": "I have 847 contacts and I could call maybe 3 of them at 2am", "delay": 2.0},
   {"sender": "best friend", "text": "that's not true lol", "delay": 1.2},
   {"sender": "me", "text": "ok name 5 people you've actually TALKED to this month. not texted. talked.", "delay": 2.0},
-  {"sender": "best friend", "text": "...", "delay": 2.0},
+  {"sender": "system", "text": "...", "delay": 2.0},
   {"sender": "me", "text": "exactly", "delay": 1.2},
   {"sender": "me", "text": "the last time I called someone who wasn't my mom was february", "delay": 2.5},
   {"sender": "best friend", "text": "ok that's actually insane when you say it out loud", "delay": 1.8},
@@ -93,7 +93,7 @@ EXAMPLE 2 — THE CONFESSION:
   {"sender": "best friend", "text": "bro we literally have a tradition", "delay": 1.5},
   {"sender": "me", "text": "HAD a tradition", "delay": 2.0},
   {"sender": "me", "text": "the worst part is I only remembered because instagram reminded me. not my brain. an app.", "delay": 2.5},
-  {"sender": "best friend", "text": "...", "delay": 2.0},
+  {"sender": "system", "text": "...", "delay": 2.0},
   {"sender": "system", "text": "typing...", "delay": 1.5},
   {"sender": "system", "text": "Read 11:58 PM", "delay": 2.5}
 ]
@@ -103,7 +103,7 @@ EXAMPLE 3 — THE CALLOUT:
   {"sender": "me", "text": "be honest. when's the last time you texted me first", "delay": 2.0},
   {"sender": "best friend", "text": "what are you talking about I text you all the time", "delay": 1.5},
   {"sender": "me", "text": "scroll up", "delay": 1.5},
-  {"sender": "best friend", "text": "...", "delay": 2.0},
+  {"sender": "system", "text": "...", "delay": 2.0},
   {"sender": "best friend", "text": "ok that's actually crazy", "delay": 1.5},
   {"sender": "me", "text": "every single conversation for the last 4 months starts with me", "delay": 2.5},
   {"sender": "me", "text": "I stopped texting first for a week to see what would happen and you literally didn't notice", "delay": 2.5},
@@ -195,6 +195,17 @@ def _validate_messages(messages: list[dict]) -> list[dict]:
         msg["delay"] = max(0.8, msg["delay"])
         msg["delay"] = min(3.0, msg["delay"])
 
+        # Normalize: "..." / "typing..." / "Read X" / "Delivered" are ALWAYS
+        # system pauses, not chat messages. Prevents Claude returning them
+        # with a normal sender from rendering as literal text bubbles.
+        text_l = msg["text"].strip().lower()
+        if (text_l == "..."
+                or text_l == "typing..."
+                or text_l == "typing"
+                or text_l.startswith("read ")
+                or text_l == "delivered"):
+            msg["sender"] = "system"
+
     if len(messages) > 9:
         messages = messages[:9]
     if len(messages) < 7:
@@ -239,7 +250,7 @@ HARDCODED_FALLBACKS = [
         {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 1.5},
         {"sender": "best friend", "text": "that's not true lol", "delay": 1.0},
         {"sender": "me", "text": "ok name 5 people you've actually talked to this month. not texted. TALKED.", "delay": 2.0},
-        {"sender": "best friend", "text": "...", "delay": 1.5},
+        {"sender": "system", "text": "...", "delay": 1.5},
         {"sender": "me", "text": "exactly", "delay": 1.0},
         {"sender": "best friend", "text": "idk what happened tbh", "delay": 1.5},
         {"sender": "me", "text": "nothing happened. that's the whole problem.", "delay": 2.0},
@@ -250,7 +261,7 @@ HARDCODED_FALLBACKS = [
         {"sender": "me", "text": "be honest. when's the last time you texted me first", "delay": 2.0},
         {"sender": "best friend", "text": "what are you talking about I text you all the time", "delay": 1.5},
         {"sender": "me", "text": "scroll up", "delay": 1.5},
-        {"sender": "best friend", "text": "...", "delay": 2.0},
+        {"sender": "system", "text": "...", "delay": 2.0},
         {"sender": "best friend", "text": "ok that's actually crazy", "delay": 1.5},
         {"sender": "me", "text": "every single conversation for the last 4 months starts with me", "delay": 2.5},
         {"sender": "me", "text": "I stopped texting first for a week to see what would happen and you literally didn't notice", "delay": 2.5},
@@ -263,7 +274,7 @@ HARDCODED_FALLBACKS = [
         {"sender": "best friend", "text": "bro we literally have a tradition", "delay": 1.5},
         {"sender": "me", "text": "HAD a tradition", "delay": 2.0},
         {"sender": "me", "text": "the worst part is I only remembered because instagram reminded me. not my brain. an app.", "delay": 2.5},
-        {"sender": "best friend", "text": "...", "delay": 2.0},
+        {"sender": "system", "text": "...", "delay": 2.0},
         {"sender": "system", "text": "Read 11:58 PM", "delay": 2.5},
     ],
     [

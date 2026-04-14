@@ -243,6 +243,7 @@ def _measure_message_height(
     font: ImageFont.FreeTypeFont,
     contact_font: ImageFont.FreeTypeFont,
     system_font: ImageFont.FreeTypeFont,
+    show_name: bool = True,
 ) -> int:
     """Calculate the pixel height a message will occupy (bubble + gap)."""
     sender = msg["sender"]
@@ -257,7 +258,7 @@ def _measure_message_height(
     line_height = FONT_SIZE + 4
     text_height = line_height * len(lines)
     bubble_height = int(text_height + BUBBLE_PAD_V * 2)
-    name_height = 0 if is_me else CONTACT_FONT_SIZE + 4
+    name_height = 0 if (is_me or not show_name) else CONTACT_FONT_SIZE + 4
 
     return name_height + bubble_height + MESSAGE_GAP
 
@@ -270,9 +271,13 @@ def render_message_bubble(
     contact_font: ImageFont.FreeTypeFont,
     system_font: ImageFont.FreeTypeFont | None = None,
     show_delivered: bool = False,
+    show_name: bool = True,
 ) -> int:
     """
     Draw a single message bubble and return the new y_pos after it.
+
+    show_name: If False, skip the contact name label above incoming bubbles.
+    Used to consolidate consecutive messages from the same sender.
     """
     sender = msg["sender"]
     text = msg["text"]
@@ -298,9 +303,9 @@ def render_message_bubble(
     bubble_width = min(int(bubble_width), MAX_BUBBLE_WIDTH)
     bubble_height = int(text_height + BUBBLE_PAD_V * 2)
 
-    # Draw contact name for non-"me" messages
+    # Draw contact name for non-"me" messages (only when sender changes)
     name_height = 0
-    if not is_me:
+    if not is_me and show_name:
         name = sender
         draw.text(
             (SAFE_LEFT + 8, y_pos),
@@ -357,6 +362,30 @@ def _get_contact_name(messages: list[dict]) -> str:
     return "best friend"
 
 
+def _compute_show_name_flags(messages: list[dict]) -> list[bool]:
+    """
+    For each message, return True if the contact name label should be drawn.
+    Only show above the FIRST message of a run from the same non-me sender.
+    System messages don't affect runs (they're just centered pauses).
+    """
+    flags: list[bool] = []
+    last_real_sender: str | None = None
+    for msg in messages:
+        sender = msg.get("sender", "")
+        if sender == "system":
+            flags.append(True)  # unused for system
+            continue
+        if sender == "me":
+            flags.append(False)  # "me" never has a name label
+            last_real_sender = "me"
+            continue
+        # Incoming message — show name only when sender changes
+        show = sender != last_real_sender
+        flags.append(show)
+        last_real_sender = sender
+    return flags
+
+
 def render_text_story_frames(
     messages: list[dict],
     temp_dir: str,
@@ -373,6 +402,7 @@ def render_text_story_frames(
     system_font = _get_italic_font(CONTACT_FONT_SIZE - 4)
 
     contact_name = _get_contact_name(messages)
+    show_name_flags = _compute_show_name_flags(messages)
 
     frames = []
 
@@ -403,13 +433,15 @@ def render_text_story_frames(
             _draw_top_bar(draw_typing, contact_name, contact_font, frame_timestamp)
 
             visible_messages = messages[:msg_idx]
+            visible_flags = show_name_flags[:msg_idx]
             max_visible = _count_fitting_messages(visible_messages, font, contact_font, system_font)
             if max_visible < len(visible_messages):
                 visible_messages = visible_messages[-max_visible:]
+                visible_flags = visible_flags[-max_visible:]
 
             total_content_height = sum(
-                _measure_message_height(msg, font, contact_font, system_font)
-                for msg in visible_messages
+                _measure_message_height(m, font, contact_font, system_font, show_name=flag)
+                for m, flag in zip(visible_messages, visible_flags)
             )
             # Add space for typing indicator
             typing_height = CONTACT_FONT_SIZE + 4 + 44 + MESSAGE_GAP
@@ -421,8 +453,11 @@ def render_text_story_frames(
             else:
                 y_pos = content_top
 
-            for msg in visible_messages:
-                y_pos = render_message_bubble(draw_typing, msg, y_pos, font, contact_font, system_font)
+            for m, flag in zip(visible_messages, visible_flags):
+                y_pos = render_message_bubble(
+                    draw_typing, m, y_pos, font, contact_font, system_font,
+                    show_name=flag,
+                )
                 if y_pos > content_bottom - typing_height:
                     break
 
@@ -440,30 +475,30 @@ def render_text_story_frames(
         _draw_top_bar(draw, contact_name, contact_font, frame_timestamp)
 
         visible_messages = messages[:msg_idx + 1]
+        visible_flags = show_name_flags[:msg_idx + 1]
         max_visible = _count_fitting_messages(visible_messages, font, contact_font, system_font)
         if max_visible < len(visible_messages):
             visible_messages = visible_messages[-max_visible:]
+            visible_flags = visible_flags[-max_visible:]
 
         total_content_height = sum(
-            _measure_message_height(msg, font, contact_font, system_font)
-            for msg in visible_messages
+            _measure_message_height(m, font, contact_font, system_font, show_name=flag)
+            for m, flag in zip(visible_messages, visible_flags)
         )
 
         available_height = content_bottom - content_top
+        # ALWAYS bottom-align like real iMessage. No upper-center fallback —
+        # it made single messages float oddly in the middle of the screen.
         if total_content_height < available_height:
-            fill_ratio = total_content_height / available_height
-            if fill_ratio < 0.35:
-                # Few messages — place in upper-center zone so they're immediately visible
-                # Not dead center (looks weird), but high enough to avoid "lost in black void"
-                y_pos = content_top + int(available_height * 0.3)
-            else:
-                # Enough messages — bottom-align like real iMessage
-                y_pos = content_bottom - total_content_height
+            y_pos = content_bottom - total_content_height
         else:
             y_pos = content_top
 
-        for msg in visible_messages:
-            y_pos = render_message_bubble(draw, msg, y_pos, font, contact_font, system_font)
+        for m, flag in zip(visible_messages, visible_flags):
+            y_pos = render_message_bubble(
+                draw, m, y_pos, font, contact_font, system_font,
+                show_name=flag,
+            )
             if y_pos > content_bottom:
                 break
 
