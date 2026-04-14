@@ -238,26 +238,83 @@ def _try_youtube_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] 
 
 # ── Reddit Hook Source ───────────────────────────────────────────────────
 
-# Map hook categories to the most relevant subreddits for that content
-# NOTE: CrazyFuckingVideos is NSFW and often blocked from datacenter IPs
-# Put reliable subs first, NSFW subs last as bonus attempts
+# Map hook categories to high-action subreddits only.
+# These subs curate genuinely viral high-engagement action content —
+# no news clips, no talking heads, no slow content.
 REDDIT_SUBREDDIT_MAP = {
-    "crash": ["nextfuckinglevel", "AbruptChaos", "IdiotsInCars", "nonononoyes", "CrazyFuckingVideos"],
-    "extreme_heights": ["nextfuckinglevel", "SweatyPalms", "holdmyredbull", "CrazyFuckingVideos"],
-    "explosion": ["nextfuckinglevel", "AbruptChaos", "Unexpected", "CrazyFuckingVideos"],
-    "extreme_sports": ["nextfuckinglevel", "holdmyredbull", "AbruptChaos", "CrazyFuckingVideos"],
-    "nature": ["nextfuckinglevel", "natureismetal", "NatureIsFuckingLit", "SweatyPalms"],
-    "viral": ["nextfuckinglevel", "AbruptChaos", "Unexpected", "maybemaybemaybe"],
+    "crash": ["IdiotsInCars", "AbruptChaos", "nextfuckinglevel", "nonononoyes"],
+    "extreme_heights": ["SweatyPalms", "holdmyredbull", "nextfuckinglevel"],
+    "explosion": ["AbruptChaos", "CatastrophicFailure", "nextfuckinglevel"],
+    "extreme_sports": ["holdmyredbull", "nextfuckinglevel", "SkateboardingGifs", "SweatyPalms"],
+    "nature": ["natureismetal", "NatureIsFuckingLit", "nextfuckinglevel", "SweatyPalms"],
+    "viral": ["nextfuckinglevel", "AbruptChaos", "holdmyredbull", "maybemaybemaybe"],
 }
 
-# Fallback list — reliable subs that work from datacenter IPs
+# Fallback list — best all-round action subs
 REDDIT_SUBREDDITS_FALLBACK = [
     "nextfuckinglevel",
     "AbruptChaos",
-    "Unexpected",
     "holdmyredbull",
-    "maybemaybemaybe",
+    "SweatyPalms",
+    "IdiotsInCars",
 ]
+
+# Reject titles containing these — they signal boring/non-action content
+# (news reporting, interviews, political speech, slow compilations, etc.)
+REJECT_TITLE_KEYWORDS = [
+    "journalist", "reporter", "anchor", "correspondent",
+    "news", "press conference", "press briefing",
+    "interview", "interviewed", "interviewing",
+    "speech", "speaks", "speaking", "statement",
+    "politician", "president", "senator", "congress", "parliament",
+    "debate", "debates",
+    "explains", "explained", "discussion", "discusses",
+    "tutorial", "how to", "guide", "review",
+    "gameplay", "minecraft", "roblox", "fortnite",
+    "podcast", "talk show",
+    "cute", "wholesome", "heartwarming",  # still viral but wrong energy for our drift story
+    "dance", "dances", "dancing",  # not action
+    "tiktok dance",
+    "asmr", "satisfying compilation",
+    # Boring not-actually-action stuff that leaks through
+    "shows the", "demonstrates", "tribute", "meet the",
+    "training", "testing", "test of", "strength test",
+    "preparing", "gets ready", "behind the scenes", "explainer",
+    "documentary", "history of",
+]
+
+# Action keywords — boost score if title contains these
+ACTION_TITLE_KEYWORDS = [
+    "crash", "crashed", "crashes", "crashing",
+    "flip", "flipped", "flipping", "flips",
+    "jump", "jumped", "jumping", "launched", "launches",
+    "explodes", "explode", "exploded", "explosion", "blast", "blew up",
+    "slam", "slammed", "wipeout", "wiped out",
+    "fall", "falls", "falling", "fell", "dropped",
+    "wreck", "wrecks", "wrecked",
+    "send", "sent it", "sending it", "gnar",
+    "insane", "crazy", "wild", "brutal", "savage",
+    "close call", "near miss", "almost died", "barely",
+    "stunt", "trick", "backflip", "frontflip",
+    "racing", "race", "speeding", "speed",
+    "skateboard", "skateboarding", "bmx",
+    "bike", "motorcycle", "motocross", "mtb",
+    "surf", "surfing", "wave",
+    "ski", "skiing", "snowboard", "snowboarding",
+    "parkour", "cliff",
+]
+
+
+def _title_is_rejected(title: str) -> bool:
+    """Return True if title contains any reject keyword."""
+    t = title.lower()
+    return any(kw in t for kw in REJECT_TITLE_KEYWORDS)
+
+
+def _action_boost(title: str) -> int:
+    """Count action keywords in title for quality ranking."""
+    t = title.lower()
+    return sum(1 for kw in ACTION_TITLE_KEYWORDS if kw in t)
 
 REDDIT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -317,18 +374,28 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
     from config import get_hook_category
     hook_category = get_hook_category(query)
 
-    # Pick subreddits relevant to the hook category
+    # Pick subreddits relevant to the hook category.
+    # Preserve list order — the FIRST sub in each category is the most on-topic
+    # (e.g. "crash" → IdiotsInCars first). Randomize only the remainder so we
+    # don't get the same clip twice in a batch.
     category_subs = REDDIT_SUBREDDIT_MAP.get(hook_category, REDDIT_SUBREDDITS_FALLBACK)
-    # Try 4 subs: 3 from category + 1 wildcard for variety
-    subs_to_try = random.sample(category_subs, min(3, len(category_subs)))
+    if category_subs:
+        primary = category_subs[0]
+        rest = list(category_subs[1:])
+        random.shuffle(rest)
+        subs_to_try = [primary] + rest[:2]
+    else:
+        subs_to_try = list(REDDIT_SUBREDDITS_FALLBACK[:3])
+    # Add one wildcard fallback sub for variety
     wildcard = random.choice(REDDIT_SUBREDDITS_FALLBACK)
     if wildcard not in subs_to_try:
         subs_to_try.append(wildcard)
 
     for subreddit in subs_to_try:
         try:
-            # Use "top" endpoint with time filter — proven viral, not just trending
-            time_filter = random.choice(["day", "week", "month"])
+            # Use "top" endpoint with day/week filter only — month has too much
+            # stale/low-action content. Fresh action clips go viral in days.
+            time_filter = random.choice(["day", "week", "week"])
             resp = requests.get(
                 f"https://www.reddit.com/r/{subreddit}/top.json",
                 params={"limit": 50, "t": time_filter},
@@ -342,45 +409,69 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
             data = resp.json()
             posts = data.get("data", {}).get("children", [])
 
-            # Filter for video posts with high engagement
+            # Filter for high-action video posts with strong engagement
             video_posts = []
+            rejected_titles = 0
             for post in posts:
                 pd = post.get("data", {})
                 if not pd.get("is_video"):
                     continue
                 score = pd.get("score", 0)
-                if score < 500:
+                # Raised score floor — only genuinely viral action clips
+                if score < 2000:
                     continue
                 media = pd.get("media", {})
                 reddit_video = media.get("reddit_video", {}) if media else {}
                 duration = reddit_video.get("duration", 0)
-                # Accept 5-90s videos — wider net, smart segment extraction handles trimming
                 if duration < 5 or duration > 90:
                     continue
                 permalink = pd.get("permalink", "")
                 if not permalink:
                     continue
+                title = pd.get("title", "Reddit video")
+                # Reject news/interview/talking-head/non-action content
+                if _title_is_rejected(title):
+                    rejected_titles += 1
+                    continue
+
                 video_posts.append({
                     "url": f"https://www.reddit.com{permalink}",
-                    "title": pd.get("title", "Reddit video"),
+                    "title": title,
                     "duration": duration,
                     "score": score,
                     "upvote_ratio": pd.get("upvote_ratio", 0.5),
                     "num_comments": pd.get("num_comments", 0),
+                    "action_boost": _action_boost(title),
                 })
+
+            if rejected_titles:
+                log.info("r/%s: rejected %d non-action titles", subreddit, rejected_titles)
 
             if not video_posts:
                 continue
 
-            # Rank by engagement quality: high score + high upvote ratio + comments
-            # This finds clips people genuinely loved, not just rage-bait
+            # Rank by engagement quality
             for vp in video_posts:
                 vp["quality_score"] = (
-                    vp["score"] * vp["upvote_ratio"]
-                    + vp["num_comments"] * 10
+                    vp["score"] * vp["upvote_ratio"] + vp["num_comments"] * 10
                 )
-            video_posts.sort(key=lambda x: x["quality_score"], reverse=True)
-            chosen = random.choice(video_posts[:3])
+
+            # Partition: posts with action keywords in the title vs. without.
+            # Pick from the action-keyword bucket whenever possible — ensures
+            # we don't grab a high-score but boring clip like "Arvid Lindblad
+            # shows the machines used to test motorsport strength".
+            action_posts = [vp for vp in video_posts if vp["action_boost"] >= 1]
+            if action_posts:
+                action_posts.sort(key=lambda x: x["quality_score"], reverse=True)
+                chosen = random.choice(action_posts[:3])
+                log.info(
+                    "r/%s: %d action-keyword posts (picked from top 3)",
+                    subreddit, len(action_posts),
+                )
+            else:
+                # No action-keyword titles — bail this sub and try next one
+                log.info("r/%s: no action-keyword titles, skipping", subreddit)
+                continue
 
             log.info(
                 "Reddit hook from r/%s (top/%s): %s (score=%d, ratio=%.2f, dur=%ds)",
@@ -583,20 +674,11 @@ def extract_hook_audio(input_path: str, output_path: str) -> str:
 # ── Main Entry Point ─────────────────────────────────────────────────────
 
 
-def get_full_hook(
-    query: str,
-    temp_dir: str,
-) -> tuple[str, str, float, str]:
-    """
-    Full hook pipeline: Reddit (primary) → YouTube (fallback).
-    Returns (vertical_clip_path, audio_path, duration, description).
-    """
-    # Try Reddit first — public API, no bot detection, best viral content
+def _run_source_chain(query: str, temp_dir: str):
+    """Run Reddit → YouTube → Pexels chain once. Returns result tuple or None."""
     result = _try_reddit_hook(query, temp_dir)
     if not result:
         log.warning("Reddit failed for '%s', trying YouTube", query)
-
-        # Try YouTube with cookies
         if not _cookies_expired:
             result = _try_youtube_hook(query, temp_dir)
             if not result:
@@ -604,20 +686,62 @@ def get_full_hook(
                     log.warning("YouTube cookies expired")
                 else:
                     log.warning("YouTube failed for '%s'", query)
-
-    # Last resort: Pexels (stock video isn't viral, but better than total failure)
     if not result:
         log.warning("Reddit + YouTube both failed, trying Pexels last resort")
         result = _try_pexels_hook(query, temp_dir)
+    return result
 
-    if not result:
-        raise RuntimeError(f"No hook found for query: {query} (all sources failed)")
 
-    clip_path, audio_path, duration, desc = result
+def get_full_hook(
+    query: str,
+    temp_dir: str,
+    max_attempts: int = 3,
+) -> tuple[str, str, float, str]:
+    """
+    Full hook pipeline: Reddit (primary) → YouTube (fallback) → Pexels.
+    Retries with different queries if the chosen hook is too short.
+    Returns (vertical_clip_path, audio_path, duration, description).
+    """
+    from config import get_random_hook_query, get_hook_category
+    attempted_queries = [query]
 
-    # Enforce minimum 5s hook duration
-    if duration < 5.0:
-        log.warning("Hook too short (%.1fs < 5s), rejecting: %s", duration, desc)
-        raise RuntimeError(f"Hook too short: {duration:.1f}s for '{desc}' (minimum 5s)")
+    for attempt in range(max_attempts):
+        current_query = attempted_queries[-1]
+        log.info("Hook attempt %d/%d for query: %s",
+                 attempt + 1, max_attempts, current_query)
 
-    return clip_path, audio_path, duration, desc
+        result = _run_source_chain(current_query, temp_dir)
+        if result:
+            clip_path, audio_path, duration, desc = result
+            if duration >= 5.0:
+                return clip_path, audio_path, duration, desc
+            # Too short — clean up and try again with a new query in the same category
+            log.warning(
+                "Hook too short (%.1fs < 5s), retrying: %s",
+                duration, desc,
+            )
+            for p in (clip_path, audio_path):
+                if p and os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+
+        # Pick a NEW query in the SAME category so the script bridge still fits
+        same_cat = get_hook_category(query)
+        # Filter HOOK_SEARCH_QUERIES to same category, excluding already tried
+        from config import HOOK_SEARCH_QUERIES
+        candidates = [
+            q for q in HOOK_SEARCH_QUERIES
+            if get_hook_category(q) == same_cat and q not in attempted_queries
+        ]
+        if not candidates:
+            # Fall back to any untried query
+            candidates = [q for q in HOOK_SEARCH_QUERIES if q not in attempted_queries]
+        if not candidates:
+            break
+        attempted_queries.append(random.choice(candidates))
+
+    raise RuntimeError(
+        f"No usable hook found after {max_attempts} attempts (tried: {attempted_queries})"
+    )

@@ -157,98 +157,247 @@ def _render_text_fadein_frames(line: str, temp_dir: str, duration: float = 1.5) 
 
 
 # ── Segment 2: Nesso App Walkthrough ────────────────────────────────────
+# Simulates someone tapping through the Nesso app:
+#   1. Screen appears with a tap ring flash (where they "tapped")
+#   2. Screen holds with subtle zoom + caption
+#   3. Swipe transition slides it out as next screen slides in
+#   4. Repeat for each screen
 
-# Ordered walkthrough — each screen shows a core feature, with caption
-# that ties directly to the friendship-drift emotion in the text story.
+# Each entry: (filename, caption, tap_x_ratio, tap_y_ratio)
+# Tap points are where the user "presses" to advance to the NEXT screen
 WALKTHROUGH_SCREENS = [
-    ("home.png", "never forget the people who matter"),
-    ("home_contacts.png", "see when friendships are fading"),
-    ("reach_out.png", "reach out before it's too late"),
-    ("ai_suggestions.png", "AI writes the perfect message"),
+    ("home.png", "never forget the people who matter", 0.25, 0.38),
+    ("home_contacts.png", "see when friendships are fading", 0.25, 0.38),
+    ("reach_out.png", "reach out before it's too late", 0.80, 0.75),
+    ("ai_suggestions.png", "AI writes the perfect message", 0.50, 0.35),
 ]
 
 
-def _render_single_screen_frames(
+def _load_screen(screen_path: str) -> Image.Image:
+    img = Image.open(screen_path).convert("RGB")
+    return img.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+
+def _draw_caption_band(img: Image.Image, caption: str, opacity: float = 1.0):
+    """Draw the bottom caption band + text on the frame in-place."""
+    draw = ImageDraw.Draw(img)
+    band_h = 240
+    band_top = HEIGHT - band_h
+    draw.rectangle((0, band_top, WIDTH, HEIGHT), fill=(0, 0, 0))
+
+    brightness = int(255 * max(0.0, min(1.0, opacity)))
+    color = (brightness, brightness, brightness)
+    font = _get_font(40, bold=True)
+    lines = _wrap_text_lines(caption, font, 900)
+    line_height = font.size + 8
+    total_h = line_height * len(lines)
+    y_start = band_top + (band_h - total_h) // 2
+    for li, text_line in enumerate(lines):
+        tw = font.getlength(text_line)
+        tx = (WIDTH - tw) / 2
+        ty = y_start + li * line_height
+        draw.text((tx, ty), text_line, fill=color, font=font)
+
+
+def _draw_tap_ring(img: Image.Image, cx: int, cy: int, t: float):
+    """
+    Draw a pulsing tap indicator at (cx, cy). t goes 0→1 over the tap animation.
+
+    Expanding white ring + center dot, fading as it grows. Bright and
+    chunky so it reads clearly as a tap on mobile playback. Blends onto
+    the pixel data directly instead of full-frame alpha_composite, which
+    was ~100x slower and made Railway unusable.
+    """
+    if t <= 0 or t >= 1:
+        return
+    t_eased = _ease_out_cubic(t)
+    radius = int(40 + 110 * t_eased)       # bigger: 40 → 150 px
+    opacity = 1.0 - t_eased                 # fade out as it expands
+    if opacity <= 0:
+        return
+
+    # Clip the pixel-blend work to a tight bounding box around the ring
+    pad = radius + 10
+    x0 = max(0, cx - pad)
+    y0 = max(0, cy - pad)
+    x1 = min(WIDTH, cx + pad)
+    y1 = min(HEIGHT, cy + pad)
+    if x1 <= x0 or y1 <= y0:
+        return
+
+    region = img.crop((x0, y0, x1, y1))
+    rdraw = ImageDraw.Draw(region)
+
+    # White with opacity baked into the greyscale — PIL RGB draw has no alpha,
+    # so we blend toward white by `opacity`. On the dark mockup edges this
+    # still looks like a partially-transparent white ring.
+    w = int(255 * opacity)
+    ring_color = (w, w, w) if w < 255 else (255, 255, 255)
+
+    # Outer expanding ring (thick stroke via width param — one draw call)
+    lcx = cx - x0
+    lcy = cy - y0
+    rdraw.ellipse(
+        (lcx - radius, lcy - radius, lcx + radius, lcy + radius),
+        outline=ring_color,
+        width=8,
+    )
+    # Center dot (smaller, stays roughly put)
+    dot_r = 22
+    rdraw.ellipse(
+        (lcx - dot_r, lcy - dot_r, lcx + dot_r, lcy + dot_r),
+        fill=ring_color,
+    )
+
+    img.paste(region, (x0, y0))
+
+
+def _render_screen_hold_frames(
     screen_path: str,
     caption: str,
     num_frames: int,
+    tap_xy: tuple[int, int] | None,
     temp_dir: str,
     frame_prefix: str,
 ) -> list[str]:
-    """Render frames for a single walkthrough screen with subtle zoom + caption."""
-    screenshot = Image.open(screen_path).convert("RGB")
-    screenshot = screenshot.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+    """
+    Render a screen being "held" on — subtle zoom, caption, and a tap ring
+    near the end indicating the user is about to advance.
 
+    Perf: the source is upscaled ONCE to the max zoom, then every frame
+    is just a crop from the pre-scaled image. Avoids N LANCZOS resizes.
+    """
+    base = _load_screen(screen_path)
     zoom_start = 1.02
-    zoom_end = 1.08
-    overlay_font = _get_font(40, bold=True)
+    zoom_end = 1.06
+
+    # Pre-scale to max zoom ONE TIME — each frame just picks a different
+    # crop window, which gives a convincing zoom illusion on ~4% range.
+    max_w = int(WIDTH * zoom_end)
+    max_h = int(HEIGHT * zoom_end)
+    max_scaled = base.resize((max_w, max_h), Image.Resampling.LANCZOS)
+
+    # Tap animation runs in the LAST 0.4s of the hold
+    tap_anim_frames = min(int(0.4 * FPS), num_frames // 2)
+    tap_start_frame = num_frames - tap_anim_frames
 
     frames = []
     for frame_idx in range(num_frames):
         t = frame_idx / max(1, num_frames - 1)
         t_smooth = _ease_in_out(t)
 
+        # Interpolate the effective zoom by picking a proportionally sized
+        # crop window from the pre-scaled max image.
         zoom = zoom_start + (zoom_end - zoom_start) * t_smooth
-        new_w = int(WIDTH * zoom)
-        new_h = int(HEIGHT * zoom)
+        # At zoom_end, crop = full max_scaled. At zoom_start, crop is
+        # (zoom_start / zoom_end) of the max image, scaled down to WIDTHxHEIGHT.
+        crop_w = int(WIDTH * (zoom_end / zoom))
+        crop_h = int(HEIGHT * (zoom_end / zoom))
+        crop_x = (max_w - crop_w) // 2
+        crop_y = (max_h - crop_h) // 2
+        cropped = max_scaled.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+        # Fast bilinear resize back to exact output dim
+        frame = cropped.resize((WIDTH, HEIGHT), Image.Resampling.BILINEAR)
 
-        zoomed = screenshot.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        crop_x = (new_w - WIDTH) // 2
-        crop_y = (new_h - HEIGHT) // 2
-        cropped = zoomed.crop((crop_x, crop_y, crop_x + WIDTH, crop_y + HEIGHT))
+        _draw_caption_band(frame, caption, opacity=1.0)
 
-        # Solid dark band at bottom for caption readability
-        draw = ImageDraw.Draw(cropped)
-        band_h = 240
-        band_top = HEIGHT - band_h
-        draw.rectangle((0, band_top, WIDTH, HEIGHT), fill=(0, 0, 0))
+        # Tap ring near the end of the hold
+        if tap_xy is not None and frame_idx >= tap_start_frame:
+            tap_t = (frame_idx - tap_start_frame) / max(1, tap_anim_frames - 1)
+            _draw_tap_ring(frame, tap_xy[0], tap_xy[1], tap_t)
 
-        # Caption fades in quickly, holds full opacity
-        text_opacity = max(0.0, min(1.0, t / 0.3))
-        text_opacity = _ease_out_cubic(text_opacity)
-        brightness = int(255 * text_opacity)
-        color = (brightness, brightness, brightness)
+        fp = os.path.join(temp_dir, f"{frame_prefix}_{frame_idx:04d}.png")
+        frame.save(fp, "PNG")
+        frames.append(fp)
 
-        # Wrap caption if too wide
-        lines = _wrap_text_lines(caption, overlay_font, 900)
-        line_height = overlay_font.size + 8
-        total_h = line_height * len(lines)
-        y_start = band_top + (band_h - total_h) // 2
-        for li, text_line in enumerate(lines):
-            tw = overlay_font.getlength(text_line)
-            tx = (WIDTH - tw) / 2
-            ty = y_start + li * line_height
-            draw.text((tx, ty), text_line, fill=color, font=overlay_font)
+    return frames
 
-        frame_path = os.path.join(temp_dir, f"{frame_prefix}_{frame_idx:04d}.png")
-        cropped.save(frame_path, "PNG")
-        frames.append(frame_path)
+
+def _render_slide_transition_frames(
+    from_path: str,
+    to_path: str,
+    to_caption: str,
+    num_frames: int,
+    temp_dir: str,
+    frame_prefix: str,
+) -> list[str]:
+    """
+    Horizontal slide transition — outgoing screen exits left,
+    incoming screen enters from the right. Both are rendered at 1.0 zoom
+    with the NEW caption appearing on the incoming screen.
+    """
+    from_img = _load_screen(from_path)
+    to_img = _load_screen(to_path)
+
+    frames = []
+    for frame_idx in range(num_frames):
+        t = frame_idx / max(1, num_frames - 1)
+        t_smooth = _ease_in_out(t)
+        offset = int(WIDTH * t_smooth)
+
+        canvas = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+        canvas.paste(from_img, (-offset, 0))
+        canvas.paste(to_img, (WIDTH - offset, 0))
+
+        # Draw the NEW caption fading in on the incoming screen as it arrives
+        caption_opacity = t_smooth
+        _draw_caption_band(canvas, to_caption, opacity=caption_opacity)
+
+        fp = os.path.join(temp_dir, f"{frame_prefix}_{frame_idx:04d}.png")
+        canvas.save(fp, "PNG")
+        frames.append(fp)
 
     return frames
 
 
 def _render_app_walkthrough_frames(temp_dir: str, duration: float = 5.0) -> list[str]:
     """
-    Render a full Nesso app walkthrough — 4 screens in sequence, each with
-    a caption tying back to the friendship drift emotion.
+    Render a full Nesso app walkthrough with swipe transitions and tap
+    indicators so it feels like someone is actually using the app.
+
+    Per screen: 0.25s slide transition (except first) + hold time.
+    Tap ring flashes in the last 0.4s of each hold as the "press" that
+    triggers the next screen.
     """
     available = [
-        (f, cap) for f, cap in WALKTHROUGH_SCREENS
+        (f, cap, tx, ty) for f, cap, tx, ty in WALKTHROUGH_SCREENS
         if os.path.exists(os.path.join(APP_SCREENS_DIR, f))
     ]
     if not available:
         return []
 
-    frames_per_screen = int((duration * FPS) / len(available))
+    n = len(available)
+    total_frames = int(duration * FPS)
+    trans_frames = int(0.25 * FPS)          # 0.25s slide
+    num_transitions = n - 1                  # no transition before first screen
+    hold_budget = total_frames - (num_transitions * trans_frames)
+    hold_frames = max(1, hold_budget // n)
+
     all_frames: list[str] = []
 
-    for i, (screen_file, caption) in enumerate(available):
+    for i, (screen_file, caption, tx_ratio, ty_ratio) in enumerate(available):
         screen_path = os.path.join(APP_SCREENS_DIR, screen_file)
-        screen_frames = _render_single_screen_frames(
-            screen_path, caption, frames_per_screen, temp_dir,
-            frame_prefix=f"reveal_walk_{i:02d}",
+
+        # Slide in from previous screen (skip for first)
+        if i > 0:
+            prev_path = os.path.join(APP_SCREENS_DIR, available[i - 1][0])
+            slide = _render_slide_transition_frames(
+                prev_path, screen_path, caption,
+                trans_frames, temp_dir,
+                frame_prefix=f"reveal_slide_{i:02d}",
+            )
+            all_frames.extend(slide)
+
+        # Hold on this screen (with tap ring at the end, except on final screen)
+        tap_xy: tuple[int, int] | None = None
+        if i < n - 1:
+            tap_xy = (int(WIDTH * tx_ratio), int(HEIGHT * ty_ratio))
+
+        hold = _render_screen_hold_frames(
+            screen_path, caption, hold_frames, tap_xy, temp_dir,
+            frame_prefix=f"reveal_hold_{i:02d}",
         )
-        all_frames.extend(screen_frames)
+        all_frames.extend(hold)
 
     return all_frames
 
