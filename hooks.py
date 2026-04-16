@@ -319,65 +319,19 @@ def _action_boost(title: str) -> int:
     return sum(1 for kw in ACTION_TITLE_KEYWORDS if kw in t)
 
 REDDIT_HEADERS = {
-    "User-Agent": "NessoContentBot/1.0 (by /u/nesso_app)",
-    "Accept": "application/json",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Cache-Control": "max-age=0",
 }
 
-# ── Reddit OAuth (bypasses 403 on cloud IPs) ──────────────────────────────
-_reddit_token: str = ""
-_reddit_token_expires: float = 0
-
-
-def _get_reddit_auth_headers() -> dict:
-    """
-    Get Reddit API headers with OAuth token. Reddit blocks unauthenticated
-    requests from cloud IPs (Railway, AWS, etc.) with 403. OAuth via
-    application-only flow fixes this.
-
-    Requires REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET env vars.
-    Falls back to unauthenticated headers if not set.
-    """
-    import time as _time
-    global _reddit_token, _reddit_token_expires
-
-    client_id = os.environ.get("REDDIT_CLIENT_ID", "")
-    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
-
-    if not client_id or not client_secret:
-        # No OAuth creds — fall back to unauthenticated (will 403 on Railway)
-        return REDDIT_HEADERS
-
-    # Reuse token if still valid (5 min buffer)
-    if _reddit_token and _time.time() < _reddit_token_expires - 300:
-        return {
-            "Authorization": f"Bearer {_reddit_token}",
-            "User-Agent": REDDIT_HEADERS["User-Agent"],
-        }
-
-    try:
-        auth = requests.auth.HTTPBasicAuth(client_id, client_secret)
-        resp = requests.post(
-            "https://www.reddit.com/api/v1/access_token",
-            auth=auth,
-            data={"grant_type": "client_credentials"},
-            headers={"User-Agent": REDDIT_HEADERS["User-Agent"]},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            _reddit_token = data["access_token"]
-            _reddit_token_expires = _time.time() + data.get("expires_in", 3600)
-            log.info("Reddit OAuth token acquired (expires in %ds)", data.get("expires_in", 3600))
-            return {
-                "Authorization": f"Bearer {_reddit_token}",
-                "User-Agent": REDDIT_HEADERS["User-Agent"],
-            }
-        else:
-            log.warning("Reddit OAuth failed (%d): %s", resp.status_code, resp.text[:200])
-    except Exception as e:
-        log.warning("Reddit OAuth request failed: %s", e)
-
-    return REDDIT_HEADERS
+# Endpoints to try in order — old.reddit.com is less aggressive with blocking
+REDDIT_ENDPOINTS = [
+    "https://old.reddit.com",
+    "https://www.reddit.com",
+]
 
 
 def _extract_best_segment(input_path: str, output_path: str, total_duration: float, title: str = "") -> str:
@@ -468,20 +422,25 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
             # Use "top" endpoint with day/week filter only — month has too much
             # stale/low-action content. Fresh action clips go viral in days.
             time_filter = random.choice(["day", "week", "week"])
-            # Use OAuth endpoint if we have a token (cloud IPs get 403 on www.reddit.com)
-            auth_headers = _get_reddit_auth_headers()
-            if "Authorization" in auth_headers:
-                reddit_base = "https://oauth.reddit.com"
-            else:
-                reddit_base = "https://www.reddit.com"
-            resp = requests.get(
-                f"{reddit_base}/r/{subreddit}/top.json",
-                params={"limit": 50, "t": time_filter},
-                headers=auth_headers,
-                timeout=15,
-            )
-            if resp.status_code != 200:
-                log.warning("Reddit r/%s returned %d", subreddit, resp.status_code)
+            # Try multiple endpoints — old.reddit.com is less aggressive with IP blocks
+            resp = None
+            for reddit_base in REDDIT_ENDPOINTS:
+                try:
+                    resp = requests.get(
+                        f"{reddit_base}/r/{subreddit}/top.json",
+                        params={"limit": 50, "t": time_filter, "raw_json": 1},
+                        headers=REDDIT_HEADERS,
+                        timeout=15,
+                    )
+                    if resp.status_code == 200:
+                        break
+                    log.debug("Reddit %s r/%s returned %d, trying next endpoint",
+                              reddit_base, subreddit, resp.status_code)
+                except Exception:
+                    continue
+            if resp is None or resp.status_code != 200:
+                log.warning("Reddit r/%s returned %d on all endpoints", subreddit,
+                            resp.status_code if resp else 0)
                 continue
 
             data = resp.json()
