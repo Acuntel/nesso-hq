@@ -162,7 +162,9 @@ def download_youtube_hook(
     """Download a segment from YouTube using cookies."""
     ydl_opts = {
         **_yt_base_opts(),
-        "format": "best[height<=720]/best",
+        # Use DASH merge format — "best" progressive streams are rarely available now.
+        # Prefer 720p or lower to keep file small and Railway-friendly.
+        "format": "bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best[height<=720]/best",
         "outtmpl": output_path,
         "download_ranges": yt_dlp.utils.download_range_func(
             None, [(start_time, end_time)]
@@ -317,34 +319,104 @@ def _action_boost(title: str) -> int:
     return sum(1 for kw in ACTION_TITLE_KEYWORDS if kw in t)
 
 REDDIT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "NessoContentBot/1.0 (by /u/nesso_app)",
     "Accept": "application/json",
 }
 
+# ── Reddit OAuth (bypasses 403 on cloud IPs) ──────────────────────────────
+_reddit_token: str = ""
+_reddit_token_expires: float = 0
 
-def _extract_best_segment(input_path: str, output_path: str, total_duration: float) -> str:
+
+def _get_reddit_auth_headers() -> dict:
     """
-    Extract the best 8-15s segment from a video.
+    Get Reddit API headers with OAuth token. Reddit blocks unauthenticated
+    requests from cloud IPs (Railway, AWS, etc.) with 403. OAuth via
+    application-only flow fixes this.
 
-    Heuristic: Reddit viral videos usually have the payoff in the first 40%.
-    For short videos (< 20s), take the whole thing (trimmed to 15s).
-    For longer videos, start at 10-25% of the way in to skip buildup.
+    Requires REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET env vars.
+    Falls back to unauthenticated headers if not set.
     """
-    max_clip = 10.0
+    import time as _time
+    global _reddit_token, _reddit_token_expires
 
-    if total_duration <= 20:
-        # Short video — beginning likely has the action
-        start = 0
-    elif total_duration <= 40:
-        # Medium — skip the first few seconds of buildup
-        start = max(0, total_duration * 0.1)
+    client_id = os.environ.get("REDDIT_CLIENT_ID", "")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
+
+    if not client_id or not client_secret:
+        # No OAuth creds — fall back to unauthenticated (will 403 on Railway)
+        return REDDIT_HEADERS
+
+    # Reuse token if still valid (5 min buffer)
+    if _reddit_token and _time.time() < _reddit_token_expires - 300:
+        return {
+            "Authorization": f"Bearer {_reddit_token}",
+            "User-Agent": REDDIT_HEADERS["User-Agent"],
+        }
+
+    try:
+        auth = requests.auth.HTTPBasicAuth(client_id, client_secret)
+        resp = requests.post(
+            "https://www.reddit.com/api/v1/access_token",
+            auth=auth,
+            data={"grant_type": "client_credentials"},
+            headers={"User-Agent": REDDIT_HEADERS["User-Agent"]},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            _reddit_token = data["access_token"]
+            _reddit_token_expires = _time.time() + data.get("expires_in", 3600)
+            log.info("Reddit OAuth token acquired (expires in %ds)", data.get("expires_in", 3600))
+            return {
+                "Authorization": f"Bearer {_reddit_token}",
+                "User-Agent": REDDIT_HEADERS["User-Agent"],
+            }
+        else:
+            log.warning("Reddit OAuth failed (%d): %s", resp.status_code, resp.text[:200])
+    except Exception as e:
+        log.warning("Reddit OAuth request failed: %s", e)
+
+    return REDDIT_HEADERS
+
+
+def _extract_best_segment(input_path: str, output_path: str, total_duration: float, title: str = "") -> str:
+    """
+    Extract the best segment from a video with SMART duration.
+
+    The clip length adapts to the content:
+    - Explosions, crashes, wipeouts: 3-5s (the action is instant)
+    - Stunts, races, jumps: 5-7s (need setup + payoff)
+    - General viral: 5-8s (default)
+
+    Short clips keep attention. We're not a compilation channel.
+    """
+    title_lower = title.lower() if title else ""
+
+    # Smart duration based on content type
+    if any(w in title_lower for w in ["explosion", "explode", "blast", "demolition", "implosion"]):
+        max_clip = random.uniform(3.0, 5.0)  # explosions are instant
+    elif any(w in title_lower for w in ["crash", "wipeout", "wreck", "slam", "fall", "fell"]):
+        max_clip = random.uniform(4.0, 6.0)  # crashes need a tiny setup
+    elif any(w in title_lower for w in ["jump", "flip", "stunt", "trick", "backflip"]):
+        max_clip = random.uniform(5.0, 7.0)  # stunts need approach + payoff
     else:
-        # Longer video — the peak is likely 15-35% in
-        start = total_duration * random.uniform(0.15, 0.30)
+        max_clip = random.uniform(5.0, 8.0)  # general content
 
-    # Don't overshoot the end
-    available = total_duration - start
-    clip_dur = min(max_clip, available)
+    if total_duration <= max_clip + 2:
+        # Short video — use most of it
+        start = 0
+        clip_dur = min(max_clip, total_duration)
+    elif total_duration <= 30:
+        # Medium — action is usually early
+        start = max(0, total_duration * 0.1)
+        available = total_duration - start
+        clip_dur = min(max_clip, available)
+    else:
+        # Long video — skip buildup, target 15-30% in
+        start = total_duration * random.uniform(0.15, 0.30)
+        available = total_duration - start
+        clip_dur = min(max_clip, available)
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
@@ -396,10 +468,16 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
             # Use "top" endpoint with day/week filter only — month has too much
             # stale/low-action content. Fresh action clips go viral in days.
             time_filter = random.choice(["day", "week", "week"])
+            # Use OAuth endpoint if we have a token (cloud IPs get 403 on www.reddit.com)
+            auth_headers = _get_reddit_auth_headers()
+            if "Authorization" in auth_headers:
+                reddit_base = "https://oauth.reddit.com"
+            else:
+                reddit_base = "https://www.reddit.com"
             resp = requests.get(
-                f"https://www.reddit.com/r/{subreddit}/top.json",
+                f"{reddit_base}/r/{subreddit}/top.json",
                 params={"limit": 50, "t": time_filter},
-                headers=REDDIT_HEADERS,
+                headers=auth_headers,
                 timeout=15,
             )
             if resp.status_code != 200:
@@ -499,7 +577,7 @@ def _try_reddit_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
 
             # Smart segment extraction: pick the best 8-15s window
             trimmed = os.path.join(temp_dir, "hook_raw.mp4")
-            _extract_best_segment(raw_path, trimmed, chosen["duration"])
+            _extract_best_segment(raw_path, trimmed, chosen["duration"], title=chosen["title"])
             try:
                 os.remove(raw_path)
             except OSError:
@@ -634,7 +712,7 @@ def _try_pexels_hook(query: str, temp_dir: str) -> tuple[str, str, float, str] |
 
 
 def crop_to_vertical(input_path: str, output_path: str) -> str:
-    """Crop a video to 9:16 vertical."""
+    """Crop a video to 9:16 vertical. Preserves input duration (smart segment already trimmed it)."""
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", input_path,
@@ -645,7 +723,6 @@ def crop_to_vertical(input_path: str, output_path: str) -> str:
         ),
         "-preset", FFMPEG_PRESET,
         "-an",
-        "-t", "10",
         output_path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)

@@ -97,10 +97,23 @@ def get_morph_transition() -> str:
 # Second ElevenLabs voice for "friend" messages
 ELEVENLABS_VOICE_ID_2 = os.environ.get("ELEVENLABS_VOICE_ID_2", "21m00Tcm4TlvDq8ikWAM")  # Rachel voice
 
-# ── Reveal (3s total — any longer and viewers swipe) ──────────────────────
-REVEAL_TEXT_DURATION = 1.5   # single feature line
-REVEAL_DURATION = 1.5        # logo + "it's free"
-BLACK_SCREEN_DURATION = 0.0  # KILLED — no separate CTA frame
+# ── Nesso Demo (app walkthrough woven into story) ─────────────────────────
+# The demo replaces the old reveal. It's an actual app walkthrough with VO,
+# inserted BETWEEN text story part 1 and part 2.
+DEMO_DURATION = 6.0  # total demo section in seconds
+DEMO_NARRATION = [
+    ("this is nesso", 1.2),
+    ("time's up. time to reach out", 1.5),
+    ("AI writes the message for you", 1.5),
+    ("just tap and send", 1.0),
+]
+
+# ── CTA (quick logo + handle at the end) ─────────────────────────────────
+CTA_DURATION = 2.0  # logo + @nesso.app + "it's free"
+
+# ── Script Structure ──────────────────────────────────────────────────────
+SCRIPT_PART1_MAX = 5   # messages before the Nesso demo (tension build)
+SCRIPT_PART2_MAX = 3   # messages after the demo (resolution via Nesso)
 
 # ── ElevenLabs TTS Voiceover ─────────────────────────────────────────────
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")

@@ -1,13 +1,17 @@
 """
-Nesso Content Engine V20 — Full Render Pipeline Orchestrator
+Nesso Content Engine V21 — Full Render Pipeline Orchestrator
 
-Calls: hooks → scripts → renderer → morph → reveal → music → verify
-in sequence. Manages temp files and memory budget.
+New flow:
+  hook → text_story_part1 → nesso_demo → text_story_part2 → cta
+
+The Nesso demo is woven INTO the story — Part 1 builds tension,
+the demo shows the app intervening, Part 2 shows the resolution.
 """
 
 import logging
 import os
 import shutil
+import subprocess
 import time
 import uuid
 
@@ -31,7 +35,7 @@ from hooks import get_full_hook
 from morph import morph_and_concat
 from music import download_background_music, download_psych_sfx
 from renderer import compile_frames_to_video, render_text_story_frames
-from reveal import render_nesso_reveal
+from reveal import render_nesso_demo, render_cta
 from scripts import generate_text_story
 from verify import get_duration, verify_clip
 from voiceover import generate_voiceover
@@ -72,16 +76,8 @@ def render_single_video(
     """
     Full pipeline: generate one video from scratch.
 
-    Returns dict with:
-        - output_path: str (path to final .mp4)
-        - tiktok_caption: str
-        - ig_caption: str
-        - hook_query: str
-        - hook_description: str
-        - duration: float
-        - error: str | None
+    Flow: hook → story_part1 → nesso_demo → story_part2 → cta
     """
-    # Create unique temp dir for this render
     render_id = uuid.uuid4().hex[:8]
     render_dir = os.path.join(TEMP_DIR, f"render_{render_id}")
     os.makedirs(render_dir, exist_ok=True)
@@ -110,98 +106,123 @@ def render_single_video(
         result["hook_description"] = hook_desc
         log.info("[%s] Hook: %.1fs — %s", render_id, hook_dur, hook_desc)
 
-        # ── STEP 3: Generate text story script ────────────────────────
+        # ── STEP 3: Generate two-part text story script ───────────────
         hook_category = get_hook_category(hook_query)
-        messages = generate_text_story(hook_desc, hook_category)
-        log.info("[%s] Script: %d messages", render_id, len(messages))
+        part1_msgs, part2_msgs = generate_text_story(hook_desc, hook_category)
+        log.info("[%s] Script: Part 1 = %d msgs, Part 2 = %d msgs",
+                 render_id, len(part1_msgs), len(part2_msgs))
 
-        # ── STEP 3.5: Generate voiceover (ElevenLabs TTS) ────────────
-        vo_path, vo_durations = generate_voiceover(messages, render_dir)
-        if vo_path and vo_durations and len(vo_durations) == len(messages):
-            # Override message delays with TTS durations (synced to speech)
+        # ── STEP 4: Generate voiceover for Part 1 only ────────────────
+        # Part 2 uses text delays (snappy resolution, no VO needed)
+        vo_path, vo_durations = generate_voiceover(part1_msgs, render_dir)
+        if vo_path and vo_durations and len(vo_durations) == len(part1_msgs):
             for i, dur in enumerate(vo_durations):
-                messages[i]["delay"] = dur
-            log.info("[%s] Voiceover: %.1fs total", render_id, sum(vo_durations))
+                part1_msgs[i]["delay"] = dur
+            log.info("[%s] Part 1 VO: %.1fs total", render_id, sum(vo_durations))
         elif vo_path and vo_durations:
-            # Length mismatch — VO track is out of sync, discard it
-            log.warning(
-                "[%s] Voiceover length mismatch: %d durations vs %d messages — discarding",
-                render_id, len(vo_durations), len(messages),
-            )
+            log.warning("[%s] VO length mismatch: %d vs %d — discarding",
+                        render_id, len(vo_durations), len(part1_msgs))
             vo_path = ""
         else:
             vo_path = ""
-            log.info("[%s] No voiceover — using text delays only", render_id)
+            log.info("[%s] No voiceover — using text delays", render_id)
 
-        # ── STEP 4: Render text story frames ──────────────────────────
+        # ── STEP 5: Render text story Part 1 frames ──────────────────
         voiceover_active = bool(vo_path and vo_durations)
-        story_frames = render_text_story_frames(messages, render_dir, voiceover_active=voiceover_active)
-        log.info("[%s] Rendered %d frames", render_id, len(story_frames))
+        story1_frames = render_text_story_frames(part1_msgs, render_dir, voiceover_active=voiceover_active)
+        log.info("[%s] Part 1: %d frames", render_id, len(story1_frames))
 
-        # ── STEP 5: Compile frames to video ───────────────────────────
-        story_video = os.path.join(render_dir, "story.mp4")
-        compile_frames_to_video(story_frames, story_video)
+        story1_video = os.path.join(render_dir, "story1.mp4")
+        compile_frames_to_video(story1_frames, story1_video)
 
-        if not verify_clip(story_video):
-            raise RuntimeError("Story video compilation failed verification")
+        if not verify_clip(story1_video):
+            raise RuntimeError("Story Part 1 video compilation failed")
 
-        # Clean up frame PNGs immediately
-        for frame_path, _ in story_frames:
+        for frame_path, _ in story1_frames:
             try:
                 os.remove(frame_path)
             except OSError:
                 pass
 
-        # ── STEP 6: Render Nesso reveal ───────────────────────────────
-        reveal_video = os.path.join(render_dir, "reveal.mp4")
-        render_nesso_reveal(reveal_video)
+        # ── STEP 6: Render Nesso app demo ─────────────────────────────
+        demo_video = os.path.join(render_dir, "demo.mp4")
+        demo_video, demo_vo_path = render_nesso_demo(demo_video, render_dir)
 
-        if not verify_clip(reveal_video):
-            raise RuntimeError("Reveal video failed verification — Pillow and Remotion both failed")
+        if not verify_clip(demo_video):
+            raise RuntimeError("Nesso demo video failed verification")
 
-        # ── STEP 7: Download background music ─────────────────────────
+        # ── STEP 7: Render text story Part 2 frames ──────────────────
+        story2_frames = render_text_story_frames(
+            part1_msgs + part2_msgs, render_dir,
+            voiceover_active=False,  # Part 2 uses text delays only
+            start_from_msg=len(part1_msgs),  # render only Part 2 messages but show Part 1 context
+        )
+        log.info("[%s] Part 2: %d frames", render_id, len(story2_frames))
+
+        story2_video = os.path.join(render_dir, "story2.mp4")
+        compile_frames_to_video(story2_frames, story2_video)
+
+        if not verify_clip(story2_video):
+            raise RuntimeError("Story Part 2 video compilation failed")
+
+        for frame_path, _ in story2_frames:
+            try:
+                os.remove(frame_path)
+            except OSError:
+                pass
+
+        # ── STEP 8: Render CTA ────────────────────────────────────────
+        cta_video = os.path.join(render_dir, "cta.mp4")
+        render_cta(cta_video, render_dir)
+
+        if not verify_clip(cta_video):
+            raise RuntimeError("CTA video failed verification")
+
+        # ── STEP 9: Download background music ─────────────────────────
         music_path = os.path.join(render_dir, "music.mp3")
         download_background_music(music_path, exclude_queries=exclude_queries)
         if not os.path.exists(music_path):
             music_path = ""
-            log.warning("[%s] No background music — proceeding without", render_id)
+            log.warning("[%s] No background music", render_id)
 
-        # ── STEP 8: Build message timings for iMessage SFX ─────────
-        # Calculate cumulative time offsets for each message in the story
+        # ── STEP 10: Build message timings for iMessage SFX ──────────
         msg_timings = []
         cumulative = 0.0
-        for msg in messages:
+        for msg in part1_msgs:
             msg_timings.append({
                 "sender": msg.get("sender", ""),
                 "cumulative_time": cumulative,
             })
             cumulative += msg.get("delay", 1.2)
 
-        # ── STEP 9: Morph + concat + audio ────────────────────────────
+        # ── STEP 11: Assemble all 5 segments + audio mix ─────────────
         concat_video = os.path.join(render_dir, "concat.mp4")
         morph_and_concat(
             hook_path=hook_path,
             hook_audio_path=hook_audio,
-            story_path=story_video,
-            reveal_path=reveal_video,
+            story1_path=story1_video,
+            demo_path=demo_video,
+            story2_path=story2_video,
+            cta_path=cta_video,
             psych_sfx_path=psych_path,
             music_path=music_path,
             output_path=concat_video,
-            voiceover_path=vo_path,
+            story1_vo_path=vo_path,
+            demo_vo_path=demo_vo_path,
             message_timings=msg_timings,
         )
 
         # Clean intermediates
-        for f in [hook_path, hook_audio, story_video, reveal_video, music_path, vo_path]:
+        for f in [hook_path, hook_audio, story1_video, demo_video,
+                  story2_video, cta_video, music_path, vo_path, demo_vo_path]:
             if f:
                 try:
                     os.remove(f)
                 except OSError:
                     pass
 
-        # ── STEP 10: Final encode ─────────────────────────────────────
+        # ── STEP 12: Final encode ─────────────────────────────────────
         output_path = os.path.join(render_dir, f"nesso_{render_id}.mp4")
-        import subprocess
         cmd = [
             "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
             "-i", concat_video,
@@ -227,16 +248,13 @@ def render_single_video(
         except OSError:
             pass
 
-        # ── STEP 11: Verify final output ──────────────────────────────
-        # Note: hook_path and story_video are already deleted at this point.
-        # Only verify the final output — the health check on deleted files was dead code.
+        # ── STEP 13: Verify final output ──────────────────────────────
         if not verify_clip(output_path):
             raise RuntimeError("Final video failed verification")
 
         result["output_path"] = output_path
         result["duration"] = get_duration(output_path)
 
-        # Use curated caption hooks — script messages don't work as standalone captions
         result["tiktok_caption"] = generate_tiktok_caption("", hook_category)
         result["ig_caption"] = generate_ig_caption("", hook_category)
         result["ig_pin_comment"] = generate_ig_pin_comment()
@@ -249,16 +267,15 @@ def render_single_video(
     except Exception as e:
         result["error"] = str(e)
         log.error("[%s] Pipeline failed: %s", render_id, e, exc_info=True)
-
-        # Clean up on failure
         cleanup_temp_files(render_dir)
 
     # Log to analytics
+    _locals = locals()
     log_render(
         hook_query=result.get("hook_query", ""),
-        hook_category=hook_category if "hook_category" in dir() else "",
+        hook_category=_locals.get("hook_category", ""),
         hook_description=result.get("hook_description", ""),
-        script_length=len(messages) if "messages" in dir() else 0,
+        script_length=len(_locals.get("part1_msgs", [])) + len(_locals.get("part2_msgs", [])),
         duration=result.get("duration", 0),
         success=result["error"] is None,
         error=result.get("error", ""),
@@ -268,9 +285,7 @@ def render_single_video(
 
 
 def render_batch(count: int = 1) -> list[dict]:
-    """
-    Render a batch of videos. Each with a different hook category.
-    """
+    """Render a batch of videos. Each with a different hook category."""
     results = []
     used_queries = []
 
@@ -281,7 +296,6 @@ def render_batch(count: int = 1) -> list[dict]:
             used_queries.append(result["hook_query"])
         results.append(result)
 
-        # Brief pause between renders to let Railway breathe
         if i < count - 1:
             time.sleep(2)
 

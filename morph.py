@@ -1,15 +1,17 @@
 """
-Nesso Content Engine V21 — Morph Transition + Audio Mix
+Nesso Content Engine V21 — Video Assembly + Audio Mix
 
-Simple concat approach: hook → black frame → story → black frame → reveal
-Reliable on all FFmpeg versions. No xfade dependency.
+New 5-segment flow (NO black frames):
+  [hook] → [story_part1] → [nesso_demo] → [story_part2] → [cta]
 
-Timeline (video):
-  [0, hook_dur] hook
-  [hook_dur, hook_dur+0.3] black frame
-  [hook_dur+0.3, hook_dur+0.3+story_dur] story
-  [hook_dur+0.3+story_dur, hook_dur+0.6+story_dur] black frame
-  [hook_dur+0.6+story_dur, hook_dur+0.6+story_dur+reveal_dur] reveal
+Audio layers:
+  1. Hook original audio (full volume, fade out last 1.0s)
+  2. PSYCH sfx at hook→story transition
+  3. Story Part 1 voiceover (85% volume)
+  4. Demo voiceover (85% volume)
+  5. Story Part 2: no VO (text delays only — snappy resolution)
+  6. Background music (12% with VO, 18% without, spans story+demo)
+  7. iMessage send/receive SFX (first 3 messages of Part 1 only)
 """
 
 import logging
@@ -37,110 +39,91 @@ from verify import get_duration
 
 log = logging.getLogger(__name__)
 
-# Duration of the black transition frame between segments (must match _safe_concat usage)
-BLACK_FRAME_DUR = 0.3
-
 
 def morph_and_concat(
     hook_path: str,
     hook_audio_path: str,
-    story_path: str,
-    reveal_path: str,
+    story1_path: str,
+    demo_path: str,
+    story2_path: str,
+    cta_path: str,
     psych_sfx_path: str,
     music_path: str,
     output_path: str,
-    voiceover_path: str = "",
+    story1_vo_path: str = "",
+    demo_vo_path: str = "",
     message_timings: list[dict] | None = None,
 ) -> str:
     """
-    Full video assembly:
-    Hook → black frame → Story → black frame → Reveal
-
-    Audio layers (5-layer mix):
-    1. Hook original audio (full volume, fade out last 1.0s)
-    2. PSYCH sfx at morph point
-    3. Voiceover during text story (85% volume)
-    4. Lo-fi music (12% with VO, 18% without, starts 1.0s before morph)
-    5. iMessage send/receive SFX (first 3 messages only)
+    Full 5-segment video assembly with multi-layer audio mix.
+    NO black frames — direct cuts between segments.
     """
     hook_dur = get_duration(hook_path)
-    story_dur = get_duration(story_path)
-    reveal_dur = get_duration(reveal_path)
+    story1_dur = get_duration(story1_path)
+    demo_dur = get_duration(demo_path)
+    story2_dur = get_duration(story2_path)
+    cta_dur = get_duration(cta_path)
 
-    if hook_dur <= 0 or story_dur <= 0:
-        raise RuntimeError(f"Invalid durations: hook={hook_dur}, story={story_dur}")
+    if hook_dur <= 0 or story1_dur <= 0:
+        raise RuntimeError(f"Invalid durations: hook={hook_dur}, story1={story1_dur}")
 
     log.info(
-        "Assembly: hook=%.1fs, story=%.1fs, reveal=%.1fs",
-        hook_dur, story_dur, reveal_dur,
+        "Assembly: hook=%.1fs, story1=%.1fs, demo=%.1fs, story2=%.1fs, cta=%.1fs",
+        hook_dur, story1_dur, demo_dur, story2_dur, cta_dur,
     )
 
     temp_dir = os.path.dirname(output_path)
 
-    # ── STEP 1: Normalize all inputs ──────────────────────────────────
-    norm_hook = os.path.join(temp_dir, "norm_hook.mp4")
-    norm_story = os.path.join(temp_dir, "norm_story.mp4")
-    _normalize_video(hook_path, norm_hook)
-    _normalize_video(story_path, norm_story)
+    # ── STEP 1: Normalize all video inputs ────────────────────────────────
+    segments = {
+        "hook": hook_path,
+        "story1": story1_path,
+        "demo": demo_path,
+        "story2": story2_path,
+        "cta": cta_path,
+    }
+    norm_paths = {}
+    for name, path in segments.items():
+        norm = os.path.join(temp_dir, f"norm_{name}.mp4")
+        _normalize_video(path, norm)
+        norm_paths[name] = norm
 
-    # Create a short black frame for transitions (0.3s — short enough to not lose viewers)
-    black_frame = os.path.join(temp_dir, "black_transition.mp4")
-    black_cmd = [
-        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-f", "lavfi", "-i",
-        f"color=c=black:s={WIDTH}x{HEIGHT}:r={FPS}:d=0.3",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-preset", FFMPEG_PRESET,
-        black_frame,
-    ]
-    subprocess.run(black_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
-
-    # Concat: hook → black → story
-    morphed_video = os.path.join(temp_dir, "morphed_v.mp4")
-    _safe_concat([norm_hook, black_frame, norm_story], morphed_video)
-    log.info("Morph: hook → black → story")
-
-    for f in [norm_hook, norm_story]:
-        try:
-            os.remove(f)
-        except OSError:
-            pass
-
-    # ── STEP 2: Concat morphed + reveal ────────────────────────────────
+    # ── STEP 2: Concat all 5 segments (no black frames) ──────────────────
     full_video = os.path.join(temp_dir, "full_v.mp4")
-    norm_reveal = os.path.join(temp_dir, "norm_reveal.mp4")
-    _normalize_video(reveal_path, norm_reveal)
-    _safe_concat([morphed_video, black_frame, norm_reveal], full_video)
-    for f in [norm_reveal, black_frame]:
+    _safe_concat(
+        [norm_paths["hook"], norm_paths["story1"], norm_paths["demo"],
+         norm_paths["story2"], norm_paths["cta"]],
+        full_video,
+    )
+
+    for p in norm_paths.values():
         try:
-            os.remove(f)
+            os.remove(p)
         except OSError:
             pass
 
     actual_video_dur = get_duration(full_video)
     log.info("Full video (before audio): %.1fs", actual_video_dur)
 
-    try:
-        os.remove(morphed_video)
-    except OSError:
-        pass
-
-    # ── STEP 3: Build audio track ──────────────────────────────────────
+    # ── STEP 3: Build audio track ─────────────────────────────────────────
     full_audio = os.path.join(temp_dir, "full_audio.m4a")
     _build_audio_track(
         hook_audio_path=hook_audio_path,
         psych_sfx_path=psych_sfx_path,
         music_path=music_path,
-        voiceover_path=voiceover_path,
+        story1_vo_path=story1_vo_path,
+        demo_vo_path=demo_vo_path,
         hook_dur=hook_dur,
-        story_dur=story_dur,
-        reveal_dur=reveal_dur,
+        story1_dur=story1_dur,
+        demo_dur=demo_dur,
+        story2_dur=story2_dur,
+        cta_dur=cta_dur,
         output_path=full_audio,
         actual_video_dur=actual_video_dur,
         message_timings=message_timings,
     )
 
-    # ── STEP 4: Mux video + audio ─────────────────────────────────────
+    # ── STEP 4: Mux video + audio ────────────────────────────────────────
     mux_cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-i", full_video,
@@ -162,7 +145,7 @@ def morph_and_concat(
     if result.returncode != 0:
         raise RuntimeError(f"Mux failed: {result.stderr[-500:]}")
 
-    log.info("Morph + concat complete: %s (%.1fs)", output_path, get_duration(output_path))
+    log.info("Assembly complete: %s (%.1fs)", output_path, get_duration(output_path))
     return output_path
 
 
@@ -222,38 +205,39 @@ def _build_audio_track(
     hook_audio_path: str,
     psych_sfx_path: str,
     music_path: str,
-    voiceover_path: str,
+    story1_vo_path: str,
+    demo_vo_path: str,
     hook_dur: float,
-    story_dur: float,
-    reveal_dur: float,
+    story1_dur: float,
+    demo_dur: float,
+    story2_dur: float,
+    cta_dur: float,
     output_path: str,
     actual_video_dur: float = 0,
     message_timings: list[dict] | None = None,
 ) -> str:
     """
-    Build the complete 5-layer audio track:
-    1. Hook audio (full volume, fade out last 1.0s)
-    2. PSYCH sfx at morph point
-    3. Voiceover during story (85% volume)
-    4. Background music (12% with VO, 18% without, starts 1.0s before morph)
-    5. iMessage send/receive SFX (first 3 messages)
+    Build multi-layer audio track for the 5-segment video.
+
+    Timeline:
+      [0, hook_dur]: hook audio
+      [hook_dur, hook_dur+story1_dur]: story1 VO + music + iMsg SFX
+      [hook_dur+story1_dur, hook_dur+story1_dur+demo_dur]: demo VO + music
+      [hook_dur+story1_dur+demo_dur, ...+story2_dur]: music only (text delays)
+      [..., +cta_dur]: silence/music fade
     """
-    # V21 concat timeline: hook + black(0.3) + story + black(0.3) + reveal
-    calculated_dur = hook_dur + BLACK_FRAME_DUR + story_dur + BLACK_FRAME_DUR + reveal_dur
-    total_dur = actual_video_dur if actual_video_dur > 0 else calculated_dur
-    if actual_video_dur > 0 and abs(actual_video_dur - calculated_dur) > 0.5:
-        log.info(
-            "Audio track using actual video dur %.1fs (calculated was %.1fs)",
-            actual_video_dur, calculated_dur,
-        )
+    total_dur = actual_video_dur if actual_video_dur > 0 else (
+        hook_dur + story1_dur + demo_dur + story2_dur + cta_dur
+    )
 
-    # Story visuals start after hook + black frame gap
-    story_start = hook_dur + BLACK_FRAME_DUR
-    # Music bridges the transition — starts before story visuals appear
-    music_start = max(0, story_start - MUSIC_PRE_MORPH_OFFSET)
+    story1_start = hook_dur
+    demo_start = hook_dur + story1_dur
+    story2_start = demo_start + demo_dur
+    music_start = max(0, story1_start - MUSIC_PRE_MORPH_OFFSET)
 
-    has_voiceover = voiceover_path and os.path.exists(voiceover_path)
-    effective_music_vol = MUSIC_VOLUME_WITH_VO if has_voiceover else MUSIC_VOLUME_RATIO
+    has_story1_vo = story1_vo_path and os.path.exists(story1_vo_path)
+    has_demo_vo = demo_vo_path and os.path.exists(demo_vo_path)
+    effective_music_vol = MUSIC_VOLUME_WITH_VO if (has_story1_vo or has_demo_vo) else MUSIC_VOLUME_RATIO
 
     inputs = []
     filter_parts = []
@@ -274,7 +258,7 @@ def _build_audio_track(
             f"[hook_null]atrim=0:{hook_dur}[hook_a]"
         )
 
-    # Layer 2: PSYCH sfx
+    # Layer 2: PSYCH sfx at transition
     has_psych = psych_sfx_path and os.path.exists(psych_sfx_path)
     if has_psych:
         inputs.extend(["-i", psych_sfx_path])
@@ -284,32 +268,43 @@ def _build_audio_track(
         )
         stream_idx += 1
 
-    # Layer 3: Voiceover — starts when story visuals begin (after black frame)
-    if has_voiceover:
-        inputs.extend(["-i", voiceover_path])
-        vo_delay_ms = int(story_start * 1000)
+    # Layer 3: Story Part 1 voiceover
+    if has_story1_vo:
+        inputs.extend(["-i", story1_vo_path])
+        vo1_delay_ms = int(story1_start * 1000)
         filter_parts.append(
             f"[{stream_idx}:a]volume={VOICEOVER_VOLUME},"
             f"afade=t=in:st=0:d=0.3,"
-            f"adelay={vo_delay_ms}|{vo_delay_ms}[vo_a]"
+            f"adelay={vo1_delay_ms}|{vo1_delay_ms}[vo1_a]"
         )
         stream_idx += 1
 
-    # Layer 4: Background music
+    # Layer 4: Demo voiceover
+    if has_demo_vo:
+        inputs.extend(["-i", demo_vo_path])
+        demo_delay_ms = int(demo_start * 1000)
+        filter_parts.append(
+            f"[{stream_idx}:a]volume={VOICEOVER_VOLUME},"
+            f"adelay={demo_delay_ms}|{demo_delay_ms}[demo_vo_a]"
+        )
+        stream_idx += 1
+
+    # Layer 5: Background music (spans story1 + demo + story2)
     has_music = music_path and os.path.exists(music_path)
     if has_music:
         inputs.extend(["-i", music_path])
         music_delay_ms = int(music_start * 1000)
-        fade_start = story_dur - 2
+        music_dur = story1_dur + demo_dur + story2_dur + cta_dur
+        fade_start = max(0, music_dur - 2)
         filter_parts.append(
             f"[{stream_idx}:a]volume={effective_music_vol},"
-            f"atrim=0:{story_dur + reveal_dur},"
+            f"atrim=0:{music_dur},"
             f"afade=t=in:st=0:d=1,afade=t=out:st={fade_start}:d=2,"
             f"adelay={music_delay_ms}|{music_delay_ms}[music_a]"
         )
         stream_idx += 1
 
-    # Layer 5: iMessage send/receive SFX (first N messages only)
+    # Layer 6: iMessage SFX (first N messages of Part 1 only)
     has_send_sfx = os.path.exists(IMESSAGE_SEND_SFX)
     has_recv_sfx = os.path.exists(IMESSAGE_RECV_SFX)
     imsg_labels = []
@@ -327,7 +322,7 @@ def _build_audio_track(
             if not os.path.exists(sfx_path):
                 continue
 
-            msg_time_ms = int((story_start + mt.get("cumulative_time", 0)) * 1000)
+            msg_time_ms = int((story1_start + mt.get("cumulative_time", 0)) * 1000)
             label = f"imsg_{sfx_count}"
 
             inputs.extend(["-i", sfx_path])
@@ -345,8 +340,11 @@ def _build_audio_track(
     if has_psych:
         mix_inputs += "[psych_a]"
         mix_count += 1
-    if has_voiceover:
-        mix_inputs += "[vo_a]"
+    if has_story1_vo:
+        mix_inputs += "[vo1_a]"
+        mix_count += 1
+    if has_demo_vo:
+        mix_inputs += "[demo_vo_a]"
         mix_count += 1
     if has_music:
         mix_inputs += "[music_a]"

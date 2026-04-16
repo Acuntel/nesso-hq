@@ -138,6 +138,9 @@ ELEVENLABS_API_KEY     (optional — TTS voiceover)
 ELEVENLABS_VOICE_ID    (optional — default: pFZP5JQG7iQjIQuC4Bku)
 ELEVENLABS_VOICE_ID_2  (optional — friend voice, default: Rachel)
 YT_COOKIES_B64         (optional — YouTube cookie auth)
+REDDIT_CLIENT_ID       (recommended — Reddit OAuth, bypasses 403 on cloud IPs)
+REDDIT_CLIENT_SECRET   (recommended — Reddit OAuth, bypasses 403 on cloud IPs)
+PEXELS_API_KEY         (optional — last-resort hook fallback)
 ```
 
 ## File Structure

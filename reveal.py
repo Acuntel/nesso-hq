@@ -1,26 +1,28 @@
 """
-Nesso Content Engine V21 — Animated Reveal Sequence
+Nesso Content Engine V21 — Nesso App Demo + CTA
 
-Primary: Remotion (React → Chromium → MP4) for professional motion graphics.
-Fallback: Pillow frame-by-frame animation if Remotion service unavailable.
+The demo is an actual app walkthrough woven INTO the text story:
+  Screen 1: Inner Circle — show the bars (1.2s) VO: "this is nesso"
+  Screen 2: Bar drains, tap Reach Out (1.5s) VO: "time's up. time to reach out"
+  Screen 3: AI suggestions appear (1.5s) VO: "AI writes the message for you"
+  Screen 4: Tap to send to text (1.0s) VO: "just tap and send"
 
-Flow (~8s total):
-1. Feature text fade-in, word by word (1.5s)
-2. Nesso app walkthrough — 4 screens, caption overlay, slow zoom (5.0s)
-3. Logo + "it's free" + @nesso.app CTA (1.5s)
+CTA is a separate 2s segment: logo + "it's free" + @nesso.app
 """
 
 import logging
-import math
 import os
-import random
 import subprocess
 
-import requests as http_requests
 from PIL import Image, ImageDraw, ImageFont
 
 from config import (
     ASSETS_DIR,
+    CTA_DURATION,
+    DEMO_DURATION,
+    DEMO_NARRATION,
+    ELEVENLABS_API_KEY,
+    ELEVENLABS_VOICE_ID,
     FFMPEG_PRESET,
     FFMPEG_THREADS,
     FFMPEG_TIMEOUT,
@@ -28,14 +30,20 @@ from config import (
     HEIGHT,
     NESSO_LOGO_PATH,
     WIDTH,
-    get_reveal_line,
 )
 from verify import get_duration
 
 log = logging.getLogger(__name__)
 
 APP_SCREENS_DIR = os.path.join(ASSETS_DIR, "app_screens")
-APP_SCREENSHOTS = ["home.png", "home_contacts.png", "reach_out.png", "ai_suggestions.png"]
+
+# Screen flow for the demo — each screen gets one narration line
+DEMO_SCREENS = [
+    "home.png",           # Inner Circle with bars
+    "reach_out.png",      # "Reach out to Mom" with bar drained
+    "ai_suggestions.png", # AI message suggestions modal
+    "ai_suggestions.png", # Same screen — "tap to send" moment
+]
 
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -62,23 +70,10 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 
 
 def _ease_out_cubic(t: float) -> float:
-    """Ease-out cubic — fast start, smooth landing."""
     return 1 - (1 - t) ** 3
 
 
-def _ease_in_out(t: float) -> float:
-    """Smoothstep ease in-out."""
-    return t * t * (3 - 2 * t)
-
-
-def _lerp_color(c1: tuple, c2: tuple, t: float) -> tuple:
-    """Linearly interpolate between two RGB colors."""
-    t = max(0.0, min(1.0, t))
-    return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
-
-
 def _draw_gradient_bg(draw: ImageDraw.ImageDraw):
-    """Draw the subtle dark gradient background."""
     for y in range(HEIGHT):
         t = y / HEIGHT
         r = int(5 + 15 * t)
@@ -87,528 +82,245 @@ def _draw_gradient_bg(draw: ImageDraw.ImageDraw):
         draw.line([(0, y), (WIDTH, y)], fill=(r, g, b))
 
 
-def _wrap_text_lines(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    """Wrap text into lines that fit within max_width."""
-    import textwrap
-    avg_char_width = font.getlength("m")
-    chars_per_line = max(1, int(max_width / avg_char_width))
-    return textwrap.wrap(text, width=chars_per_line) or [text]
-
-
-# ── Segment 1: Feature Text Fade-In ─────────────────────────────────────
-
-def _render_text_fadein_frames(line: str, temp_dir: str, duration: float = 1.5) -> list[str]:
-    """
-    Render the feature text line with a word-by-word fade-in effect.
-    Each word appears sequentially with a smooth opacity ramp.
-    """
-    num_frames = int(duration * FPS)
-    font = _get_font(56, bold=True)
-    words = line.split()
-    frames = []
-
-    # Background color for "invisible" text (matches gradient at center)
-    bg_at_center = (12, 10, 16)
-    text_color = (255, 255, 255)
-
-    for frame_idx in range(num_frames):
-        t = frame_idx / max(1, num_frames - 1)  # 0.0 → 1.0
-
-        img = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        _draw_gradient_bg(draw)
-
-        # Calculate how many words should be visible at this point
-        # Each word fades in over ~0.15s, staggered
-        lines = _wrap_text_lines(line, font, 900)
-        line_height = font.size + 10
-        total_text_height = line_height * len(lines)
-        y_start = HEIGHT // 2 - total_text_height // 2
-
-        # Track word index across wrapped lines
-        word_idx_global = 0
-        for li, text_line in enumerate(lines):
-            line_words = text_line.split()
-            # Measure total line width for centering
-            full_line_width = font.getlength(text_line)
-            x = (WIDTH - full_line_width) / 2
-            y = y_start + li * line_height
-
-            for wi, word in enumerate(line_words):
-                # Each word starts appearing at a staggered time
-                word_start = word_idx_global / max(1, len(words)) * 0.7  # 70% of duration for stagger
-                word_t = max(0.0, min(1.0, (t - word_start) / 0.3))  # 0.3 = fade duration per word
-                word_t = _ease_out_cubic(word_t)
-
-                # Interpolate color from background to white
-                color = _lerp_color(bg_at_center, text_color, word_t)
-                draw.text((x, y), word, fill=color, font=font)
-
-                # Advance x position
-                word_width = font.getlength(word + " ")
-                x += word_width
-                word_idx_global += 1
-
-        frame_path = os.path.join(temp_dir, f"reveal_text_{frame_idx:04d}.png")
-        img.save(frame_path, "PNG")
-        frames.append(frame_path)
-
-    return frames
-
-
-# ── Segment 2: Nesso App Walkthrough ────────────────────────────────────
-# Simulates someone tapping through the Nesso app:
-#   1. Screen appears with a tap ring flash (where they "tapped")
-#   2. Screen holds with subtle zoom + caption
-#   3. Swipe transition slides it out as next screen slides in
-#   4. Repeat for each screen
-
-# Each entry: (filename, caption, tap_x_ratio, tap_y_ratio)
-# Tap points are where the user "presses" to advance to the NEXT screen
-WALKTHROUGH_SCREENS = [
-    ("home.png", "never forget the people who matter", 0.25, 0.38),
-    ("home_contacts.png", "see when friendships are fading", 0.25, 0.38),
-    ("reach_out.png", "reach out before it's too late", 0.80, 0.75),
-    ("ai_suggestions.png", "AI writes the perfect message", 0.50, 0.35),
-]
-
-
-def _load_screen(screen_path: str) -> Image.Image:
-    img = Image.open(screen_path).convert("RGB")
+def _load_screen(filename: str) -> Image.Image | None:
+    path = os.path.join(APP_SCREENS_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    img = Image.open(path).convert("RGB")
     return img.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 
 
-def _draw_caption_band(img: Image.Image, caption: str, opacity: float = 1.0):
-    """Draw the bottom caption band + text on the frame in-place."""
-    draw = ImageDraw.Draw(img)
-    band_h = 240
-    band_top = HEIGHT - band_h
-    draw.rectangle((0, band_top, WIDTH, HEIGHT), fill=(0, 0, 0))
+# ── Demo Voiceover ─────────────────────────────────────────────────────────
 
-    brightness = int(255 * max(0.0, min(1.0, opacity)))
-    color = (brightness, brightness, brightness)
-    font = _get_font(40, bold=True)
-    lines = _wrap_text_lines(caption, font, 900)
-    line_height = font.size + 8
-    total_h = line_height * len(lines)
-    y_start = band_top + (band_h - total_h) // 2
-    for li, text_line in enumerate(lines):
-        tw = font.getlength(text_line)
-        tx = (WIDTH - tw) / 2
-        ty = y_start + li * line_height
-        draw.text((tx, ty), text_line, fill=color, font=font)
-
-
-def _draw_tap_ring(img: Image.Image, cx: int, cy: int, t: float):
+def _generate_demo_voiceover(temp_dir: str) -> tuple[str, list[float]]:
     """
-    Draw a pulsing tap indicator at (cx, cy). t goes 0→1 over the tap animation.
-
-    Expanding white ring + center dot, fading as it grows. Bright and
-    chunky so it reads clearly as a tap on mobile playback. Blends onto
-    the pixel data directly instead of full-frame alpha_composite, which
-    was ~100x slower and made Railway unusable.
+    Generate ElevenLabs TTS for the demo narration lines.
+    Returns (concat_audio_path, per_line_durations).
+    Falls back to silence if TTS unavailable.
     """
-    if t <= 0 or t >= 1:
-        return
-    t_eased = _ease_out_cubic(t)
-    radius = int(40 + 110 * t_eased)       # bigger: 40 → 150 px
-    opacity = 1.0 - t_eased                 # fade out as it expands
-    if opacity <= 0:
-        return
-
-    # Clip the pixel-blend work to a tight bounding box around the ring
-    pad = radius + 10
-    x0 = max(0, cx - pad)
-    y0 = max(0, cy - pad)
-    x1 = min(WIDTH, cx + pad)
-    y1 = min(HEIGHT, cy + pad)
-    if x1 <= x0 or y1 <= y0:
-        return
-
-    region = img.crop((x0, y0, x1, y1))
-    rdraw = ImageDraw.Draw(region)
-
-    # White with opacity baked into the greyscale — PIL RGB draw has no alpha,
-    # so we blend toward white by `opacity`. On the dark mockup edges this
-    # still looks like a partially-transparent white ring.
-    w = int(255 * opacity)
-    ring_color = (w, w, w) if w < 255 else (255, 255, 255)
-
-    # Outer expanding ring (thick stroke via width param — one draw call)
-    lcx = cx - x0
-    lcy = cy - y0
-    rdraw.ellipse(
-        (lcx - radius, lcy - radius, lcx + radius, lcy + radius),
-        outline=ring_color,
-        width=8,
-    )
-    # Center dot (smaller, stays roughly put)
-    dot_r = 22
-    rdraw.ellipse(
-        (lcx - dot_r, lcy - dot_r, lcx + dot_r, lcy + dot_r),
-        fill=ring_color,
-    )
-
-    img.paste(region, (x0, y0))
-
-
-def _render_screen_hold_frames(
-    screen_path: str,
-    caption: str,
-    num_frames: int,
-    tap_xy: tuple[int, int] | None,
-    temp_dir: str,
-    frame_prefix: str,
-) -> list[str]:
-    """
-    Render a screen being "held" on — subtle zoom, caption, and a tap ring
-    near the end indicating the user is about to advance.
-
-    Perf: the source is upscaled ONCE to the max zoom, then every frame
-    is just a crop from the pre-scaled image. Avoids N LANCZOS resizes.
-    """
-    base = _load_screen(screen_path)
-    zoom_start = 1.02
-    zoom_end = 1.06
-
-    # Pre-scale to max zoom ONE TIME — each frame just picks a different
-    # crop window, which gives a convincing zoom illusion on ~4% range.
-    max_w = int(WIDTH * zoom_end)
-    max_h = int(HEIGHT * zoom_end)
-    max_scaled = base.resize((max_w, max_h), Image.Resampling.LANCZOS)
-
-    # Tap animation runs in the LAST 0.4s of the hold
-    tap_anim_frames = min(int(0.4 * FPS), num_frames // 2)
-    tap_start_frame = num_frames - tap_anim_frames
-
-    frames = []
-    for frame_idx in range(num_frames):
-        t = frame_idx / max(1, num_frames - 1)
-        t_smooth = _ease_in_out(t)
-
-        # Interpolate the effective zoom by picking a proportionally sized
-        # crop window from the pre-scaled max image.
-        zoom = zoom_start + (zoom_end - zoom_start) * t_smooth
-        # At zoom_end, crop = full max_scaled. At zoom_start, crop is
-        # (zoom_start / zoom_end) of the max image, scaled down to WIDTHxHEIGHT.
-        crop_w = int(WIDTH * (zoom_end / zoom))
-        crop_h = int(HEIGHT * (zoom_end / zoom))
-        crop_x = (max_w - crop_w) // 2
-        crop_y = (max_h - crop_h) // 2
-        cropped = max_scaled.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
-        # Fast bilinear resize back to exact output dim
-        frame = cropped.resize((WIDTH, HEIGHT), Image.Resampling.BILINEAR)
-
-        _draw_caption_band(frame, caption, opacity=1.0)
-
-        # Tap ring near the end of the hold
-        if tap_xy is not None and frame_idx >= tap_start_frame:
-            tap_t = (frame_idx - tap_start_frame) / max(1, tap_anim_frames - 1)
-            _draw_tap_ring(frame, tap_xy[0], tap_xy[1], tap_t)
-
-        fp = os.path.join(temp_dir, f"{frame_prefix}_{frame_idx:04d}.png")
-        frame.save(fp, "PNG")
-        frames.append(fp)
-
-    return frames
-
-
-def _render_slide_transition_frames(
-    from_path: str,
-    to_path: str,
-    to_caption: str,
-    num_frames: int,
-    temp_dir: str,
-    frame_prefix: str,
-) -> list[str]:
-    """
-    Horizontal slide transition — outgoing screen exits left,
-    incoming screen enters from the right. Both are rendered at 1.0 zoom
-    with the NEW caption appearing on the incoming screen.
-    """
-    from_img = _load_screen(from_path)
-    to_img = _load_screen(to_path)
-
-    frames = []
-    for frame_idx in range(num_frames):
-        t = frame_idx / max(1, num_frames - 1)
-        t_smooth = _ease_in_out(t)
-        offset = int(WIDTH * t_smooth)
-
-        canvas = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
-        canvas.paste(from_img, (-offset, 0))
-        canvas.paste(to_img, (WIDTH - offset, 0))
-
-        # Draw the NEW caption fading in on the incoming screen as it arrives
-        caption_opacity = t_smooth
-        _draw_caption_band(canvas, to_caption, opacity=caption_opacity)
-
-        fp = os.path.join(temp_dir, f"{frame_prefix}_{frame_idx:04d}.png")
-        canvas.save(fp, "PNG")
-        frames.append(fp)
-
-    return frames
-
-
-def _render_app_walkthrough_frames(temp_dir: str, duration: float = 5.0) -> list[str]:
-    """
-    Render a full Nesso app walkthrough with swipe transitions and tap
-    indicators so it feels like someone is actually using the app.
-
-    Per screen: 0.25s slide transition (except first) + hold time.
-    Tap ring flashes in the last 0.4s of each hold as the "press" that
-    triggers the next screen.
-    """
-    available = [
-        (f, cap, tx, ty) for f, cap, tx, ty in WALKTHROUGH_SCREENS
-        if os.path.exists(os.path.join(APP_SCREENS_DIR, f))
-    ]
-    if not available:
-        return []
-
-    n = len(available)
-    total_frames = int(duration * FPS)
-    trans_frames = int(0.25 * FPS)          # 0.25s slide
-    num_transitions = n - 1                  # no transition before first screen
-    hold_budget = total_frames - (num_transitions * trans_frames)
-    hold_frames = max(1, hold_budget // n)
-
-    all_frames: list[str] = []
-
-    for i, (screen_file, caption, tx_ratio, ty_ratio) in enumerate(available):
-        screen_path = os.path.join(APP_SCREENS_DIR, screen_file)
-
-        # Slide in from previous screen (skip for first)
-        if i > 0:
-            prev_path = os.path.join(APP_SCREENS_DIR, available[i - 1][0])
-            slide = _render_slide_transition_frames(
-                prev_path, screen_path, caption,
-                trans_frames, temp_dir,
-                frame_prefix=f"reveal_slide_{i:02d}",
-            )
-            all_frames.extend(slide)
-
-        # Hold on this screen (with tap ring at the end, except on final screen)
-        tap_xy: tuple[int, int] | None = None
-        if i < n - 1:
-            tap_xy = (int(WIDTH * tx_ratio), int(HEIGHT * ty_ratio))
-
-        hold = _render_screen_hold_frames(
-            screen_path, caption, hold_frames, tap_xy, temp_dir,
-            frame_prefix=f"reveal_hold_{i:02d}",
-        )
-        all_frames.extend(hold)
-
-    return all_frames
-
-
-# ── Segment 3: Logo Scale-Up + Cascade CTA ──────────────────────────────
-
-def _render_logo_cascade_frames(temp_dir: str, duration: float = 1.5) -> list[str]:
-    """
-    Animated logo reveal:
-    - Logo scales from 75% to 100% with ease-out
-    - "it's free" appears bright immediately alongside logo
-    - @nesso.app fades in shortly after
-    """
-    num_frames = int(duration * FPS)
-    frames = []
-
-    # Load logo — scaled up for visibility
-    logo_img = None
-    logo_target_size = 360
-    if os.path.exists(NESSO_LOGO_PATH):
-        try:
-            logo_img = Image.open(NESSO_LOGO_PATH).convert("RGBA")
-        except Exception:
-            pass
-
-    font_main = _get_font(72, bold=True)
-    font_handle = _get_font(40, bold=True)
-
-    for frame_idx in range(num_frames):
-        t = frame_idx / max(1, num_frames - 1)
-
-        img = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        _draw_gradient_bg(draw)
-
-        # Push logo higher so there's room below for text
-        logo_y_center = HEIGHT // 2 - 160
-
-        # Logo animation: scale 75% → 100% with ease-out
-        logo_t = min(1.0, t / 0.4)
-        logo_t = _ease_out_cubic(logo_t)
-        current_logo_size = int(logo_target_size * (0.75 + 0.25 * logo_t))
-
-        if logo_img:
-            logo_resized = logo_img.resize(
-                (current_logo_size, current_logo_size),
-                Image.Resampling.LANCZOS,
-            )
-            logo_x = (WIDTH - current_logo_size) // 2
-            logo_y = logo_y_center - current_logo_size // 2
-            img.paste(logo_resized, (logo_x, logo_y), logo_resized)
-        else:
-            logo_x = (WIDTH - current_logo_size) // 2
-            logo_y = logo_y_center - current_logo_size // 2
-            draw.ellipse(
-                (logo_x, logo_y, logo_x + current_logo_size, logo_y + current_logo_size),
-                fill=(232, 212, 207),
-            )
-
-        text_base_y = logo_y_center + logo_target_size // 2 + 50
-
-        # "it's free" — fades in FAST at t=0.15 → 0.4 (pure white for contrast)
-        free_t = max(0.0, min(1.0, (t - 0.15) / 0.25))
-        free_t = _ease_out_cubic(free_t)
-        free_brightness = int(255 * free_t)
-        free_color = (free_brightness, free_brightness, free_brightness)
-        free_text = "it's free"
-        free_width = font_main.getlength(free_text)
-        draw.text(
-            ((WIDTH - free_width) / 2, text_base_y),
-            free_text, fill=free_color, font=font_main,
-        )
-
-        # @nesso.app — fades in at t=0.4 → 0.65, warm accent color
-        handle_t = max(0.0, min(1.0, (t - 0.4) / 0.25))
-        handle_t = _ease_out_cubic(handle_t)
-        handle_brightness = int(handle_t * 255)
-        # Warm peach tone matching Nesso brand
-        handle_color = (
-            int(232 * handle_t),
-            int(212 * handle_t),
-            int(207 * handle_t),
-        )
-        handle_text = "@nesso.app"
-        handle_width = font_handle.getlength(handle_text)
-        draw.text(
-            ((WIDTH - handle_width) / 2, text_base_y + 110),
-            handle_text, fill=handle_color, font=font_handle,
-        )
-
-        frame_path = os.path.join(temp_dir, f"reveal_logo_{frame_idx:04d}.png")
-        img.save(frame_path, "PNG")
-        frames.append(frame_path)
-
-    return frames
-
-
-# ── Main Entry Point ────────────────────────────────────────────────────
-
-REMOTION_URL = os.environ.get("REMOTION_URL", "")  # e.g. http://remotion-reveal.railway.internal:3100
-
-
-def _try_remotion_reveal(output_path: str, line: str) -> bool:
-    """Try rendering via the Remotion microservice. Returns True on success."""
-    if not REMOTION_URL:
-        return False
-
-    # Check for app screenshot to pass
-    available = [f for f in APP_SCREENSHOTS if os.path.exists(os.path.join(APP_SCREENS_DIR, f))]
-    screenshot_url = ""
-    if available:
-        # Remotion needs a URL or base64 — for Railway internal, use file:// or serve it
-        # For now, skip screenshot in Remotion (logo + text is the main value)
-        pass
-
-    # Encode logo as data URL if it exists
-    logo_url = ""
-    if os.path.exists(NESSO_LOGO_PATH):
-        import base64
-        with open(NESSO_LOGO_PATH, "rb") as f:
-            logo_b64 = base64.b64encode(f.read()).decode()
-        logo_url = f"data:image/png;base64,{logo_b64}"
-
-    payload = {
-        "headline": line,
-        "logoUrl": logo_url,
-        "screenshotUrl": screenshot_url,
-        "subtitleText": "it's free",
-        "handleText": "@nesso.app",
-        "accentColor": "#E8D4CF",
-        "fps": FPS,
-        "durationSeconds": 5.0,
-    }
+    if not ELEVENLABS_API_KEY:
+        log.info("No ElevenLabs key — demo will be silent")
+        return "", [d for _, d in DEMO_NARRATION]
 
     try:
-        resp = http_requests.post(
-            f"{REMOTION_URL}/render",
-            json=payload,
-            timeout=60,
-            stream=True,
-        )
-        if resp.status_code != 200:
-            log.warning("Remotion returned %d: %s", resp.status_code, resp.text[:200])
-            return False
+        from elevenlabs import ElevenLabs
+        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    except ImportError:
+        return "", [d for _, d in DEMO_NARRATION]
 
-        with open(output_path, "wb") as f:
-            for chunk in resp.iter_content(8192):
-                f.write(chunk)
+    clip_paths = []
+    durations = []
 
-        dur = get_duration(output_path)
-        if dur < 1.0:
-            log.warning("Remotion output too short (%.1fs), falling back to Pillow", dur)
-            return False
+    for i, (text, min_dur) in enumerate(DEMO_NARRATION):
+        clip_path = os.path.join(temp_dir, f"demo_vo_{i:02d}.mp3")
+        try:
+            audio_gen = client.text_to_speech.convert(
+                voice_id=ELEVENLABS_VOICE_ID,
+                text=text,
+                model_id="eleven_turbo_v2_5",
+                output_format="mp3_44100_128",
+            )
+            with open(clip_path, "wb") as f:
+                for chunk in audio_gen:
+                    f.write(chunk)
 
-        log.info("Remotion reveal rendered: %.1fs", dur)
-        return True
+            clip_dur = get_duration(clip_path)
+            actual_dur = max(clip_dur + 0.3, min_dur)
+            clip_paths.append(clip_path)
+            durations.append(actual_dur)
+            log.debug("Demo VO %d: %.1fs for '%s'", i, actual_dur, text)
+        except Exception as e:
+            log.warning("Demo TTS failed for '%s': %s", text, e)
+            clip_paths.append("")
+            durations.append(min_dur)
 
-    except Exception as e:
-        log.warning("Remotion reveal failed, falling back to Pillow: %s", e)
-        return False
+    # Concat all clips with silence padding to match target durations
+    concat_path = os.path.join(temp_dir, "demo_voiceover.mp3")
+    concat_file = os.path.join(temp_dir, "demo_vo_concat.txt")
 
+    # Build padded clips — each clip is padded with silence to its target duration
+    padded_paths = []
+    for i, (clip, dur) in enumerate(zip(clip_paths, durations)):
+        if not clip:
+            # Generate silence for this slot
+            silence_path = os.path.join(temp_dir, f"demo_silence_{i:02d}.mp3")
+            cmd = [
+                "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+                "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+                "-t", str(dur), "-c:a", "libmp3lame", "-b:a", "64k",
+                silence_path,
+            ]
+            subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+            padded_paths.append(silence_path)
+            continue
 
-def _pillow_reveal(output_path: str, line: str) -> str:
-    """Pillow-based fallback reveal renderer (frame-by-frame animation).
+        # Pad the clip with silence to fill the target duration
+        clip_dur = get_duration(clip)
+        if clip_dur < dur:
+            padded_path = os.path.join(temp_dir, f"demo_padded_{i:02d}.mp3")
+            pad_cmd = [
+                "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+                "-i", clip,
+                "-af", f"apad=whole_dur={dur}",
+                "-c:a", "libmp3lame", "-b:a", "128k",
+                padded_path,
+            ]
+            result = subprocess.run(pad_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+            if result.returncode == 0:
+                padded_paths.append(padded_path)
+            else:
+                padded_paths.append(clip)
+        else:
+            padded_paths.append(clip)
 
-    Structure (~8s total):
-      1. Feature text fade-in (1.5s) — "this didn't have to happen"
-      2. Nesso app walkthrough — 4 screens with captions (5.0s)
-      3. Logo + "it's free" + @nesso.app CTA (1.5s)
-    """
-    temp_dir = os.path.dirname(output_path)
-
-    all_frames = []
-
-    # Segment 1: Text fade-in
-    text_frames = _render_text_fadein_frames(line, temp_dir, duration=1.5)
-    all_frames.extend(text_frames)
-
-    # Segment 2: App walkthrough (4 screens × ~1.25s each)
-    walkthrough_frames = _render_app_walkthrough_frames(temp_dir, duration=5.0)
-    all_frames.extend(walkthrough_frames)
-
-    # Segment 3: Logo + CTA
-    logo_frames = _render_logo_cascade_frames(temp_dir, duration=1.5)
-    all_frames.extend(logo_frames)
-
-    if not all_frames:
-        raise RuntimeError("No reveal frames generated")
-
-    concat_file = os.path.join(temp_dir, "reveal_frames.txt")
     with open(concat_file, "w") as f:
-        for fp in all_frames:
+        for p in padded_paths:
+            safe = p.replace("'", "'\\''")
+            f.write(f"file '{safe}'\n")
+
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-f", "concat", "-safe", "0", "-i", concat_file,
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        concat_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+
+    # Cleanup
+    for p in padded_paths + clip_paths:
+        if p and p != concat_path:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    try:
+        os.remove(concat_file)
+    except OSError:
+        pass
+
+    if result.returncode != 0:
+        log.warning("Demo VO concat failed: %s", result.stderr[-200:])
+        return "", durations
+
+    log.info("Demo voiceover: %.1fs", get_duration(concat_path))
+    return concat_path, durations
+
+
+# ── Demo Frame Rendering ───────────────────────────────────────────────────
+
+def _render_demo_frames(temp_dir: str, durations: list[float]) -> list[tuple[str, float]]:
+    """
+    Render the Nesso app demo as PNG frames with per-screen durations.
+    Each screen gets a subtle zoom + caption overlay.
+    Returns list of (frame_path, duration) tuples.
+    """
+    frames = []
+    frame_idx = 0
+
+    for screen_idx, (screen_file, (narration_text, _)) in enumerate(zip(DEMO_SCREENS, DEMO_NARRATION)):
+        screen_img = _load_screen(screen_file)
+        if screen_img is None:
+            # Skip missing screens — render a branded placeholder
+            screen_img = Image.new("RGB", (WIDTH, HEIGHT), (20, 15, 25))
+            draw = ImageDraw.Draw(screen_img)
+            _draw_gradient_bg(draw)
+
+        dur = durations[screen_idx] if screen_idx < len(durations) else 1.5
+        num_frames = max(1, int(dur * FPS))
+
+        # Pre-scale for zoom effect
+        zoom_start, zoom_end = 1.0, 1.04
+        max_w = int(WIDTH * zoom_end)
+        max_h = int(HEIGHT * zoom_end)
+        max_scaled = screen_img.resize((max_w, max_h), Image.Resampling.LANCZOS)
+
+        for fi in range(num_frames):
+            t = fi / max(1, num_frames - 1)
+
+            # Zoom crop
+            zoom = zoom_start + (zoom_end - zoom_start) * t
+            crop_w = int(WIDTH * (zoom_end / zoom))
+            crop_h = int(HEIGHT * (zoom_end / zoom))
+            crop_x = (max_w - crop_w) // 2
+            crop_y = (max_h - crop_h) // 2
+            cropped = max_scaled.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+            frame = cropped.resize((WIDTH, HEIGHT), Image.Resampling.BILINEAR)
+
+            # Caption band at bottom
+            draw = ImageDraw.Draw(frame)
+            band_h = 180
+            band_top = HEIGHT - band_h
+            draw.rectangle((0, band_top, WIDTH, HEIGHT), fill=(0, 0, 0))
+
+            font = _get_font(38, bold=True)
+            # Fade in text
+            text_t = min(1.0, t * 3)  # fade in over first 1/3 of duration
+            brightness = int(255 * _ease_out_cubic(text_t))
+            color = (brightness, brightness, brightness)
+            tw = font.getlength(narration_text)
+            tx = (WIDTH - tw) / 2
+            ty = band_top + (band_h - 38) // 2
+            draw.text((tx, ty), narration_text, fill=color, font=font)
+
+            fp = os.path.join(temp_dir, f"demo_{frame_idx:04d}.png")
+            frame.save(fp, "PNG")
+            frames.append(fp)
+            frame_idx += 1
+
+    # Return as (path, duration) per screen — for concat demuxer
+    result = []
+    offset = 0
+    for screen_idx in range(len(DEMO_SCREENS)):
+        dur = durations[screen_idx] if screen_idx < len(durations) else 1.5
+        num_frames = max(1, int(dur * FPS))
+        # Point to all frames for this screen — but use concat with per-frame duration
+        for fi in range(num_frames):
+            result.append((frames[offset + fi], 1.0 / FPS))
+        offset += num_frames
+
+    return result
+
+
+def render_nesso_demo(output_path: str, temp_dir: str) -> tuple[str, str]:
+    """
+    Render the Nesso app demo segment.
+
+    Returns:
+        (video_path, voiceover_path)
+        - video_path: the demo video (no audio baked in)
+        - voiceover_path: the demo VO audio (mixed in by morph.py)
+    """
+    # Generate demo voiceover
+    vo_path, durations = _generate_demo_voiceover(temp_dir)
+
+    # Render frames
+    frame_data = _render_demo_frames(temp_dir, durations)
+
+    if not frame_data:
+        raise RuntimeError("No demo frames generated — app screenshots missing?")
+
+    # Compile frames to video
+    concat_file = os.path.join(temp_dir, "demo_concat.txt")
+    with open(concat_file, "w") as f:
+        for fp, dur in frame_data:
             safe = fp.replace("'", "'\\''")
-            f.write(f"file '{safe}'\nduration {1/FPS}\n")
-        safe = all_frames[-1].replace("'", "'\\''")
+            f.write(f"file '{safe}'\nduration {dur}\n")
+        # Repeat last frame
+        safe = frame_data[-1][0].replace("'", "'\\''")
         f.write(f"file '{safe}'\n")
 
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-        "-f", "concat", "-safe", "0",
-        "-i", concat_file,
+        "-f", "concat", "-safe", "0", "-i", concat_file,
         "-vf", f"fps={FPS}",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-preset", FFMPEG_PRESET,
         output_path,
     ]
-
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
 
-    for fp in all_frames:
+    # Cleanup frames
+    for fp, _ in frame_data:
         try:
             os.remove(fp)
         except OSError:
@@ -619,29 +331,99 @@ def _pillow_reveal(output_path: str, line: str) -> str:
         pass
 
     if result.returncode != 0:
-        raise RuntimeError(f"Reveal render failed: {result.stderr[-500:]}")
+        raise RuntimeError(f"Demo video compile failed: {result.stderr[-500:]}")
 
-    return output_path
+    demo_dur = get_duration(output_path)
+    log.info("Nesso demo rendered: %s (%.1fs)", output_path, demo_dur)
+    return output_path, vo_path
 
 
-def render_nesso_reveal(output_path: str) -> str:
-    """
-    Render the animated Nesso reveal sequence.
+# ── CTA Segment ────────────────────────────────────────────────────────────
 
-    Tries Remotion microservice first (professional motion graphics with
-    spring physics, CSS easing, anti-aliased text, ambient glow).
-    Falls back to Pillow frame-by-frame animation if Remotion unavailable.
-    """
-    line = get_reveal_line()
+def render_cta(output_path: str, temp_dir: str) -> str:
+    """Render a 2-second CTA: logo + "it's free" + @nesso.app."""
+    num_frames = int(CTA_DURATION * FPS)
+    frames = []
 
-    # Try Remotion first
-    if _try_remotion_reveal(output_path, line):
-        return output_path
+    logo_img = None
+    if os.path.exists(NESSO_LOGO_PATH):
+        try:
+            logo_img = Image.open(NESSO_LOGO_PATH).convert("RGBA")
+        except Exception:
+            pass
 
-    # Fallback to Pillow
-    log.info("Using Pillow fallback for reveal")
-    _pillow_reveal(output_path, line)
+    font_main = _get_font(72, bold=True)
+    font_handle = _get_font(40, bold=True)
 
-    reveal_dur = get_duration(output_path)
-    log.info("Reveal rendered (Pillow): %s (%.1fs)", output_path, reveal_dur)
+    for fi in range(num_frames):
+        t = fi / max(1, num_frames - 1)
+
+        img = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        _draw_gradient_bg(draw)
+
+        logo_y_center = HEIGHT // 2 - 160
+        logo_size = 300
+
+        # Logo — instant appear, no slow animation
+        if logo_img:
+            resized = logo_img.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            lx = (WIDTH - logo_size) // 2
+            ly = logo_y_center - logo_size // 2
+            img.paste(resized, (lx, ly), resized)
+
+        text_y = logo_y_center + logo_size // 2 + 40
+
+        # "it's free" — fade in fast
+        free_t = min(1.0, t / 0.3)
+        free_b = int(255 * _ease_out_cubic(free_t))
+        free_text = "it's free"
+        fw = font_main.getlength(free_text)
+        draw.text(((WIDTH - fw) / 2, text_y), free_text, fill=(free_b, free_b, free_b), font=font_main)
+
+        # @nesso.app
+        handle_t = max(0.0, min(1.0, (t - 0.2) / 0.3))
+        hb = _ease_out_cubic(handle_t)
+        handle_color = (int(232 * hb), int(212 * hb), int(207 * hb))
+        handle_text = "@nesso.app"
+        hw = font_handle.getlength(handle_text)
+        draw.text(((WIDTH - hw) / 2, text_y + 100), handle_text, fill=handle_color, font=font_handle)
+
+        fp = os.path.join(temp_dir, f"cta_{fi:04d}.png")
+        img.save(fp, "PNG")
+        frames.append(fp)
+
+    # Compile
+    concat_file = os.path.join(temp_dir, "cta_concat.txt")
+    with open(concat_file, "w") as f:
+        for fp in frames:
+            safe = fp.replace("'", "'\\''")
+            f.write(f"file '{safe}'\nduration {1/FPS}\n")
+        safe = frames[-1].replace("'", "'\\''")
+        f.write(f"file '{safe}'\n")
+
+    cmd = [
+        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+        "-f", "concat", "-safe", "0", "-i", concat_file,
+        "-vf", f"fps={FPS}",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-preset", FFMPEG_PRESET,
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
+
+    for fp in frames:
+        try:
+            os.remove(fp)
+        except OSError:
+            pass
+    try:
+        os.remove(concat_file)
+    except OSError:
+        pass
+
+    if result.returncode != 0:
+        raise RuntimeError(f"CTA compile failed: {result.stderr[-500:]}")
+
+    log.info("CTA rendered: %s (%.1fs)", output_path, get_duration(output_path))
     return output_path

@@ -390,11 +390,17 @@ def render_text_story_frames(
     messages: list[dict],
     temp_dir: str,
     voiceover_active: bool = False,
+    start_from_msg: int = 0,
 ) -> list[tuple[str, float]]:
     """
     Render the text story as a series of PNG frames.
     Each frame shows all messages up to that point.
     Messages are bottom-aligned like real iMessage.
+
+    start_from_msg: If > 0, only render frames for messages starting at this index,
+                    but show earlier messages as already-visible context.
+                    Used for Part 2 rendering (shows Part 1 messages as backdrop).
+
     Returns list of (frame_path, duration_seconds) tuples.
     """
     font = _get_font(FONT_SIZE)
@@ -419,8 +425,12 @@ def render_text_story_frames(
     content_top = TOP_BAR_HEIGHT + 10
     content_bottom = HEIGHT - SAFE_BOTTOM - 20
 
+    # When rendering Part 2, skip generating frames for Part 1 messages
+    # (they'll still appear as visible context in each frame)
+    render_start = start_from_msg if start_from_msg > 0 else 0
+
     frame_count = 0
-    for msg_idx in range(len(messages)):
+    for msg_idx in range(render_start, len(messages)):
         current_msg = messages[msg_idx]
         is_incoming = current_msg["sender"] not in ("me", "system")
 
@@ -509,11 +519,13 @@ def render_text_story_frames(
         frames.append((frame_path, duration))
         frame_count += 1
 
-    # Enforce story duration bounds — but NEVER when voiceover is active,
-    # because frame durations must match the VO audio exactly.
+    # Enforce story duration bounds — adapted for two-part structure.
+    # Part 1: 6-12s target. Part 2: 4-8s target. Full story: 12-20s.
+    # NEVER scale when voiceover is active — durations must match audio.
     total_dur = sum(d for _, d in frames)
-    min_story_dur = 12.0
-    max_story_dur = 20.0  # Target 25-33s total (10s hook + 12-20s story + 3s reveal)
+    is_part2 = start_from_msg > 0
+    min_story_dur = 4.0 if is_part2 else 6.0
+    max_story_dur = 8.0 if is_part2 else 12.0
     if not voiceover_active and total_dur < min_story_dur and total_dur > 0:
         scale = min_story_dur / total_dur
         frames = [(p, d * scale) for p, d in frames]
@@ -549,7 +561,7 @@ def _count_fitting_messages(
         total_height += _measure_message_height(msg, font, contact_font, s_font)
 
         if total_height > available_height:
-            return i  # return count of messages that fit
+            return max(1, i)  # at least 1 message must be visible
 
     return len(messages)
 

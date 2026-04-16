@@ -224,14 +224,26 @@ def generate_voiceover(
             clip_paths.append(result)
             per_message_durations.append(fallback_delay)
 
-    # Filter out any empty paths from failed silence generation
-    valid = [(p, d) for p, d in zip(clip_paths, per_message_durations) if p]
-    if not valid:
-        log.warning("No voiceover clips generated")
+    # Check for failed silence generation — if ANY clip is empty, the durations
+    # list won't match the messages list, so pipeline will discard the VO.
+    # Instead of filtering (which shrinks the list), replace empty paths with
+    # a freshly generated silence so the 1:1 mapping is preserved.
+    empty_count = sum(1 for p in clip_paths if not p)
+    if empty_count == len(clip_paths):
+        log.warning("No voiceover clips generated (all %d failed)", len(clip_paths))
         return "", []
-
-    clip_paths = [p for p, _ in valid]
-    per_message_durations = [d for _, d in valid]
+    if empty_count > 0:
+        log.warning("%d/%d VO clips had empty paths — regenerating silence for each", empty_count, len(clip_paths))
+        for i, (p, d) in enumerate(zip(clip_paths, per_message_durations)):
+            if not p:
+                retry_path = os.path.join(temp_dir, f"vo_retry_{i:03d}.mp3")
+                result_retry = _generate_silence_wav(d, retry_path)
+                if result_retry:
+                    clip_paths[i] = result_retry
+                else:
+                    # Absolute last resort: write a tiny silent WAV directly
+                    log.error("Cannot generate silence for clip %d — VO will be discarded", i)
+                    return "", []
 
     # Concatenate all clips into one continuous audio file
     concat_path = os.path.join(temp_dir, "voiceover.mp3")
@@ -289,10 +301,18 @@ def generate_voiceover(
         log.info("VO too long (%.1fs), speeding up by %.2fx to cap at %.0fs",
                  actual_total_dur, speed_factor, MAX_VO_DURATION)
         sped_up_path = concat_path + ".fast.mp3"
+        # atempo only supports 0.5-2.0 range — chain filters for higher factors
+        atempo_parts = []
+        remaining = speed_factor
+        while remaining > 2.0:
+            atempo_parts.append("atempo=2.0")
+            remaining /= 2.0
+        atempo_parts.append(f"atempo={remaining:.4f}")
+        atempo_filter = ",".join(atempo_parts)
         speed_cmd = [
             "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
             "-i", concat_path,
-            "-af", f"atempo={min(speed_factor, 2.0)}",
+            "-af", atempo_filter,
             "-c:a", "libmp3lame", "-b:a", "128k",
             sped_up_path,
         ]
