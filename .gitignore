@@ -8,6 +8,21 @@ tmp/
 *.png
 !assets/nesso_logo.png
 !assets/psych_sfx.mp3
-!assets/app_screens/*.png
+!assets/imessage_sounds/*.mp3
+!assets/music/*.mp3
+!assets/sfx/*.mp3
+!remotion-reveal/public/nesso_logo.png
+
+# Dev-only helpers
+test_render.py
 .DS_Store
 venv/
+
+# Node / Remotion
+node_modules/
+remotion-reveal/build/
+remotion-reveal/bundle/
+
+# Analytics DB (don't commit runtime state)
+*.db
+*.db-journal

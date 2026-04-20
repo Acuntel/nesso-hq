@@ -68,30 +68,6 @@ async def _send_video_result(update, result, video_num=""):
     _total_renders += 1
     _last_render_time = time.time()
 
-    # Check if YouTube cookies expired — send one-time alert
-    global _cookie_alert_sent
-    if not _cookie_alert_sent:
-        try:
-            from hooks import are_cookies_expired
-            if are_cookies_expired():
-                _cookie_alert_sent = True
-                await update.message.reply_text(
-                    "⚠️ **YouTube cookies expired** — hooks are using Pexels fallback.\n\n"
-                    "To restore YouTube hooks, run on your Mac:\n"
-                    "```\n"
-                    "cd ~/Desktop/nesso-content-v20\n"
-                    "yt-dlp --cookies-from-browser chrome "
-                    "--cookies /tmp/yt_cookies.txt "
-                    '"https://youtube.com" --skip-download\n'
-                    "grep -E '^(\\.|#)' /tmp/yt_cookies.txt "
-                    "| gzip | base64 > /tmp/c.txt\n"
-                    'railway variables --set "YT_COOKIES_B64=$(cat /tmp/c.txt)"\n'
-                    "railway redeploy -y\n"
-                    "```"
-                )
-        except Exception:
-            pass
-
     output_path = result["output_path"]
     duration = result["duration"]
 
@@ -100,7 +76,7 @@ async def _send_video_result(update, result, video_num=""):
         with open(output_path, "rb") as video_file:
             await update.message.reply_video(
                 video=video_file,
-                caption=f"{video_num}Nesso Content V20 — {duration:.0f}s",
+                caption=f"{video_num}Nesso V22 — {duration:.0f}s",
                 supports_streaming=True,
             )
     except Exception as e:
@@ -207,15 +183,15 @@ async def cmd_theme(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    query = THEME_QUERIES[theme]
+    # V22: themes no longer affect hook sourcing (hooks are typographic).
+    # Kept for forward-compat — script prompt could accept theme in the future.
     await update.message.reply_text(
-        f"🎯 Generating video with theme: **{theme}**\n"
-        f"Hook query: {query}\n"
-        "This takes 1-3 minutes..."
+        f"🎯 Generating video (theme: {theme})\n"
+        "This takes ~90s..."
     )
 
     start_time = time.time()
-    result = render_single_video(query=query)
+    result = render_single_video(theme=theme)
     elapsed = time.time() - start_time
 
     await _send_video_result(update, result)
@@ -254,7 +230,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status command."""
     status_lines = [
-        "📊 **Nesso Content Engine V20 Status**\n",
+        "📊 **Nesso Content Engine V22 Status**\n",
         f"Total renders: {_total_renders}",
         f"Total failures: {_total_failures}",
     ]
@@ -274,6 +250,18 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_lines.append(f"\nLast error: {_last_error[:200]}")
 
     from config import PSYCH_SFX_PATH, NESSO_LOGO_PATH
+    from remotion_client import REMOTION_URL
+    import requests
+
+    remotion_ok = False
+    try:
+        r = requests.get(f"{REMOTION_URL}/health", timeout=3)
+        remotion_ok = r.ok
+    except Exception:
+        pass
+
+    status_lines.append(f"\nServices:")
+    status_lines.append(f"  Remotion: {'✅' if remotion_ok else '❌ (check entrypoint logs)'}")
     status_lines.append(f"\nAssets:")
     status_lines.append(f"  Logo: {'✅' if os.path.exists(NESSO_LOGO_PATH) else '❌'}")
     status_lines.append(f"  PSYCH sfx: {'✅' if os.path.exists(PSYCH_SFX_PATH) else '⬇️ will download'}")
@@ -284,14 +272,14 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
     await update.message.reply_text(
-        "🎬 **Nesso Content Engine V20**\n\n"
+        "🎬 **Nesso Content Engine V22**\n\n"
         "Commands:\n"
-        "/make — Generate 1 video\n"
+        "/make — Generate 1 video (22s)\n"
         "/make 5 — Generate batch of 5\n"
         "/theme — Generate with a specific vibe\n"
         "/stats — Render analytics\n"
         "/status — Pipeline health\n\n"
-        "Each video: hook → PSYCH morph → text story → app walkthrough → CTA"
+        "Each video: kinetic hook → iMessage story → real app click-through → logo close"
     )
 
 

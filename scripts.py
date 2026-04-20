@@ -1,311 +1,305 @@
 """
-Nesso Content Engine V21 — Two-Part Text Story Script Generation
+Nesso Content Engine V22 — Script Generation
 
-Part 1: Tension build (4-5 messages) — hook the viewer emotionally
-Part 2: Resolution (2-3 messages) — friend receives Nesso-generated message
+Produces one unified script dict:
 
-The Nesso app demo plays BETWEEN Part 1 and Part 2.
+    {
+      "hook_line": str,
+      "hook_subline": str,
+      "palette": "rose" | "indigo",
+      "contact_name": str,       # header name shown in iMessage chrome
+      "person_name": str,        # who the app demo shows (often same as contact_name)
+      "months_since": int,       # "X months since you talked"
+      "messages": [              # 4-6 messages, one with emphasis=True
+        {"sender": "me" | "other" | "system", "text": str, "delay": float, "emphasis": bool}
+      ],
+      "ai_message": str,         # what the app's AI types during the demo
+    }
 """
+
+from __future__ import annotations
 
 import json
 import logging
 import os
 import random
+import re
 
 import anthropic
 
-from config import FALLBACKS_DIR, SCRIPT_PART1_MAX, SCRIPT_PART2_MAX
+from config import (
+    FALLBACKS_DIR,
+    MESSAGES_MAX,
+    MESSAGES_MIN,
+    MAX_MESSAGE_DELAY,
+    MIN_MESSAGE_DELAY,
+    get_random_ai_message,
+    get_random_hook,
+)
 
 log = logging.getLogger(__name__)
 
-# ── Outlandish Opener Templates ─────────────────────────────────────────
-OUTLANDISH_OPENERS = [
-    "Start with a specific stat or number — like 'I just counted how many times we said we should hang out this year. it's 11. we hung out zero times'",
-    "Start with a raw confession — like 'I just realized I'm the friend everyone slowly phases out and I've known for months'",
-    "Start with chaotic confrontational energy — like 'be honest. when's the last time you texted me first'",
-    "Start with a specific, painful observation — like 'I just scrolled past 30 conversations in my texts before I found someone I actually talk to'",
-]
 
+SYSTEM_PROMPT = """You write viral fake text conversations for TikTok/Reels about friendship drift.
 
-SCRIPT_SYSTEM_PROMPT = """You write viral fake text message conversations for TikTok/Instagram Reels.
-
-You are writing for an 18-25 year old audience. The texts must feel REAL — like screenshots someone took of their actual phone at 1am.
-
-IMPORTANT: You must generate a TWO-PART script. The video structure is:
-  Part 1 (tension) → Nesso app demo → Part 2 (resolution)
-
-The Nesso app demo shows: friendship bar draining → tap "Reach out" → AI writes a message → tap to send.
-Part 2 shows the friend RECEIVING that Nesso-generated text and reacting.
-
-FORMAT: Return ONLY a JSON object with two arrays. No other text. No markdown.
+You must return ONLY a JSON object with this exact shape. No prose. No markdown fences.
 
 {
-  "part1": [
-    {"sender": "me", "text": "message", "delay": 1.5},
-    ...
-  ],
-  "part2": [
-    {"sender": "best friend", "text": "wait did you just use an app to text me", "delay": 1.5},
-    ...
+  "contact_name": "best friend",
+  "person_name": "Sarah",
+  "months_since": 4,
+  "messages": [
+    {"sender": "me",    "text": "<message>", "delay": 1.2, "emphasis": false},
+    {"sender": "other", "text": "<message>", "delay": 1.4, "emphasis": false},
+    {"sender": "me",    "text": "<the gut-punch>", "delay": 1.8, "emphasis": true},
+    {"sender": "me",    "text": "<quiet close>", "delay": 2.0, "emphasis": false},
+    {"sender": "system", "text": "Read 1:47 AM", "delay": 0.8, "emphasis": false}
   ]
 }
 
-"sender" options: "me", "best friend", "college roommate", "the group chat", or a first name.
-"delay" is seconds before showing the NEXT message (controls pacing/tension).
+RULES:
+- 4 to 6 messages total. HARD CAP 6. Count them.
+- Exactly one message with emphasis=true. It's the quotable gut-punch line — the thing a viewer would screenshot.
+- Last message MUST be a system read receipt like "Read 1:47 AM" or "Read 2:14 AM" (pick a believable late-night time).
+- "sender" is only "me", "other", or "system".
+- person_name = a single first name like "Sarah", "Maya", "Emma", "Jake", "Alex". Match what you put as contact_name's subject.
+- contact_name = how the conversation is labelled in iMessage. Usually a phrase like "best friend", "sarah", "the group chat", or a first name. Keep under 18 chars.
+- months_since = integer 2-12 (months of silence). Usually 3-6 for emotional truth.
+- delay = seconds before the NEXT message. Range 0.8-2.5. The emphasis message gets 1.8-2.5.
+- Messages are lowercase, texting style. No proper grammar. Use "ngl", "fr", "lol", "tbh" naturally but sparingly.
+- AT LEAST ONE message MUST contain a SPECIFIC detail: a number ("4 months"), a name, a date, a count.
+- No emojis in messages (they wreck TTS voiceover). Skip them.
+- Each message 1-2 short sentences max. If the gut-punch line is longer, that's fine — but never more than ~100 chars.
 
-DELAY RULES:
-- Normal message: 1.0 - 1.5s
-- Emotional weight: 1.5 - 2.0s
-- Gut-punch moment: 2.0 - 2.5s
-- "..." or typing: 1.5 - 2.0s
-- MINIMUM: 0.8s. MAXIMUM: 3.0s.
+ARCHETYPES (pick one):
+(a) THE AUDIT — "I counted. we haven't actually talked in 4 months."
+(b) THE CALLOUT — "be honest. when's the last time you texted me first."
+(c) THE NOSTALGIA — "remember when we used to call every sunday? we haven't since january."
+(d) THE CONFESSION — "I realized I'm the friend everyone slowly phases out."
+(e) THE AUTOPSY — "the last real message in our chat is from october."
 
-PART 1 STRUCTURE (4-5 messages, STRICT):
-1. Message 1: THE SCROLL-STOPPER. Most unhinged, specific opener possible.
-2. Message 2: Other person responds — confused or defensive.
-3. Message 3: Escalation with a SPECIFIC detail (name, number, date).
-4. Message 4: The gut-punch line. Quotable on its own.
-5. Message 5 (optional): "..." or a one-word silence. Let it hang.
-The conversation must feel UNRESOLVED. The viewer should feel the weight.
-
-PART 2 STRUCTURE (2-3 messages, STRICT):
-This happens AFTER the Nesso app demo. The friend just received an AI-generated check-in message from the app. Part 2 shows their reaction.
-1. Message 1: Friend reacts to receiving the text — surprised, touched, or calling it out ("wait did you just use an app to text me" / "ngl I needed this" / "bro where did that come from")
-2. Message 2: "me" responds honestly — "yeah this app reminded me before I forgot again" / "it literally told me our friendship was fading" / "ngl it wrote the message for me but the feeling is real"
-3. Message 3 (optional): "Read [time]" or a brief emotional close.
-
-The BRIDGE between Part 1 and Part 2 must feel natural. Part 1 ends with tension about drifting apart. The Nesso demo shows the app intervening. Part 2 shows the result — connection restored.
-
-CRITICAL RULES:
-- All lowercase texting style. Use "ngl", "fr", "lol", "lmao", "bruh", "tbh" naturally.
-- NEVER proper grammar. These are real texts not essays.
-- At least ONE specific detail in Part 1 (a name, a number, a date).
-- Each message is 1-2 short sentences MAX.
-- Part 2 must reference the app naturally — not like an ad script, like a real reaction.
-- The viewer should finish wanting to download Nesso IMMEDIATELY.
-
-ARCHETYPES (pick one per script):
-(a) THE AUDIT — evidence of drift, then Nesso catches it
-(b) THE COMPARISON — "we used to ___ now we ___", then Nesso bridges the gap
-(c) THE CONFESSION — admits noticing drift, Nesso gives them a way to act
-(d) THE CALLOUT — confronts about disappearing, Nesso provides the olive branch
-(e) THE GROUP CHAT AUTOPSY — dead group chat, Nesso revives it"""
+The conversation should feel UNRESOLVED. Emotional, not dramatic. Quiet, not yelling."""
 
 
-def generate_text_story(
-    hook_description: str,
-    hook_category: str,
-) -> tuple[list[dict], list[dict]]:
+def generate_script(hook_context: str = "") -> dict:
     """
-    Generate a two-part text conversation.
+    Generate a V22 script dict. Falls back to hardcoded on any failure.
 
-    Returns:
-        (part1_messages, part2_messages)
-        - part1: 4-5 messages (tension build, plays before Nesso demo)
-        - part2: 2-3 messages (resolution, plays after Nesso demo)
+    hook_context is passed to the model as flavor but is OPTIONAL. Hooks are
+    now typographic (see config.HOOK_LINES) so the conversation doesn't need
+    to thematically match a random video clip anymore — it just needs to be good.
     """
-    opener_style = random.choice(OUTLANDISH_OPENERS)
-
-    user_message = (
-        f"Hook video context: {hook_description} (category: {hook_category})\n\n"
-        f"OPENER STYLE FOR MESSAGE 1:\n{opener_style}\n\n"
-        "Generate a two-part fake text conversation. "
-        "Part 1 plays BEFORE the Nesso app demo. Part 2 plays AFTER.\n\n"
-        "Return ONLY the JSON object with part1 and part2 arrays. Nothing else."
-    )
+    hook_line, hook_subline, palette = get_random_hook()
+    ai_message = get_random_ai_message()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         log.warning("ANTHROPIC_API_KEY not set — using fallback script")
-        return get_fallback_script()
+        return _attach_global(_fallback_script(), hook_line, hook_subline, palette, ai_message)
+
+    user = (
+        f"Hook line that will appear BEFORE this conversation: \"{hook_line}\"\n"
+        + (f"Subline: \"{hook_subline}\"\n" if hook_subline else "")
+        + "Write the conversation that pays off this hook. "
+        "Return ONLY the JSON object described in the system prompt."
+    )
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        resp = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=800,
-            system=SCRIPT_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
+            max_tokens=900,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        data = json.loads(raw)
+        script = _validate_script(data)
+    except Exception as e:
+        log.warning("Claude script generation failed, using fallback: %s", e)
+        script = _fallback_script()
+
+    if not _has_specificity(script["messages"]):
+        log.info("Script lacks specificity — retrying once")
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=900,
+                system=SYSTEM_PROMPT,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": user
+                        + "\n\nIMPORTANT: include a SPECIFIC number, date, or count in at least one message (e.g. '4 months', 'october', 'our last call was june 14').",
+                    }
+                ],
+            )
+            raw = resp.content[0].text.strip().replace("```json", "").replace("```", "").strip()
+            retry = _validate_script(json.loads(raw))
+            if _has_specificity(retry["messages"]):
+                script = retry
+        except Exception as e2:
+            log.warning("Specificity retry failed: %s", e2)
+
+    return _attach_global(script, hook_line, hook_subline, palette, ai_message)
+
+
+def _attach_global(
+    script: dict, hook_line: str, hook_subline: str, palette: str, ai_message: str
+) -> dict:
+    script["hook_line"] = hook_line
+    script["hook_subline"] = hook_subline
+    script["palette"] = palette
+    script["ai_message"] = ai_message
+    return script
+
+
+def _validate_script(data: dict) -> dict:
+    """Normalize and validate the Claude response. Raises on bad data."""
+    if not isinstance(data, dict):
+        raise ValueError("script root must be object")
+
+    contact_name = str(data.get("contact_name", "best friend"))[:18] or "best friend"
+    person_name = str(data.get("person_name", "Sarah")).split()[0][:14] or "Sarah"
+    months_since = int(data.get("months_since", 4))
+    months_since = max(2, min(12, months_since))
+
+    msgs = data.get("messages", [])
+    if not isinstance(msgs, list) or len(msgs) < MESSAGES_MIN:
+        raise ValueError(f"need at least {MESSAGES_MIN} messages, got {len(msgs)}")
+    msgs = msgs[:MESSAGES_MAX]
+
+    cleaned = []
+    has_emphasis = False
+    for m in msgs:
+        if not isinstance(m, dict):
+            continue
+        sender = m.get("sender", "me")
+        if sender not in ("me", "other", "system"):
+            sender = "me"
+        text = str(m.get("text", "")).strip()
+        if not text:
+            continue
+        delay = float(m.get("delay", 1.2))
+        delay = max(MIN_MESSAGE_DELAY, min(MAX_MESSAGE_DELAY, delay))
+        emphasis = bool(m.get("emphasis", False))
+        if emphasis:
+            has_emphasis = True
+        cleaned.append(
+            {"sender": sender, "text": text, "delay": delay, "emphasis": emphasis}
         )
 
-        raw = response.content[0].text.strip()
-        raw = raw.replace("```json", "").replace("```", "").strip()
+    if len(cleaned) < MESSAGES_MIN:
+        raise ValueError("after cleaning, too few messages")
 
-        data = json.loads(raw)
+    # Ensure exactly one emphasis — prefer the longest non-system message if none marked
+    if not has_emphasis:
+        non_sys = [(i, m) for i, m in enumerate(cleaned) if m["sender"] != "system"]
+        if non_sys:
+            idx, _ = max(non_sys, key=lambda p: len(p[1]["text"]))
+            cleaned[idx]["emphasis"] = True
 
-        # Handle both old format (flat array) and new format (part1/part2)
-        if isinstance(data, list):
-            # Old format — split it
-            part1 = data[:SCRIPT_PART1_MAX]
-            part2 = []
-        else:
-            part1 = data.get("part1", [])
-            part2 = data.get("part2", [])
+    # Guarantee last message is a system read receipt
+    if cleaned[-1]["sender"] != "system":
+        hour = random.randint(1, 2)
+        minute = random.randint(10, 59)
+        cleaned.append(
+            {
+                "sender": "system",
+                "text": f"Read {hour}:{minute:02d} AM",
+                "delay": 0.8,
+                "emphasis": False,
+            }
+        )
+        cleaned = cleaned[:MESSAGES_MAX]
+        if cleaned[-1]["sender"] != "system":
+            # If trimming removed the system line, replace last with it
+            cleaned[-1] = {
+                "sender": "system",
+                "text": f"Read {hour}:{minute:02d} AM",
+                "delay": 0.8,
+                "emphasis": False,
+            }
 
-        part1 = _validate_messages(part1, max_msgs=SCRIPT_PART1_MAX, min_msgs=3)
-        if part2:
-            part2 = _validate_messages(part2, max_msgs=SCRIPT_PART2_MAX, min_msgs=2)
-        else:
-            part2 = _generate_default_part2()
-
-        # Specificity check on part 1
-        if not _has_specificity(part1):
-            log.info("Script lacks specificity, retrying once...")
-            try:
-                response2 = client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=800,
-                    system=SCRIPT_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_message + "\n\nIMPORTANT: Include at least one SPECIFIC number, date, or name in Part 1."}],
-                )
-                raw2 = response2.content[0].text.strip()
-                raw2 = raw2.replace("```json", "").replace("```", "").strip()
-                data2 = json.loads(raw2)
-                if isinstance(data2, dict):
-                    retry_p1 = _validate_messages(data2.get("part1", []), max_msgs=SCRIPT_PART1_MAX, min_msgs=3)
-                    retry_p2 = _validate_messages(data2.get("part2", []), max_msgs=SCRIPT_PART2_MAX, min_msgs=2)
-                    if _has_specificity(retry_p1):
-                        part1, part2 = retry_p1, retry_p2
-            except Exception as e2:
-                log.warning("Specificity retry failed: %s", e2)
-
-        log.info("Script: Part 1 = %d msgs, Part 2 = %d msgs", len(part1), len(part2))
-        return part1, part2
-
-    except Exception as e:
-        log.warning("Claude API failed, using fallback: %s", e)
-        return get_fallback_script()
-
-
-def _validate_messages(messages: list[dict], max_msgs: int = 9, min_msgs: int = 2) -> list[dict]:
-    """Validate and clean up generated message list."""
-    for msg in messages:
-        if "sender" not in msg:
-            raise ValueError("Missing sender in message")
-        if "text" not in msg:
-            raise ValueError("Missing text in message")
-        if "delay" not in msg:
-            msg["delay"] = 1.2
-        msg["delay"] = max(0.8, min(3.0, msg["delay"]))
-
-        # Normalize system indicators
-        text_l = msg["text"].strip().lower()
-        if (text_l == "..."
-                or text_l == "typing..."
-                or text_l == "typing"
-                or text_l.startswith("read ")
-                or text_l == "delivered"):
-            msg["sender"] = "system"
-
-    if len(messages) > max_msgs:
-        messages = messages[:max_msgs]
-    if len(messages) < min_msgs:
-        raise ValueError(f"Script too short — only {len(messages)} messages, need at least {min_msgs}")
-
-    return messages
+    return {
+        "contact_name": contact_name,
+        "person_name": person_name,
+        "months_since": months_since,
+        "messages": cleaned,
+    }
 
 
 def _has_specificity(messages: list[dict]) -> bool:
-    """Check that at least one message contains a specific detail."""
-    import re
-    for msg in messages:
-        if msg.get("sender") == "system":
+    for m in messages:
+        if m["sender"] == "system":
             continue
-        text = msg.get("text", "")
-        if re.search(r'\d+', text):
+        t = m["text"]
+        if re.search(r"\d", t):
             return True
-        if re.search(r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\b', text, re.IGNORECASE):
-            return True
-        if re.search(r'\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b', text, re.IGNORECASE):
+        if re.search(
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\b",
+            t,
+            re.IGNORECASE,
+        ):
             return True
     return False
 
 
-def _generate_default_part2() -> list[dict]:
-    """Generate a default Part 2 when Claude doesn't return one."""
-    return random.choice([
-        [
-            {"sender": "best friend", "text": "wait did you just use an app to text me", "delay": 1.5},
-            {"sender": "me", "text": "yeah it literally told me our friendship was fading", "delay": 2.0},
-            {"sender": "system", "text": "Read 1:47 AM", "delay": 2.0},
-        ],
-        [
-            {"sender": "best friend", "text": "ngl I actually needed this tonight", "delay": 1.5},
-            {"sender": "me", "text": "an app had to remind me to text you and that's kinda the whole problem", "delay": 2.5},
-            {"sender": "system", "text": "Read 2:03 AM", "delay": 2.0},
-        ],
-        [
-            {"sender": "best friend", "text": "bro where did that come from", "delay": 1.2},
-            {"sender": "me", "text": "this app showed me a timer running out on our friendship and I panicked", "delay": 2.0},
-            {"sender": "best friend", "text": "ok that's actually insane but also thank you", "delay": 2.0},
-        ],
-    ])
+# ── Hardcoded fallbacks (used when Claude + fallback file both fail) ─────
 
-
-def get_fallback_script() -> tuple[list[dict], list[dict]]:
-    """Load a random fallback script from the JSON file, split into two parts."""
-    scripts_path = os.path.join(FALLBACKS_DIR, "scripts.json")
-    try:
-        with open(scripts_path) as f:
-            all_scripts = json.load(f)
-        script = random.choice(all_scripts)
-
-        # Check if it's already two-part format
-        if isinstance(script, dict) and "part1" in script:
-            p1 = _validate_messages(script["part1"], max_msgs=SCRIPT_PART1_MAX, min_msgs=3)
-            p2 = _validate_messages(script["part2"], max_msgs=SCRIPT_PART2_MAX, min_msgs=2)
-            return p1, p2
-
-        # Old format — split and add Part 2
-        msgs = _validate_messages(script, max_msgs=SCRIPT_PART1_MAX, min_msgs=3)
-        return msgs, _generate_default_part2()
-    except Exception as e:
-        log.error("Failed to load fallback scripts: %s", e)
-        return random.choice(HARDCODED_FALLBACKS)
-
-
-HARDCODED_FALLBACKS = [
-    (
-        # Part 1 — tension
-        [
-            {"sender": "me", "text": "I have 847 contacts and I could only call 3 of them at 2am", "delay": 1.5},
-            {"sender": "best friend", "text": "that's not true lol", "delay": 1.0},
-            {"sender": "me", "text": "ok name 5 people you've actually talked to this month. not texted. TALKED.", "delay": 2.0},
-            {"sender": "system", "text": "...", "delay": 1.5},
-            {"sender": "me", "text": "we just stopped trying and called it growing up", "delay": 2.0},
+_HARDCODED_FALLBACKS: list[dict] = [
+    {
+        "contact_name": "sarah",
+        "person_name": "Sarah",
+        "months_since": 4,
+        "messages": [
+            {"sender": "me",    "text": "I counted. we haven't actually talked in 4 months.", "delay": 1.4, "emphasis": False},
+            {"sender": "other", "text": "that's not true", "delay": 1.2, "emphasis": False},
+            {"sender": "me",    "text": "scroll up. every text for 16 weeks starts with me.", "delay": 1.8, "emphasis": True},
+            {"sender": "other", "text": "...", "delay": 1.6, "emphasis": False},
+            {"sender": "me",    "text": "we didn't fight. we just got busy. and it worked.", "delay": 2.0, "emphasis": False},
+            {"sender": "system", "text": "Read 1:47 AM", "delay": 0.8, "emphasis": False},
         ],
-        # Part 2 — resolution after Nesso demo
-        [
-            {"sender": "best friend", "text": "wait what made you text me rn", "delay": 1.2},
-            {"sender": "me", "text": "this app told me our friendship was dying and honestly it was right", "delay": 2.0},
-            {"sender": "system", "text": "Read 11:47 PM", "delay": 2.0},
+    },
+    {
+        "contact_name": "best friend",
+        "person_name": "Maya",
+        "months_since": 6,
+        "messages": [
+            {"sender": "me",    "text": "be honest. when was the last time you texted me first.", "delay": 2.0, "emphasis": False},
+            {"sender": "other", "text": "I text you all the time what", "delay": 1.2, "emphasis": False},
+            {"sender": "me",    "text": "scroll up. every conversation for 6 months starts with me.", "delay": 2.2, "emphasis": True},
+            {"sender": "other", "text": "...", "delay": 1.8, "emphasis": False},
+            {"sender": "system", "text": "Read 2:04 AM", "delay": 0.8, "emphasis": False},
         ],
-    ),
-    (
-        [
-            {"sender": "me", "text": "be honest. when's the last time you texted me first", "delay": 2.0},
-            {"sender": "best friend", "text": "what are you talking about I text you all the time", "delay": 1.5},
-            {"sender": "me", "text": "scroll up. every conversation for the last 4 months starts with me", "delay": 2.5},
-            {"sender": "system", "text": "...", "delay": 2.0},
+    },
+    {
+        "contact_name": "the group chat",
+        "person_name": "Jake",
+        "months_since": 5,
+        "messages": [
+            {"sender": "me",    "text": "the last real message in here is from october.", "delay": 1.6, "emphasis": False},
+            {"sender": "other", "text": "damn was it really october", "delay": 1.2, "emphasis": False},
+            {"sender": "me",    "text": "we used to send 40 texts a day. now it's crickets.", "delay": 1.8, "emphasis": True},
+            {"sender": "me",    "text": "idk when we became acquaintances but we did.", "delay": 2.2, "emphasis": False},
+            {"sender": "system", "text": "Read 1:28 AM", "delay": 0.8, "emphasis": False},
         ],
-        [
-            {"sender": "best friend", "text": "ngl I didn't expect that text tonight", "delay": 1.5},
-            {"sender": "me", "text": "yeah an app had to tell me to reach out and that's the saddest part", "delay": 2.0},
-            {"sender": "system", "text": "Delivered", "delay": 2.0},
-        ],
-    ),
-    (
-        [
-            {"sender": "me", "text": "ok new fear just dropped", "delay": 1.2},
-            {"sender": "best friend", "text": "what now", "delay": 1.0},
-            {"sender": "me", "text": "I've known your birthday was coming up for 2 weeks and I still almost forgot", "delay": 2.5},
-            {"sender": "best friend", "text": "bro we literally have a tradition", "delay": 1.5},
-            {"sender": "me", "text": "HAD a tradition", "delay": 2.0},
-        ],
-        [
-            {"sender": "best friend", "text": "wait was that an AI message or was that you", "delay": 1.5},
-            {"sender": "me", "text": "the app wrote it but the feeling is 100% real", "delay": 2.0},
-            {"sender": "system", "text": "Read 11:58 PM", "delay": 2.0},
-        ],
-    ),
+    },
 ]
+
+
+def _fallback_script() -> dict:
+    """Return a script from fallbacks/scripts.json if present, else hardcoded."""
+    fallback_path = os.path.join(FALLBACKS_DIR, "scripts.json")
+    try:
+        with open(fallback_path) as f:
+            data = json.load(f)
+        if isinstance(data, list) and data:
+            candidate = random.choice(data)
+            if isinstance(candidate, dict) and "messages" in candidate:
+                return _validate_script(candidate)
+    except Exception:
+        pass
+    return dict(random.choice(_HARDCODED_FALLBACKS))

@@ -1,8 +1,10 @@
 """
-Nesso Content Engine V20 — Entry Point
+Nesso Content Engine V22 — Entry Point
 
 Starts the Telegram bot + a lightweight HTTP health check server
 so Railway doesn't kill the container for not binding a port.
+The Remotion Express server is launched in parallel by entrypoint.sh
+and is verified before this process starts.
 """
 
 import logging
@@ -11,37 +13,32 @@ import sys
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Load .env file if present (for local dev — Railway uses env vars directly)
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-log = logging.getLogger("nesso-v20")
+log = logging.getLogger("nesso-v22")
 
 
 class HealthHandler(BaseHTTPRequestHandler):
-    """Minimal HTTP handler for Railway health checks."""
-
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Nesso Content Engine V20 OK")
+        self.wfile.write(b"Nesso Content Engine V22 OK")
 
     def log_message(self, format, *args):
-        pass  # Suppress request logs
+        pass
 
 
 def start_health_server():
-    """Start a background HTTP server on $PORT (Railway) or 8080."""
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), HealthHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -49,21 +46,35 @@ def start_health_server():
     log.info("Health check server listening on port %d", port)
 
 
+def verify_remotion_ready():
+    """Best-effort ping to the Remotion server. Log but don't exit on failure."""
+    try:
+        from remotion_client import wait_until_ready, REMOTION_URL
+        if wait_until_ready(max_seconds=30):
+            log.info("Remotion server healthy at %s", REMOTION_URL)
+        else:
+            log.warning(
+                "Remotion server not responding at %s — renders will fail until it's up",
+                REMOTION_URL,
+            )
+    except Exception as e:
+        log.warning("Remotion health check skipped: %s", e)
+
+
 def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
-        log.error("TELEGRAM_BOT_TOKEN not set. Get one from @BotFather on Telegram.")
+        log.error("TELEGRAM_BOT_TOKEN not set. Get one from @BotFather.")
         sys.exit(1)
 
-    # Ensure dirs exist
     from config import TEMP_DIR, ASSETS_DIR
     os.makedirs(TEMP_DIR, exist_ok=True)
     os.makedirs(ASSETS_DIR, exist_ok=True)
 
-    # Start health check server so Railway doesn't kill the container
     start_health_server()
+    verify_remotion_ready()
 
-    log.info("Starting Nesso Content Engine V20...")
+    log.info("Starting Nesso Content Engine V22...")
 
     from telegram_bot import create_bot
     app = create_bot(token)
