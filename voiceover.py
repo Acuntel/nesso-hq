@@ -6,17 +6,26 @@ Three functions:
     -> single MP3, hook line read over the 2.5s hook segment. 0.25s intro silence.
 
   generate_story_voiceover(messages, render_dir, target_duration)
-    -> single MP3, messages spoken in sequence with silence padding aligned to
-       the IMessageStory bubble appearance timeline.
+    -> {"path": str, "timings": [{text, startSec, endSec, words: [...]}]}
+       messages spoken in sequence with silence padding aligned to the
+       IMessageStory bubble appearance timeline. Word timings are relative to
+       the segment's local 0 (not absolute in the final video).
 
   generate_demo_voiceover(narration_lines, render_dir, target_duration)
-    -> single MP3, each demo line placed at its scene-start timestamp.
+    -> {"path": str, "timings": [{text, startSec, endSec, words: [...]}]}
+       each demo line placed at its scene-start timestamp.
 
-All three return "" on any failure — the pipeline handles silent VO.
+Hook returns a plain path string (no captions — HookText is kinetic typography
+and doubles as its own caption). Story and demo return dicts so we can burn
+word-by-word captions into those segments.
+
+All three gracefully degrade to empty output on any failure — the pipeline
+handles silent/uncaptioned segments.
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import subprocess
@@ -44,18 +53,98 @@ def _have_tts() -> bool:
         return False
 
 
+def _group_chars_into_words(
+    chars: list[str],
+    starts: list[float],
+    ends: list[float],
+) -> list[dict]:
+    """
+    Turn ElevenLabs' per-character alignment into per-word timings.
+
+    A "word" is a contiguous run of non-whitespace characters. Its start time
+    is the first character's start; its end time is the last character's end.
+    Whitespace and punctuation characters are attached to the adjacent word.
+    """
+    words: list[dict] = []
+    cur_chars: list[str] = []
+    cur_start: float | None = None
+    cur_end: float | None = None
+
+    def flush() -> None:
+        nonlocal cur_chars, cur_start, cur_end
+        if cur_chars and cur_start is not None and cur_end is not None:
+            w = "".join(cur_chars).strip()
+            if w:
+                words.append(
+                    {"word": w, "start_sec": float(cur_start), "end_sec": float(cur_end)}
+                )
+        cur_chars = []
+        cur_start = None
+        cur_end = None
+
+    for c, s, e in zip(chars, starts, ends):
+        if c.isspace():
+            flush()
+            continue
+        if cur_start is None:
+            cur_start = s
+        cur_chars.append(c)
+        cur_end = e
+    flush()
+    return words
+
+
 def _tts_clip(
     text: str,
     voice_id: str,
     output_path: str,
     expressive: bool = True,
-) -> bool:
-    """Generate one ElevenLabs TTS clip. Returns True on success."""
+) -> tuple[bool, list[dict]]:
+    """
+    Generate one ElevenLabs TTS clip WITH word-level timings.
+
+    Returns (ok, words) where words = [{word, start_sec, end_sec}, ...] with
+    times relative to the start of this clip. Falls back to the non-timestamped
+    endpoint if the timestamped one fails, in which case words = [].
+    """
     try:
         from elevenlabs import ElevenLabs
 
         client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
         model_id = "eleven_multilingual_v2" if expressive else "eleven_turbo_v2_5"
+
+        # First try with timestamps (per-character alignment)
+        try:
+            resp = client.text_to_speech.convert_with_timestamps(
+                voice_id=voice_id,
+                text=text,
+                model_id=model_id,
+                output_format="mp3_44100_128",
+            )
+            audio_bytes = base64.b64decode(resp.audio_base_64)
+            with open(output_path, "wb") as f:
+                f.write(audio_bytes)
+            words: list[dict] = []
+            alignment = getattr(resp, "normalized_alignment", None) or getattr(
+                resp, "alignment", None
+            )
+            if alignment is not None:
+                chars = list(alignment.characters)
+                starts = list(alignment.character_start_times_seconds)
+                ends = list(alignment.character_end_times_seconds)
+                if chars and len(chars) == len(starts) == len(ends):
+                    words = _group_chars_into_words(chars, starts, ends)
+            if get_duration(output_path) <= 0.1:
+                return (False, [])
+            return (True, words)
+        except Exception as inner_e:
+            log.info(
+                "convert_with_timestamps failed for '%s' (%s) — falling back to plain convert",
+                text[:30],
+                inner_e,
+            )
+
+        # Fallback — plain audio, no word timings
         audio_gen = client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
@@ -65,10 +154,10 @@ def _tts_clip(
         with open(output_path, "wb") as f:
             for chunk in audio_gen:
                 f.write(chunk)
-        return get_duration(output_path) > 0.1
+        return (get_duration(output_path) > 0.1, [])
     except Exception as e:
         log.warning("TTS failed for '%s': %s", text[:40], e)
-        return False
+        return (False, [])
 
 
 def _silence(duration: float, output_path: str) -> str:
@@ -148,7 +237,8 @@ def generate_hook_voiceover(
     output_path = os.path.join(render_dir, "hook_vo.mp3")
     raw = os.path.join(render_dir, "hook_vo_raw.mp3")
 
-    if not _tts_clip(hook_line, ELEVENLABS_VOICE_ID, raw, expressive=True):
+    ok, _words = _tts_clip(hook_line, ELEVENLABS_VOICE_ID, raw, expressive=True)
+    if not ok:
         return ""
 
     raw_dur = get_duration(raw)
@@ -201,7 +291,7 @@ def generate_story_voiceover(
     messages: list[dict],
     render_dir: str,
     target_duration: float,
-) -> str:
+) -> dict:
     """
     Build a story VO timeline matching the IMessageStory bubble schedule.
 
@@ -212,19 +302,29 @@ def generate_story_voiceover(
     So the VO for message i starts at the bubble-appear moment and must fit
     within ~0.5s LESS than the message's delay (leaving room for the bubble to
     settle). System messages are silent.
+
+    Returns {"path": str, "timings": [...]} where timings are caption lines
+    with word-level timings, relative to the story segment's local 0.
+    Empty path on failure; empty timings if the timestamp API isn't available.
     """
     if not _have_tts():
         log.info("TTS unavailable — story will be silent")
-        return ""
+        return {"path": "", "timings": []}
 
     output_path = os.path.join(render_dir, "story_vo.mp3")
     intro_pad = 0.1
     typing_pad_per_other = 0.35
 
     parts: list[str] = []
+    # Cursor tracks where the NEXT part will start (in seconds) relative to the
+    # segment's local 0. Used to offset TTS word timings into the segment frame.
+    cursor: float = 0.0
+    caption_lines: list[dict] = []
+
     # Intro silence so VO doesn't talk over the first bubble's spring-in
     silence0 = os.path.join(render_dir, "story_silence_intro.mp3")
     parts.append(_silence(intro_pad, silence0))
+    cursor += intro_pad
 
     for i, msg in enumerate(messages):
         delay = float(msg.get("delay", 1.2))
@@ -235,6 +335,7 @@ def generate_story_voiceover(
         if sender == "other" and i > 0:
             typing_silence = os.path.join(render_dir, f"story_typing_{i}.mp3")
             parts.append(_silence(typing_pad_per_other, typing_silence))
+            cursor += typing_pad_per_other
 
         # Slot duration = how long this bubble is on screen before the next event
         slot_dur = max(0.3, delay - 0.1)  # small headroom for next beat
@@ -242,19 +343,23 @@ def generate_story_voiceover(
         if sender == "system" or not text.strip() or text.strip() == "...":
             gap = os.path.join(render_dir, f"story_gap_{i}.mp3")
             parts.append(_silence(slot_dur, gap))
+            cursor += slot_dur
             continue
 
         # Pick voice by sender — "me" is default voice, "other" is voice 2
         voice_id = ELEVENLABS_VOICE_ID if sender == "me" else ELEVENLABS_VOICE_ID_2
 
         raw_path = os.path.join(render_dir, f"story_vo_{i:02d}.mp3")
-        ok = _tts_clip(text, voice_id, raw_path, expressive=True)
+        ok, words = _tts_clip(text, voice_id, raw_path, expressive=True)
         if not ok:
             gap = os.path.join(render_dir, f"story_gap_fail_{i}.mp3")
             parts.append(_silence(slot_dur, gap))
+            cursor += slot_dur
             continue
 
         clip_dur = get_duration(raw_path)
+        clip_offset = cursor  # where THIS clip starts in the segment timeline
+
         if clip_dur > slot_dur:
             # Clip is too long — trim to fit the slot
             trim_path = os.path.join(render_dir, f"story_vo_{i:02d}_t.mp3")
@@ -269,11 +374,58 @@ def generate_story_voiceover(
                 capture_output=True, timeout=FFMPEG_TIMEOUT,
             )
             parts.append(trim_path)
+            actual_clip_dur = slot_dur
+            # Drop words that would extend past the trimmed clip's end
+            words = [w for w in words if w["start_sec"] < slot_dur - 0.02]
+            for w in words:
+                w["end_sec"] = min(w["end_sec"], slot_dur)
         else:
             # Pad the clip with trailing silence so it fills its slot
             padded = os.path.join(render_dir, f"story_vo_{i:02d}_p.mp3")
             _pad_to(raw_path, slot_dur, padded)
             parts.append(padded)
+            actual_clip_dur = slot_dur
+
+        cursor += actual_clip_dur
+
+        # Offset each word's time by where the clip starts in the segment,
+        # then record one caption line for the whole message.
+        offset_words = [
+            {
+                "word": w["word"],
+                "startSec": clip_offset + float(w["start_sec"]),
+                "endSec": clip_offset + float(w["end_sec"]),
+            }
+            for w in words
+        ]
+        if offset_words:
+            line_start = offset_words[0]["startSec"]
+            line_end = offset_words[-1]["endSec"]
+        else:
+            # No alignment came back — fall back to uniform word spacing across
+            # the clip so we still get something reasonable.
+            spoken_dur = min(clip_dur, actual_clip_dur)
+            ws = text.split()
+            per = spoken_dur / max(1, len(ws))
+            offset_words = [
+                {
+                    "word": w,
+                    "startSec": clip_offset + k * per,
+                    "endSec": clip_offset + (k + 1) * per,
+                }
+                for k, w in enumerate(ws)
+            ]
+            line_start = clip_offset
+            line_end = clip_offset + spoken_dur
+
+        caption_lines.append(
+            {
+                "text": text,
+                "startSec": float(line_start),
+                "endSec": float(line_end),
+                "words": offset_words,
+            }
+        )
 
     _concat_audio(parts, output_path, target_duration=target_duration)
 
@@ -286,8 +438,16 @@ def generate_story_voiceover(
                 pass
 
     actual = get_duration(output_path)
-    log.info("story VO: %.1fs (target %.1fs)", actual, target_duration)
-    return output_path if actual > 0.5 else ""
+    log.info(
+        "story VO: %.1fs (target %.1fs) — %d caption lines",
+        actual,
+        target_duration,
+        len(caption_lines),
+    )
+    return {
+        "path": output_path if actual > 0.5 else "",
+        "timings": caption_lines if actual > 0.5 else [],
+    }
 
 
 # ── Demo voiceover ─────────────────────────────────────────────────────────
@@ -296,46 +456,64 @@ def generate_demo_voiceover(
     narration_lines: list[tuple[str, float]],
     render_dir: str,
     target_duration: float,
-) -> str:
+) -> dict:
     """
     Demo VO: each narration_lines entry is (text, scene_start_seconds).
-    We lay out silence + TTS clips at those absolute offsets, then trim to target_duration.
+    Returns {"path": str, "timings": [...]} with word-level caption timings
+    relative to the demo segment's local 0. Empty path on failure.
     """
     if not _have_tts() or not narration_lines:
         log.info("TTS unavailable or no narration — demo will be silent")
-        return ""
+        return {"path": "", "timings": []}
 
     output_path = os.path.join(render_dir, "demo_vo.mp3")
 
-    # Generate every TTS clip first
-    clip_paths: list[tuple[str, float, float]] = []  # (path, scene_start, duration)
+    # Generate every TTS clip with word alignment
+    clip_records: list[dict] = []
     for i, (text, scene_start) in enumerate(narration_lines):
         raw_path = os.path.join(render_dir, f"demo_vo_{i:02d}.mp3")
-        if _tts_clip(text, ELEVENLABS_VOICE_ID, raw_path, expressive=True):
-            clip_paths.append((raw_path, scene_start, get_duration(raw_path)))
+        ok, words = _tts_clip(text, ELEVENLABS_VOICE_ID, raw_path, expressive=True)
+        if ok:
+            clip_records.append(
+                {
+                    "path": raw_path,
+                    "text": text,
+                    "scene_start": scene_start,
+                    "duration": get_duration(raw_path),
+                    "words": words,
+                }
+            )
 
-    if not clip_paths:
-        return ""
+    if not clip_records:
+        return {"path": "", "timings": []}
 
     # Build timeline: silence[0..first_start] + clip0 + silence[...] + clip1 + ...
     parts: list[str] = []
+    caption_lines: list[dict] = []
     cursor = 0.0
-    for i, (path, start, dur) in enumerate(clip_paths):
+    for i, rec in enumerate(clip_records):
+        start = rec["scene_start"]
+        dur = rec["duration"]
         gap = start - cursor
         if gap > 0.02:
             silence_path = os.path.join(render_dir, f"demo_gap_{i}.mp3")
             parts.append(_silence(gap, silence_path))
             cursor += gap
 
-        # Trim the clip if it would overlap the next narration start
-        next_start = clip_paths[i + 1][1] if i + 1 < len(clip_paths) else target_duration
-        max_dur = max(0.3, next_start - start - 0.15)  # small gap before next
+        next_start = (
+            clip_records[i + 1]["scene_start"]
+            if i + 1 < len(clip_records)
+            else target_duration
+        )
+        max_dur = max(0.3, next_start - start - 0.15)
+
+        clip_offset = cursor  # when this clip begins in the demo timeline
         if dur > max_dur:
             trim_path = os.path.join(render_dir, f"demo_vo_{i:02d}_t.mp3")
             subprocess.run(
                 [
                     "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-                    "-i", path,
+                    "-i", rec["path"],
                     "-t", f"{max_dur:.3f}",
                     "-c:a", "libmp3lame", "-b:a", "128k",
                     trim_path,
@@ -343,12 +521,55 @@ def generate_demo_voiceover(
                 capture_output=True, timeout=FFMPEG_TIMEOUT,
             )
             parts.append(trim_path)
-            cursor += max_dur
+            actual_dur = max_dur
+            # Drop words past the trim
+            words = [w for w in rec["words"] if w["start_sec"] < max_dur - 0.02]
+            for w in words:
+                w["end_sec"] = min(w["end_sec"], max_dur)
         else:
-            parts.append(path)
-            cursor += dur
+            parts.append(rec["path"])
+            actual_dur = dur
+            words = rec["words"]
 
-    # Trailing silence to fill target duration
+        cursor += actual_dur
+
+        # Offset words into the segment timeline and append a caption line
+        offset_words = [
+            {
+                "word": w["word"],
+                "startSec": clip_offset + float(w["start_sec"]),
+                "endSec": clip_offset + float(w["end_sec"]),
+            }
+            for w in words
+        ]
+        if offset_words:
+            line_start = offset_words[0]["startSec"]
+            line_end = offset_words[-1]["endSec"]
+        else:
+            # Fallback to uniform spacing if ElevenLabs didn't return alignment
+            spoken_dur = min(dur, actual_dur)
+            ws = rec["text"].split()
+            per = spoken_dur / max(1, len(ws))
+            offset_words = [
+                {
+                    "word": w,
+                    "startSec": clip_offset + k * per,
+                    "endSec": clip_offset + (k + 1) * per,
+                }
+                for k, w in enumerate(ws)
+            ]
+            line_start = clip_offset
+            line_end = clip_offset + spoken_dur
+
+        caption_lines.append(
+            {
+                "text": rec["text"],
+                "startSec": float(line_start),
+                "endSec": float(line_end),
+                "words": offset_words,
+            }
+        )
+
     if cursor < target_duration:
         tail = os.path.join(render_dir, "demo_tail.mp3")
         parts.append(_silence(target_duration - cursor, tail))
@@ -363,5 +584,13 @@ def generate_demo_voiceover(
                 pass
 
     actual = get_duration(output_path)
-    log.info("demo VO: %.1fs (target %.1fs)", actual, target_duration)
-    return output_path if actual > 0.5 else ""
+    log.info(
+        "demo VO: %.1fs (target %.1fs) — %d caption lines",
+        actual,
+        target_duration,
+        len(caption_lines),
+    )
+    return {
+        "path": output_path if actual > 0.5 else "",
+        "timings": caption_lines if actual > 0.5 else [],
+    }

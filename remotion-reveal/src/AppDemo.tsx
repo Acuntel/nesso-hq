@@ -8,6 +8,7 @@ import {
   spring,
   Img,
 } from "remotion";
+import { CaptionTrack, type CaptionLine } from "./CaptionTrack";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Nesso app-faithful click-through. 8 seconds, 8 beats.
@@ -24,18 +25,25 @@ export type AppDemoProps = {
   monthsSinceText: number;
   aiMessage: string;
   logoUrl?: string;
+  /**
+   * Optional word-timed captions synced to the demo narration VO.
+   * Relative to this segment's local 0. Rendered at the lower third.
+   */
+  captions?: CaptionLine[];
 };
 
 // Scene timing — sum to 8.0s. Edit here to re-time the whole composition.
+// Beat-matched to the signature 80 BPM music (0.75s per beat, 0.375s per half-beat).
+// Every boundary lands on a beat or half-beat for a "scored" feel.
 const SCENES = {
-  HOME: { start: 0.0, end: 1.5 }, // Inner Circle grid + bar drain
-  TAP_CARD: { start: 1.5, end: 1.9 }, // finger taps Sarah
-  SLIDE: { start: 1.9, end: 2.5 }, // iOS push transition
-  PERSON: { start: 2.5, end: 3.7 }, // person detail with CTA pulse
-  TAP_REACH: { start: 3.7, end: 4.0 }, // tap reach out
-  SHEET_UP: { start: 4.0, end: 4.5 }, // sheet slides up
-  AI_TYPING: { start: 4.5, end: 6.5 }, // AI generates message
-  SEND: { start: 6.5, end: 8.0 }, // tap send, bubble flies, flash
+  HOME: { start: 0.0, end: 1.5 }, // 2 beats — Inner Circle grid + bar drain
+  TAP_CARD: { start: 1.5, end: 2.25 }, // 1 beat — finger taps Sarah (heavier weight)
+  SLIDE: { start: 2.25, end: 3.0 }, // 1 beat — iOS push transition
+  PERSON: { start: 3.0, end: 4.5 }, // 2 beats — person detail with CTA pulse
+  TAP_REACH: { start: 4.5, end: 4.875 }, // 0.5 beat — quick tap reach out
+  SHEET_UP: { start: 4.875, end: 5.25 }, // 0.5 beat — snappy sheet slide
+  AI_TYPING: { start: 5.25, end: 6.75 }, // 2 beats — AI generates message
+  SEND: { start: 6.75, end: 8.0 }, // 1.67 beats — tap send, bubble flies, flash
 } as const;
 
 const COLORS = {
@@ -1191,6 +1199,7 @@ export const AppDemo: React.FC<AppDemoProps> = ({
   monthsSinceText,
   aiMessage,
   logoUrl,
+  captions,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -1391,6 +1400,9 @@ export const AppDemo: React.FC<AppDemoProps> = ({
             cy={1760}
           />
         )}
+
+      {/* Burned-in captions synced to demo narration — top z-index */}
+      <CaptionTrack captions={captions} />
     </AbsoluteFill>
   );
 };

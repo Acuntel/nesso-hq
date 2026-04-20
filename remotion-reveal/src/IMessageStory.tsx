@@ -7,6 +7,7 @@ import {
   Easing,
   spring,
 } from "remotion";
+import { CaptionTrack, type CaptionLine } from "./CaptionTrack";
 
 export type IMessageStoryMessage = {
   /** "me" = outgoing blue bubble (right), "other" = incoming gray (left), "system" = centered gray text. */
@@ -21,6 +22,11 @@ export type IMessageStoryMessage = {
 export type IMessageStoryProps = {
   contactName: string;
   messages: IMessageStoryMessage[];
+  /**
+   * Optional word-timed captions, relative to this segment's local 0.
+   * Rendered at the lower third by CaptionTrack for muted-viewer retention.
+   */
+  captions?: CaptionLine[];
 };
 
 const IOS_BLUE = "#0A84FF"; // iMessage blue dark-mode
@@ -236,6 +242,7 @@ type BubbleState = {
 export const IMessageStory: React.FC<IMessageStoryProps> = ({
   contactName,
   messages,
+  captions,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -418,6 +425,9 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
           );
         })}
       </div>
+
+      {/* Burned-in captions for muted viewers — lower-third overlay */}
+      <CaptionTrack captions={captions} />
     </AbsoluteFill>
   );
 };

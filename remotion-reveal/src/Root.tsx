@@ -70,6 +70,7 @@ export const RemotionRoot: React.FC = () => {
               emphasis: false,
             },
           ],
+          captions: [],
         }}
       />
 
@@ -87,6 +88,7 @@ export const RemotionRoot: React.FC = () => {
           aiMessage:
             "hey, been thinking about you — free this weekend to actually catch up?",
           logoUrl: "",
+          captions: [],
         }}
       />
 

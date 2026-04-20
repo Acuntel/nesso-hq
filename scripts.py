@@ -156,6 +156,56 @@ def _attach_global(
     return script
 
 
+def generate_hook_variants(n: int = 3, seed_script: dict | None = None) -> list[dict]:
+    """
+    Produce ``n`` variant scripts that share everything EXCEPT the hook.
+
+    Each returned dict has the same ``contact_name``, ``person_name``,
+    ``months_since``, ``messages`` and ``ai_message`` as the seed (generated
+    once if not provided), but a DIFFERENT ``hook_line`` / ``hook_subline`` /
+    ``palette`` drawn from ``config.get_random_hook()`` (which already avoids
+    consecutive repeats).
+
+    If the pool has at least ``n`` distinct hooks this guarantees all ``n``
+    variants have unique hook lines — the pool helper avoids consecutive
+    repeats but could still return a duplicate over multiple calls, so we
+    explicitly dedupe here against already-chosen lines.
+    """
+    if n < 1:
+        raise ValueError("n must be >= 1")
+
+    base = seed_script if seed_script is not None else generate_script()
+
+    variants: list[dict] = []
+    chosen_lines: set[str] = set()
+
+    for _ in range(n):
+        attempts = 0
+        hook_line, hook_subline, palette = get_random_hook()
+        # Try up to 12 times to get a hook_line distinct from the ones we've
+        # already picked for this batch. If the pool is tiny this bails out
+        # and allows a duplicate rather than looping forever.
+        while hook_line in chosen_lines and attempts < 12:
+            hook_line, hook_subline, palette = get_random_hook()
+            attempts += 1
+        chosen_lines.add(hook_line)
+
+        variants.append(
+            {
+                "contact_name": base["contact_name"],
+                "person_name": base["person_name"],
+                "months_since": base["months_since"],
+                "messages": [dict(m) for m in base["messages"]],
+                "ai_message": base["ai_message"],
+                "hook_line": hook_line,
+                "hook_subline": hook_subline,
+                "palette": palette,
+            }
+        )
+
+    return variants
+
+
 def _validate_script(data: dict) -> dict:
     """Normalize and validate the Claude response. Raises on bad data."""
     if not isinstance(data, dict):

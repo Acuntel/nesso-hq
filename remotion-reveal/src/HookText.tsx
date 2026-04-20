@@ -95,6 +95,18 @@ export const HookText: React.FC<HookTextProps> = ({
   const perWordGap = (endFrame - startFrame) / Math.max(1, words.length);
   const fadeFrames = Math.max(6, Math.round(fps * 0.22));
 
+  // Ghost preview — full line visible at frame 0 so the TikTok thumbnail isn't blank.
+  // Fades to 0 by frame 6, handing off to the word-by-word stagger.
+  const ghostEnd = 6;
+  const ghostOpacity = interpolate(frame, [0, ghostEnd], [0.22, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const ghostBlur = interpolate(frame, [0, ghostEnd], [2, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
   // Subline appears at 70%
   const sublineStart = durationInFrames * 0.7;
 
@@ -213,6 +225,50 @@ export const HookText: React.FC<HookTextProps> = ({
           pointerEvents: "none",
         }}
       />
+
+      {/* Ghost preview layer — all words visible at frame 0 so the TikTok
+          thumbnail (pulled from frame 0) shows the full hook line. Fades out
+          by frame 6, then the staggered layer takes over. */}
+      {ghostOpacity > 0 && (
+        <AbsoluteFill
+          style={{
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "0 80px",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              gap: "14px 18px",
+              maxWidth: 960,
+              opacity: ghostOpacity,
+              filter: `blur(${ghostBlur}px)`,
+            }}
+          >
+            {words.map((word, i) => (
+              <span
+                key={`ghost-${i}`}
+                style={{
+                  fontFamily:
+                    "'SF Pro Display', 'Geist', 'Manrope', 'DM Sans', sans-serif",
+                  fontSize: words.length > 8 ? 88 : 108,
+                  fontWeight: 700,
+                  color: "white",
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.08,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {word}
+              </span>
+            ))}
+          </div>
+        </AbsoluteFill>
+      )}
 
       {/* Main line — word stagger */}
       <AbsoluteFill

@@ -198,10 +198,17 @@ def _build_audio(
 
     has_story_vo = bool(story_vo_path) and os.path.exists(story_vo_path)
     has_demo_vo = bool(demo_vo_path) and os.path.exists(demo_vo_path)
+    has_hook_vo = bool(hook_vo_path) and os.path.exists(hook_vo_path)
     has_music = bool(music_path) and os.path.exists(music_path)
     has_psych = bool(psych_sfx_path) and os.path.exists(psych_sfx_path)
 
-    music_vol = MUSIC_VOLUME_WITH_VO if (has_story_vo or has_demo_vo) else MUSIC_VOLUME_NO_VO
+    any_vo = has_story_vo or has_demo_vo or has_hook_vo
+    # When ducking is active, bump music base volume so it "breathes" up between VO beats.
+    # Sidechaincompress will pull it down to ~0.10 while VO speaks.
+    if any_vo:
+        music_vol = 0.22
+    else:
+        music_vol = MUSIC_VOLUME_NO_VO
 
     inputs: list[str] = []
     filter_parts: list[str] = []
@@ -214,6 +221,18 @@ def _build_audio(
     mix_labels.append("[base_a]")
     idx += 1
 
+    vo_labels: list[str] = []
+
+    # Hook voiceover (read the hook_line over the 2.5s segment)
+    if has_hook_vo:
+        inputs.extend(["-i", hook_vo_path])
+        filter_parts.append(
+            f"[{idx}:a]volume={VOICEOVER_VOLUME},afade=t=in:st=0:d=0.15[hook_vo]"
+        )
+        mix_labels.append("[hook_vo]")
+        vo_labels.append("[hook_vo]")
+        idx += 1
+
     # Story VO
     if has_story_vo:
         inputs.extend(["-i", story_vo_path])
@@ -224,6 +243,7 @@ def _build_audio(
             f"adelay={delay_ms}|{delay_ms}[story_vo]"
         )
         mix_labels.append("[story_vo]")
+        vo_labels.append("[story_vo]")
         idx += 1
 
     # Demo VO
@@ -236,9 +256,11 @@ def _build_audio(
             f"adelay={delay_ms}|{delay_ms}[demo_vo]"
         )
         mix_labels.append("[demo_vo]")
+        vo_labels.append("[demo_vo]")
         idx += 1
 
     # Music — starts at hook_dur-0.8 (fade in over hook end), fades out during close
+    music_pre_label = None  # label before ducking (if any VO present)
     if has_music:
         music_start = max(0, hook_dur - 0.8)
         music_dur = total_dur - music_start - 0.2
@@ -252,8 +274,51 @@ def _build_audio(
             f"afade=t=out:st={fade_out_start:.2f}:d={MUSIC_FADE_OUT},"
             f"adelay={delay_ms}|{delay_ms}[music_a]"
         )
-        mix_labels.append("[music_a]")
+        music_pre_label = "[music_a]"
         idx += 1
+
+    # Build ducked music: sum VO → use as sidechain key → compress music when VO speaks.
+    # Only applies if we have BOTH music AND at least one VO; otherwise music passes through.
+    # Trick: each VO label is consumed once by amix. To also feed it into sidechaincompress,
+    # we asplit each VO source into a "_mix" copy (used by the master amix) and a "_sc" copy
+    # (summed into [vo_sum] and used as the sidechain key).
+    music_final_label = music_pre_label
+    if has_music and vo_labels:
+        sc_labels = []
+        new_mix_labels = []
+        for ml in mix_labels:
+            if ml in vo_labels:
+                stripped = ml.strip("[]")
+                mix_copy = f"[{stripped}_mix]"
+                sc_copy = f"[{stripped}_sc]"
+                filter_parts.append(f"{ml}asplit=2{mix_copy}{sc_copy}")
+                new_mix_labels.append(mix_copy)
+                sc_labels.append(sc_copy)
+            else:
+                new_mix_labels.append(ml)
+        mix_labels = new_mix_labels
+
+        # Sum VO copies into [vo_sum]
+        if len(sc_labels) == 1:
+            filter_parts.append(f"{sc_labels[0]}acopy[vo_sum]")
+        else:
+            sc_concat = "".join(sc_labels)
+            filter_parts.append(
+                f"{sc_concat}amix=inputs={len(sc_labels)}:duration=longest:normalize=0[vo_sum]"
+            )
+
+        # Sidechain-compress music using [vo_sum] as the key input
+        filter_parts.append(
+            f"{music_pre_label}[vo_sum]sidechaincompress="
+            f"threshold=0.05:ratio=6:attack=5:release=250:level_sc=1[music_ducked]"
+        )
+        music_final_label = "[music_ducked]"
+
+    # Attach the (possibly ducked) music label to the master mix. Earlier logic
+    # declared the [music_a] output but never added it to mix_labels, which made
+    # the FFmpeg filtergraph reject it as "unconnected" and the whole mix failed.
+    if has_music and music_final_label:
+        mix_labels.append(music_final_label)
 
     # PSYCH sfx — hits at hook_dur-0.15 (bridges into the story cut)
     if has_psych:
@@ -266,16 +331,6 @@ def _build_audio(
             f"adelay={delay_ms}|{delay_ms}[psych_a]"
         )
         mix_labels.append("[psych_a]")
-        idx += 1
-
-    # Hook voiceover (read the hook_line over the 2.5s segment)
-    has_hook_vo = bool(hook_vo_path) and os.path.exists(hook_vo_path)
-    if has_hook_vo:
-        inputs.extend(["-i", hook_vo_path])
-        filter_parts.append(
-            f"[{idx}:a]volume={VOICEOVER_VOLUME},afade=t=in:st=0:d=0.15[hook_vo]"
-        )
-        mix_labels.append("[hook_vo]")
         idx += 1
 
     # SFX bus — each placement: {"path": str, "at": float_seconds, "volume": float}
@@ -302,6 +357,9 @@ def _build_audio(
 
     if sfx_idx:
         log.info("sfx: placed %d hits", sfx_idx)
+
+    if vo_labels and music_final_label == "[music_ducked]":
+        log.info("audio: sidechain ducking active on %d VO source(s)", len(vo_labels))
 
     mix_inputs = "".join(mix_labels)
     # Master bus: mix → limiter (prevents clipping when SFX + VO + music stack)

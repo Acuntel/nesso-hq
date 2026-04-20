@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 
 from analytics import get_stats
-from pipeline import render_batch, render_single_video
+from pipeline import render_batch, render_single_video, render_variants
 
 log = logging.getLogger(__name__)
 
@@ -125,28 +125,53 @@ async def _send_video_result(update, result, video_num=""):
 
 
 async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /make [count] command."""
-    count = 1
+    """
+    /make           → 3 hook variants of one script (pick the best)
+    /make N         → N fully independent videos (distinct scripts)
+    """
+    explicit_count = None
     if context.args:
         try:
-            count = int(context.args[0])
-            count = max(1, min(count, 10))
+            explicit_count = max(1, min(int(context.args[0]), 10))
         except ValueError:
             await update.message.reply_text("Usage: /make or /make <number 1-10>")
             return
 
+    if explicit_count is None:
+        # Variant mode: same script, 3 different hooks
+        await update.message.reply_text(
+            "🎬 Generating 3 hook variants of one script...\n"
+            "~2-3 min total (story + demo rendered once, hook × 3)."
+        )
+        start_time = time.time()
+        results = render_variants(n=3)
+        elapsed = time.time() - start_time
+
+        for i, result in enumerate(results):
+            variant_num = i + 1
+            variant_total = len(results)
+            video_num = f"[Variant {variant_num}/{variant_total}] "
+            await _send_video_result(update, result, video_num)
+
+        ok = sum(1 for r in results if not r["error"])
+        await update.message.reply_text(
+            f"✅ Variants done in {elapsed:.0f}s — {ok}/{len(results)} successful. "
+            f"Pick the best hook and ship it."
+        )
+        return
+
+    # Explicit count: N fully independent videos (legacy batch mode)
+    count = explicit_count
     await update.message.reply_text(
-        f"🎬 Generating {count} video{'s' if count > 1 else ''}...\n"
-        "This takes 1-3 minutes per video."
+        f"🎬 Generating {count} independent video{'s' if count > 1 else ''}...\n"
+        "Each has its own script. ~2-3 min per video."
     )
 
     start_time = time.time()
-
     if count == 1:
         results = [render_single_video()]
     else:
         results = render_batch(count)
-
     elapsed = time.time() - start_time
 
     for i, result in enumerate(results):
