@@ -269,14 +269,18 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
       <BackChevron />
       <ContactHeader name={contactName} />
 
-      {/* Messages container — bottom anchored, column */}
+      {/* Messages container — bottom anchored, column.
+          Bottom padding = 460 so bubbles stop at y≈1460, which leaves
+          a clean 60px gap above the caption ribbon (top at y≈1516,
+          positionY=0.79 below) and keeps bubbles well clear of TikTok's
+          bottom UI band (≈180px). Messages area = y 220 → 1460. */}
       <div
         style={{
           position: "absolute",
-          top: TOP_BAR_HEIGHT,
+          top: TOP_BAR_HEIGHT + 40,
           left: 0,
           right: 0,
-          bottom: 180, // leave safe space for TikTok UI
+          bottom: 460,
           padding: "0 28px",
           display: "flex",
           flexDirection: "column",
@@ -426,8 +430,54 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
         })}
       </div>
 
-      {/* Burned-in captions for muted viewers — lower-third overlay */}
-      <CaptionTrack captions={captions} />
+      {/* Burned-in captions for muted viewers. Positioned at y≈0.79 in the
+          clean band between bubble area (ends ~y1460) and TikTok UI (y1740),
+          with a smaller font size so the ribbon stays compact. */}
+      <CaptionTrack captions={captions} positionY={0.79} fontSize={38} />
+
+      {/* Opening whip-flash — 4 frames of white fading out on the cut from
+          the kinetic hook. Mirrors the hook's closing flash so the hard
+          cut feels like a whip-pan rather than a dead splice. */}
+      {(() => {
+        const flashOp = interpolate(frame, [0, 2, 6], [0.55, 0.25, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        });
+        if (flashOp <= 0) return null;
+        return (
+          <AbsoluteFill
+            style={{
+              background: "white",
+              opacity: flashOp,
+              pointerEvents: "none",
+              zIndex: 10000,
+            }}
+          />
+        );
+      })()}
+
+      {/* Closing riser-synced flash — 5 frames of soft white in the last
+          0.2s so the cut INTO the app demo has its own punch. */}
+      {(() => {
+        const flashStart = durationInFrames - Math.round(fps * 0.2);
+        const flashOp = interpolate(
+          frame,
+          [flashStart, flashStart + 3, durationInFrames],
+          [0, 0.4, 0],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+        );
+        if (flashOp <= 0) return null;
+        return (
+          <AbsoluteFill
+            style={{
+              background: "white",
+              opacity: flashOp,
+              pointerEvents: "none",
+              zIndex: 10000,
+            }}
+          />
+        );
+      })()}
     </AbsoluteFill>
   );
 };

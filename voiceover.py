@@ -326,6 +326,11 @@ def generate_story_voiceover(
     parts.append(_silence(intro_pad, silence0))
     cursor += intro_pad
 
+    # Per-message actual on-screen durations (we may extend them if VO needs
+    # more room). Indexed the same as `messages`. Passed back to pipeline so
+    # the IMessageStory composition can be re-timed to stay in sync.
+    actual_delays: list[float] = []
+
     for i, msg in enumerate(messages):
         delay = float(msg.get("delay", 1.2))
         sender = msg["sender"]
@@ -337,56 +342,42 @@ def generate_story_voiceover(
             parts.append(_silence(typing_pad_per_other, typing_silence))
             cursor += typing_pad_per_other
 
-        # Slot duration = how long this bubble is on screen before the next event
-        slot_dur = max(0.3, delay - 0.1)  # small headroom for next beat
-
         if sender == "system" or not text.strip() or text.strip() == "...":
+            slot_dur = max(0.3, delay - 0.1)
             gap = os.path.join(render_dir, f"story_gap_{i}.mp3")
             parts.append(_silence(slot_dur, gap))
             cursor += slot_dur
+            actual_delays.append(slot_dur)
             continue
 
-        # Pick voice by sender — "me" is default voice, "other" is voice 2
         voice_id = ELEVENLABS_VOICE_ID if sender == "me" else ELEVENLABS_VOICE_ID_2
 
         raw_path = os.path.join(render_dir, f"story_vo_{i:02d}.mp3")
         ok, words = _tts_clip(text, voice_id, raw_path, expressive=True)
         if not ok:
+            slot_dur = max(0.3, delay - 0.1)
             gap = os.path.join(render_dir, f"story_gap_fail_{i}.mp3")
             parts.append(_silence(slot_dur, gap))
             cursor += slot_dur
+            actual_delays.append(slot_dur)
             continue
 
         clip_dur = get_duration(raw_path)
-        clip_offset = cursor  # where THIS clip starts in the segment timeline
+        clip_offset = cursor
 
-        if clip_dur > slot_dur:
-            # Clip is too long — trim to fit the slot
-            trim_path = os.path.join(render_dir, f"story_vo_{i:02d}_t.mp3")
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-                    "-i", raw_path,
-                    "-t", f"{slot_dur:.3f}",
-                    "-c:a", "libmp3lame", "-b:a", "128k",
-                    trim_path,
-                ],
-                capture_output=True, timeout=FFMPEG_TIMEOUT,
-            )
-            parts.append(trim_path)
-            actual_clip_dur = slot_dur
-            # Drop words that would extend past the trimmed clip's end
-            words = [w for w in words if w["start_sec"] < slot_dur - 0.02]
-            for w in words:
-                w["end_sec"] = min(w["end_sec"], slot_dur)
-        else:
-            # Pad the clip with trailing silence so it fills its slot
-            padded = os.path.join(render_dir, f"story_vo_{i:02d}_p.mp3")
-            _pad_to(raw_path, slot_dur, padded)
-            parts.append(padded)
-            actual_clip_dur = slot_dur
+        # NEVER trim a VO mid-word. Instead, extend the on-screen slot so the
+        # viewer actually hears the full message. Target slot = max(delay, tts+0.4).
+        slot_dur = max(0.3, delay - 0.1)
+        if clip_dur + 0.2 > slot_dur:
+            slot_dur = clip_dur + 0.4  # 0.4s breathing room after VO ends
 
+        # Pad the raw clip with trailing silence so its playback matches slot_dur
+        padded = os.path.join(render_dir, f"story_vo_{i:02d}_p.mp3")
+        _pad_to(raw_path, slot_dur, padded)
+        parts.append(padded)
+        actual_clip_dur = slot_dur
         cursor += actual_clip_dur
+        actual_delays.append(actual_clip_dur)
 
         # Offset each word's time by where the clip starts in the segment,
         # then record one caption line for the whole message.
@@ -447,6 +438,8 @@ def generate_story_voiceover(
     return {
         "path": output_path if actual > 0.5 else "",
         "timings": caption_lines if actual > 0.5 else [],
+        "actual_delays": actual_delays,
+        "total_duration": actual,
     }
 
 

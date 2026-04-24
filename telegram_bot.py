@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 
 from analytics import get_stats
-from pipeline import render_batch, render_single_video, render_variants
+from pipeline import render_batch, render_single_video
 
 log = logging.getLogger(__name__)
 
@@ -126,61 +126,47 @@ async def _send_video_result(update, result, video_num=""):
 
 async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    /make           → 3 hook variants of one script (pick the best)
-    /make N         → N fully independent videos (distinct scripts)
+    /make     → 1 video
+    /make N   → N fully independent videos (distinct scripts, hooks, music)
     """
-    explicit_count = None
+    count = 1
     if context.args:
         try:
-            explicit_count = max(1, min(int(context.args[0]), 10))
+            count = max(1, min(int(context.args[0]), 10))
         except ValueError:
             await update.message.reply_text("Usage: /make or /make <number 1-10>")
             return
 
-    if explicit_count is None:
-        # Variant mode: same script, 3 different hooks
-        await update.message.reply_text(
-            "🎬 Generating 3 hook variants of one script...\n"
-            "~2-3 min total (story + demo rendered once, hook × 3)."
-        )
-        start_time = time.time()
-        results = render_variants(n=3)
-        elapsed = time.time() - start_time
-
-        for i, result in enumerate(results):
-            variant_num = i + 1
-            variant_total = len(results)
-            video_num = f"[Variant {variant_num}/{variant_total}] "
-            await _send_video_result(update, result, video_num)
-
-        ok = sum(1 for r in results if not r["error"])
-        await update.message.reply_text(
-            f"✅ Variants done in {elapsed:.0f}s — {ok}/{len(results)} successful. "
-            f"Pick the best hook and ship it."
-        )
-        return
-
-    # Explicit count: N fully independent videos (legacy batch mode)
-    count = explicit_count
     await update.message.reply_text(
-        f"🎬 Generating {count} independent video{'s' if count > 1 else ''}...\n"
-        "Each has its own script. ~2-3 min per video."
+        f"🎬 Generating {count} video{'s' if count > 1 else ''}...\n"
+        f"~2-3 min per video. You'll get each one as soon as it's ready."
     )
 
     start_time = time.time()
+
     if count == 1:
-        results = [render_single_video()]
-    else:
-        results = render_batch(count)
+        result = render_single_video()
+        await _send_video_result(update, result)
+        elapsed = time.time() - start_time
+        if not result.get("error"):
+            await update.message.reply_text(f"✅ Done in {elapsed:.0f}s")
+        return
+
+    # Batch — stream each video to Telegram as it finishes, not all at the end.
+    used_hooks: list[str] = []
+    successful = 0
+    for i in range(count):
+        r = render_single_video(exclude_queries=used_hooks)
+        if r.get("hook_query"):
+            used_hooks.append(r["hook_query"])
+        video_num = f"[{i+1}/{count}] "
+        await _send_video_result(update, r, video_num)
+        if not r.get("error"):
+            successful += 1
+
     elapsed = time.time() - start_time
-
-    for i, result in enumerate(results):
-        video_num = f"[{i+1}/{count}] " if count > 1 else ""
-        await _send_video_result(update, result, video_num)
-
     await update.message.reply_text(
-        f"✅ Batch complete in {elapsed:.0f}s — "
-        f"{sum(1 for r in results if not r['error'])}/{count} successful"
+        f"✅ Batch complete in {elapsed:.0f}s — {successful}/{count} successful"
     )
 
 
@@ -297,14 +283,15 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
     await update.message.reply_text(
-        "🎬 **Nesso Content Engine V22**\n\n"
+        "🎬 **Nesso Content Engine V23**\n\n"
         "Commands:\n"
         "/make — Generate 1 video (22s)\n"
-        "/make 5 — Generate batch of 5\n"
+        "/make 4 — Generate 4 videos back-to-back\n"
         "/theme — Generate with a specific vibe\n"
         "/stats — Render analytics\n"
         "/status — Pipeline health\n\n"
-        "Each video: kinetic hook → iMessage story → real app click-through → logo close"
+        "Each video: kinetic hook → iMessage story → real app click-through → logo close\n"
+        "Videos stream in as soon as each is ready."
     )
 
 

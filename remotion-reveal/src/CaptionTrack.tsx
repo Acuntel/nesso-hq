@@ -25,10 +25,15 @@ export type CaptionTrackProps = {
   /**
    * Vertical position as a 0..1 fraction of the screen height.
    * Default 0.78 = lower third, safe for TikTok bottom UI.
+   * For the iMessage story we use ~0.09 so captions sit in the
+   * mostly-empty space under the iMessage chrome rather than covering
+   * the bottom-anchored bubbles.
    */
   positionY?: number;
   /** Accent color for the currently-spoken word. */
   accentColor?: string;
+  /** Font size override — defaults to 46px, smaller looks cleaner in the top zone. */
+  fontSize?: number;
 };
 
 const FONT_STACK =
@@ -44,6 +49,7 @@ export const CaptionTrack: React.FC<CaptionTrackProps> = ({
   captions = [],
   positionY = 0.78,
   accentColor = "#E8A0A8",
+  fontSize = 46,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -121,7 +127,7 @@ export const CaptionTrack: React.FC<CaptionTrackProps> = ({
               key={i}
               style={{
                 fontFamily: FONT_STACK,
-                fontSize: 46,
+                fontSize,
                 fontWeight: 800,
                 letterSpacing: "-0.01em",
                 lineHeight: 1.15,

@@ -29,9 +29,10 @@ import anthropic
 
 from config import (
     FALLBACKS_DIR,
+    MAX_MESSAGE_CHARS,
+    MAX_MESSAGE_DELAY,
     MESSAGES_MAX,
     MESSAGES_MIN,
-    MAX_MESSAGE_DELAY,
     MIN_MESSAGE_DELAY,
     get_random_ai_message,
     get_random_hook,
@@ -40,45 +41,51 @@ from config import (
 log = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT = """You write viral fake text conversations for TikTok/Reels about friendship drift.
+SYSTEM_PROMPT = f"""You write viral fake text conversations for TikTok/Reels about friendship drift.
 
 You must return ONLY a JSON object with this exact shape. No prose. No markdown fences.
 
-{
+{{
   "contact_name": "best friend",
   "person_name": "Sarah",
   "months_since": 4,
   "messages": [
-    {"sender": "me",    "text": "<message>", "delay": 1.2, "emphasis": false},
-    {"sender": "other", "text": "<message>", "delay": 1.4, "emphasis": false},
-    {"sender": "me",    "text": "<the gut-punch>", "delay": 1.8, "emphasis": true},
-    {"sender": "me",    "text": "<quiet close>", "delay": 2.0, "emphasis": false},
-    {"sender": "system", "text": "Read 1:47 AM", "delay": 0.8, "emphasis": false}
+    {{"sender": "me",    "text": "<short opener>", "delay": 2.2, "emphasis": false}},
+    {{"sender": "other", "text": "<short reply>", "delay": 2.0, "emphasis": false}},
+    {{"sender": "me",    "text": "<the gut-punch>", "delay": 3.2, "emphasis": true}},
+    {{"sender": "me",    "text": "<quiet close>", "delay": 2.6, "emphasis": false}},
+    {{"sender": "system", "text": "Read 1:47 AM", "delay": 0.8, "emphasis": false}}
   ]
-}
+}}
 
-RULES:
-- 4 to 6 messages total. HARD CAP 6. Count them.
-- Exactly one message with emphasis=true. It's the quotable gut-punch line — the thing a viewer would screenshot.
-- Last message MUST be a system read receipt like "Read 1:47 AM" or "Read 2:14 AM" (pick a believable late-night time).
+HARD PACING RULES (these are the #1 thing viewers complain about — follow exactly):
+- EXACTLY 5 entries: 4 real messages + 1 final "Read H:MM AM" system line. Not 6, not 7.
+- Every message MUST be ≤ {MAX_MESSAGE_CHARS} characters. Shorter is better. Count them.
+- `delay` = seconds the bubble stays on screen before the next event. It MUST be long enough for a
+  viewer to READ the message AND for a voiceover to finish saying it out loud.
+  Default delay: 2.0-2.6 for short bubbles (≤30 chars), 2.6-3.4 for longer bubbles (30-{MAX_MESSAGE_CHARS} chars).
+  The emphasis message ALWAYS gets 3.0-3.4.
+  The final system Read receipt gets 0.8.
+- Exactly ONE message has emphasis=true. It is the quotable gut-punch — the thing someone would
+  screenshot and send to a friend. Place it as message 3 or 4.
+
+CONTENT RULES:
 - "sender" is only "me", "other", or "system".
-- person_name = a single first name like "Sarah", "Maya", "Emma", "Jake", "Alex". Match what you put as contact_name's subject.
-- contact_name = how the conversation is labelled in iMessage. Usually a phrase like "best friend", "sarah", "the group chat", or a first name. Keep under 18 chars.
-- months_since = integer 2-12 (months of silence). Usually 3-6 for emotional truth.
-- delay = seconds before the NEXT message. Range 0.8-2.5. The emphasis message gets 1.8-2.5.
-- Messages are lowercase, texting style. No proper grammar. Use "ngl", "fr", "lol", "tbh" naturally but sparingly.
-- AT LEAST ONE message MUST contain a SPECIFIC detail: a number ("4 months"), a name, a date, a count.
-- No emojis in messages (they wreck TTS voiceover). Skip them.
-- Each message 1-2 short sentences max. If the gut-punch line is longer, that's fine — but never more than ~100 chars.
+- person_name = a single first name (Sarah, Maya, Emma, Jake, Alex, Maddie, Ben, Chris, Jordan).
+- contact_name = iMessage label. "best friend", "sarah", "the group chat", a first name. Max 18 chars.
+- months_since = integer, usually 3-6 (emotional sweet spot).
+- Messages are lowercase, texting style. No proper grammar. "ngl", "fr", "tbh" allowed but sparingly.
+- At least ONE message MUST contain a specific detail: a number, a month, a count.
+- NO emojis in messages (they wreck TTS voiceover).
+- The conversation feels UNRESOLVED. Emotional, not dramatic. Quiet, not yelling.
 
-ARCHETYPES (pick one):
-(a) THE AUDIT — "I counted. we haven't actually talked in 4 months."
-(b) THE CALLOUT — "be honest. when's the last time you texted me first."
-(c) THE NOSTALGIA — "remember when we used to call every sunday? we haven't since january."
-(d) THE CONFESSION — "I realized I'm the friend everyone slowly phases out."
+ARCHETYPES (pick one per render):
+(a) THE AUDIT — "I counted. we haven't talked in 4 months."
+(b) THE CALLOUT — "be honest. when did you last text me first."
+(c) THE NOSTALGIA — "we used to call every sunday. not since january."
+(d) THE CONFESSION — "I'm the friend everyone slowly phases out."
 (e) THE AUTOPSY — "the last real message in our chat is from october."
-
-The conversation should feel UNRESOLVED. Emotional, not dramatic. Quiet, not yelling."""
+"""
 
 
 def generate_script(hook_context: str = "") -> dict:
@@ -232,8 +239,21 @@ def _validate_script(data: dict) -> dict:
         text = str(m.get("text", "")).strip()
         if not text:
             continue
-        delay = float(m.get("delay", 1.2))
-        delay = max(MIN_MESSAGE_DELAY, min(MAX_MESSAGE_DELAY, delay))
+        # Enforce length cap so VO finishes before the bubble disappears.
+        # System "Read X:XX AM" lines are never spoken, so they skip the cap.
+        if sender != "system" and len(text) > MAX_MESSAGE_CHARS:
+            text = text[: MAX_MESSAGE_CHARS - 1].rstrip() + "."
+        delay = float(m.get("delay", 2.0))
+        # System read receipts stay fast; real messages obey the new floor.
+        if sender == "system":
+            delay = max(0.6, min(1.2, delay))
+        else:
+            delay = max(MIN_MESSAGE_DELAY, min(MAX_MESSAGE_DELAY, delay))
+            # Longer messages need more time on-screen (rough heuristic:
+            # ~18 chars/sec reading speed, ~15 chars/sec TTS speed, add padding).
+            min_for_text = 1.6 + (len(text) / 20.0)
+            if min_for_text > delay:
+                delay = min(MAX_MESSAGE_DELAY, min_for_text)
         emphasis = bool(m.get("emphasis", False))
         if emphasis:
             has_emphasis = True

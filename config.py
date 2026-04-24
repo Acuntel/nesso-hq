@@ -30,9 +30,11 @@ AUDIO_CODEC = "aac"
 AUDIO_BITRATE = "128k"
 MAX_FILE_SIZE_MB = 50
 
-# ── Segment durations (seconds) — total MUST equal 22s ────────────────────
+# ── Segment durations (seconds) — total ~24-27s (story flexes to fit VO) ──
 HOOK_DURATION = 2.5
-STORY_DURATION = 9.0
+STORY_DURATION = 11.0          # baseline; clamped per-render in pipeline
+STORY_DURATION_MIN = 9.0
+STORY_DURATION_MAX = 14.0
 DEMO_DURATION = 8.0
 CLOSE_DURATION = 2.5
 TOTAL_DURATION = HOOK_DURATION + STORY_DURATION + DEMO_DURATION + CLOSE_DURATION
@@ -65,21 +67,31 @@ SFX_IMPACT_HIT = os.path.join(SFX_DIR, "impact_hit.mp3")
 SFX_RISER_SHORT = os.path.join(SFX_DIR, "riser_short.mp3")
 SFX_NOTIFICATION_DING = os.path.join(SFX_DIR, "notification_ding.mp3")
 SFX_CASH_DING = os.path.join(SFX_DIR, "cash_ding.mp3")
+# V23 additions — agency-grade transition grammar
+SFX_SUB_DROP = os.path.join(SFX_DIR, "sub_drop.mp3")
+SFX_HEARTBEAT = os.path.join(SFX_DIR, "heartbeat.mp3")
+SFX_GLITCH_STAB = os.path.join(SFX_DIR, "glitch_stab.mp3")
 
 # Per-SFX mix volumes (caller can override).
 # Values are pre-limiter; the master bus has a limiter at 0.92 to prevent clipping.
+# V23 rebalance: bubble_pop and notification_ding dropped so they don't fight VO;
+# impact_hit dropped and replaced by glitch_stab for emphasis; sub_drop replaces
+# the generic PSYCH scratch at hook→story; heartbeat lays under the story for tension.
 SFX_VOLUMES = {
-    "bubble_pop":        0.30,
-    "typing_tick":       0.18,
+    "bubble_pop":        0.22,
+    "typing_tick":       0.14,
     "ui_tap":            0.50,
     "whoosh_short":      0.55,
-    "typewriter_tick":   0.16,
+    "typewriter_tick":   0.14,
     "send_swoosh":       0.62,
-    "logo_ding":         0.50,
-    "impact_hit":        0.70,   # loud punctuation, but not clipping
-    "riser_short":       0.50,
-    "notification_ding": 0.45,
+    "logo_ding":         0.55,
+    "impact_hit":        0.55,
+    "riser_short":       0.62,
+    "notification_ding": 0.32,
     "cash_ding":         0.50,
+    "sub_drop":          0.85,   # transition moment — big
+    "heartbeat":         0.14,   # under-the-mix tension
+    "glitch_stab":       0.60,   # sharp emphasis hit
 }
 
 # ── ElevenLabs TTS ─────────────────────────────────────────────────────────
@@ -89,10 +101,14 @@ ELEVENLABS_VOICE_ID_2 = os.environ.get("ELEVENLABS_VOICE_ID_2", "21m00Tcm4TlvDq8
 VOICEOVER_ENABLED = True
 
 # ── Script constraints ────────────────────────────────────────────────────
+# 4 messages + 1 "Read" system line = 5 total; fewer messages means each
+# bubble gets enough on-screen time for the viewer to *read* and the
+# voiceover to *finish speaking* before the next bubble appears.
 MESSAGES_MIN = 4
-MESSAGES_MAX = 6
-MIN_MESSAGE_DELAY = 0.8
-MAX_MESSAGE_DELAY = 2.5
+MESSAGES_MAX = 5
+MIN_MESSAGE_DELAY = 1.6
+MAX_MESSAGE_DELAY = 3.4
+MAX_MESSAGE_CHARS = 70  # hard cap per message (TTS pacing)
 
 # ── Demo narration (spoken during the 8s app click-through) ───────────────
 # Each tuple is (text, scene_start_seconds) — aligned with AppDemo.tsx scene boundaries
@@ -101,6 +117,10 @@ DEMO_NARRATION_LINES = [
     ("time's up. reach out before the connection dies.", 2.8),
     ("AI writes the message for you. all you do is send.", 5.0),
 ]
+
+# Spoken over the 2.5s logo close — short, action-oriented. Kept optional
+# so the close can still be silent if TTS is unavailable.
+CLOSE_NARRATION_LINE = "nesso. free on the app store."
 
 # ── Hook lines — one-liners for the typographic cold open ─────────────────
 # Each tuple is (hook_line, subline, palette).

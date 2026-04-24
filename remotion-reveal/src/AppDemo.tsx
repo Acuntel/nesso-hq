@@ -1403,6 +1403,27 @@ export const AppDemo: React.FC<AppDemoProps> = ({
 
       {/* Burned-in captions synced to demo narration — top z-index */}
       <CaptionTrack captions={captions} />
+
+      {/* Opening whip-flash into the app demo — 5 frames of white fading
+          out. Pairs with the sub-drop SFX on the story → demo cut so the
+          moment FEELS like a modern ad transition, not a PowerPoint slide. */}
+      {(() => {
+        const flashOp = interpolate(frame, [0, 3, 7], [0.6, 0.3, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        });
+        if (flashOp <= 0) return null;
+        return (
+          <AbsoluteFill
+            style={{
+              background: "white",
+              opacity: flashOp,
+              pointerEvents: "none",
+              zIndex: 10000,
+            }}
+          />
+        );
+      })()}
     </AbsoluteFill>
   );
 };

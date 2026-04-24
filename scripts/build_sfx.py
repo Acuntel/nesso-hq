@@ -246,6 +246,89 @@ def notification_ding():
     _run(cmd, "notification_ding.mp3")
 
 
+def sub_drop():
+    """
+    Modern agency sub-drop for the hook → story moment.
+    50Hz → 25Hz falling sine + 120Hz kick layered on top. Sits in the
+    sub-bass — viewers FEEL it more than they hear it.
+    """
+    out = os.path.join(OUT_DIR, "sub_drop.mp3")
+    filter_complex = (
+        # Falling sub sine (50Hz → 25Hz over 0.5s)
+        "aevalsrc='sin(2*PI*(50-50*t)*t)*exp(-t*3.5)':d=0.55[sub];"
+        # Kick transient (120Hz, quick decay)
+        "aevalsrc='sin(2*PI*120*t)*exp(-t*18)':d=0.2[kick];"
+        # Click transient (1200Hz, very short)
+        "aevalsrc='sin(2*PI*1200*t)*exp(-t*180)':d=0.02[click];"
+        "[sub][kick][click]amix=inputs=3:duration=longest:normalize=0,"
+        "lowpass=f=900,"
+        "volume=1.0,"
+        "afade=t=in:d=0.002,afade=t=out:st=0.42:d=0.13"
+    )
+    cmd = [
+        "ffmpeg", "-y",
+        "-filter_complex", filter_complex,
+        "-t", "0.6",
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        out,
+    ]
+    _run(cmd, "sub_drop.mp3")
+
+
+def heartbeat():
+    """
+    Two soft heartbeat thumps used under the story segment for tension.
+    ~72 BPM pacing — first thump at 0s, second at 0.83s. Very low mix volume
+    (SFX_VOLUMES sets 0.10). Sub-audible but felt.
+    """
+    out = os.path.join(OUT_DIR, "heartbeat.mp3")
+    filter_complex = (
+        # Thump 1 at t=0: 60Hz body + 30Hz sub
+        "aevalsrc='(sin(2*PI*60*t)+0.7*sin(2*PI*30*t))*exp(-t*12)':d=0.35[t1];"
+        # Thump 2 at t=0.83: layer identical thump with adelay
+        "aevalsrc='(sin(2*PI*60*t)+0.7*sin(2*PI*30*t))*exp(-t*12)':d=0.35[t2a];"
+        "[t2a]adelay=830|830[t2];"
+        "[t1][t2]amix=inputs=2:duration=longest:normalize=0,"
+        "lowpass=f=280,"
+        "volume=0.9,"
+        "afade=t=in:d=0.005,afade=t=out:st=1.1:d=0.1"
+    )
+    cmd = [
+        "ffmpeg", "-y",
+        "-filter_complex", filter_complex,
+        "-t", "1.2",
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        out,
+    ]
+    _run(cmd, "heartbeat.mp3")
+
+
+def glitch_stab():
+    """
+    Short Uplink-style glitch stab for the gut-punch emphasis line.
+    Sharp high-band hit + bright noise burst. 90ms total.
+    """
+    out = os.path.join(OUT_DIR, "glitch_stab.mp3")
+    filter_complex = (
+        # Bright tone hit
+        "aevalsrc='sin(2*PI*2400*t)*exp(-t*90)':d=0.06[tone];"
+        # Noise slap
+        "anoisesrc=r=44100:c=white:d=0.05[n];"
+        "[n]highpass=f=2200,lowpass=f=6500,volume=0.4[noise];"
+        "[tone][noise]amix=inputs=2:duration=longest:normalize=0,"
+        "volume=0.7,"
+        "afade=t=in:d=0.003,afade=t=out:st=0.06:d=0.04"
+    )
+    cmd = [
+        "ffmpeg", "-y",
+        "-filter_complex", filter_complex,
+        "-t", "0.1",
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        out,
+    ]
+    _run(cmd, "glitch_stab.mp3")
+
+
 def cash_ding():
     """
     Soft value chime for the 'it's free' moment. Subtle cash-register
@@ -284,6 +367,9 @@ def build_all():
     riser_short()
     notification_ding()
     cash_ding()
+    sub_drop()
+    heartbeat()
+    glitch_stab()
     print("[sfx] all sfx built")
 
 

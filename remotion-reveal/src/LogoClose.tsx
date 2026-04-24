@@ -80,12 +80,25 @@ export const LogoClose: React.FC<LogoCloseProps> = ({
   const logoSize = 280;
   const accentRose = "#E8A0A8";
 
+  // Cold-open flash + whole-composition scale punch so the close CUT
+  // from the demo feels like an agency-edited payoff, not a soft fade.
+  const openFlashOp = interpolate(frame, [0, 3, 7], [0.55, 0.25, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const composePunch = interpolate(frame, [0, 6], [1.06, 1.0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
   return (
     <AbsoluteFill
       style={{
         background:
           "linear-gradient(180deg, #140B0F 0%, #1F1215 55%, #0A0707 100%)",
         overflow: "hidden",
+        transform: `scale(${composePunch})`,
       }}
     >
       {/* Backdrop (last frame of demo) */}
@@ -115,6 +128,18 @@ export const LogoClose: React.FC<LogoCloseProps> = ({
           pointerEvents: "none",
         }}
       />
+
+      {/* Opening white flash on the demo → close cut */}
+      {openFlashOp > 0 && (
+        <AbsoluteFill
+          style={{
+            background: "white",
+            opacity: openFlashOp,
+            pointerEvents: "none",
+            zIndex: 10000,
+          }}
+        />
+      )}
 
       <AbsoluteFill
         style={{

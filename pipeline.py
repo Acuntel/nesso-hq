@@ -36,17 +36,22 @@ from config import (
     PSYCH_SFX_PATH,
     SFX_BUBBLE_POP,
     SFX_CASH_DING,
+    SFX_GLITCH_STAB,
+    SFX_HEARTBEAT,
     SFX_IMPACT_HIT,
     SFX_LOGO_DING,
     SFX_NOTIFICATION_DING,
     SFX_RISER_SHORT,
     SFX_SEND_SWOOSH,
+    SFX_SUB_DROP,
     SFX_TYPEWRITER_TICK,
     SFX_TYPING_TICK,
     SFX_UI_TAP,
     SFX_VOLUMES,
     SFX_WHOOSH_SHORT,
     STORY_DURATION,
+    STORY_DURATION_MAX,
+    STORY_DURATION_MIN,
     TEMP_DIR,
     WIDTH,
     generate_ig_caption,
@@ -148,8 +153,25 @@ def _build_sfx_placements(
     demo_start = hook_dur + story_dur
     close_start = hook_dur + story_dur + demo_dur
 
-    # ── STORY bubble + typing sfx ─────────────────────────────────────────
-    # Matches the timeline built inside IMessageStory.tsx
+    # ── HOOK → STORY transition hit (Uplink-style sub drop) ────────────────
+    # Sub drop lands ON the cut. PSYCH_SFX in morph.py already fires a scratch
+    # just before the cut; the sub drop doubles the weight of the moment.
+    placements.append(_sfx(SFX_SUB_DROP, max(0.0, hook_dur - 0.05), "sub_drop"))
+
+    # ── STORY: heartbeat pulses layered UNDER the messages ────────────────
+    # One heartbeat clip = 2 thumps over ~1.1s. Repeat every ~2.2s for
+    # coverage across the 9-14s story. Volume is very low (0.14) — felt,
+    # not heard. Cuts off 0.6s before story ends so it doesn't step on the
+    # riser going into the demo.
+    heartbeat_clip_dur = 1.2
+    heartbeat_gap = 1.0   # 1s silence between heartbeat clips
+    heartbeat_cycle = heartbeat_clip_dur + heartbeat_gap
+    hb_t = story_start + 0.2
+    while hb_t + heartbeat_clip_dur < story_start + story_dur - 0.6:
+        placements.append(_sfx(SFX_HEARTBEAT, hb_t, "heartbeat"))
+        hb_t += heartbeat_cycle
+
+    # ── STORY bubble + typing sfx — matches IMessageStory.tsx timeline ────
     TYPING_DUR = 0.35
     INTRO_PAD = 0.1
 
@@ -159,28 +181,30 @@ def _build_sfx_placements(
         is_other = msg["sender"] == "other"
         is_system = msg["sender"] == "system"
         if is_other and i > 0:
-            # Typing indicator tick (soft) at start of typing bubble
-            placements.append(_sfx(SFX_TYPING_TICK, cursor + 0.05, "typing_tick"))
-            placements.append(_sfx(SFX_TYPING_TICK, cursor + 0.18, "typing_tick"))
+            # Soft tick at start of typing bubble (once, not twice — cleaner)
+            placements.append(_sfx(SFX_TYPING_TICK, cursor + 0.12, "typing_tick"))
             cursor += TYPING_DUR
         # Bubble pop when the bubble springs in (system messages skip the pop)
         if not is_system:
             placements.append(_sfx(SFX_BUBBLE_POP, cursor, "bubble_pop"))
-        # First incoming message gets an iMessage notification ding —
-        # "NEW TEXT" primal hit for the viewer
+        # First incoming message gets a notification ding (primal "NEW TEXT" hit)
         if is_other and not first_other_seen and not is_system:
             placements.append(
                 _sfx(SFX_NOTIFICATION_DING, cursor + 0.02, "notification_ding")
             )
             first_other_seen = True
-        # IMPACT hit on the gut-punch emphasis line — punctuates the beat
+        # Emphasis line gets BOTH a glitch stab (sharp high hit) AND an impact
+        # hit (sub-bass body) layered — this is the screenshot moment.
         if msg.get("emphasis") and not is_system:
+            placements.append(_sfx(SFX_GLITCH_STAB, cursor + 0.04, "glitch_stab"))
             placements.append(_sfx(SFX_IMPACT_HIT, cursor + 0.08, "impact_hit"))
         cursor += float(msg.get("delay", 1.2))
 
-    # Riser going into the demo — builds anticipation in the last 0.5s of story
-    riser_start = story_start + story_dur - 0.5
+    # Riser into the demo — builds anticipation in the last 0.55s of story
+    riser_start = story_start + story_dur - 0.55
     placements.append(_sfx(SFX_RISER_SHORT, riser_start, "riser_short"))
+    # Second sub drop ON the story → demo cut to mirror the hook → story hit
+    placements.append(_sfx(SFX_SUB_DROP, demo_start - 0.05, "sub_drop"))
 
     # ── DEMO: scene-boundary sfx (absolute timestamps in final video) ─────
     # Beat-matched to 80 BPM — every hit lands on a beat/half-beat boundary.
@@ -301,7 +325,7 @@ def render_single_video(
 
         # ── 3. Story duration (needed by VO + story render) ───────────────
         story_dur = _story_duration_seconds(messages)
-        story_dur = max(STORY_DURATION - 1.0, min(STORY_DURATION + 2.0, story_dur))
+        story_dur = max(STORY_DURATION_MIN, min(STORY_DURATION_MAX, story_dur))
 
         # ── 4. Voiceover — generated BEFORE story/demo so we have caption
         # timings to pass into those compositions. ───────────────────────
@@ -313,6 +337,20 @@ def render_single_video(
         )
         story_vo_path = story_vo_result.get("path", "")
         story_captions = story_vo_result.get("timings", [])
+        # VO may have extended some message slots to avoid cutting off speech.
+        # Re-stamp the on-screen messages with those actual delays so bubble
+        # appear timing matches VO exactly, and recompute story_dur so the
+        # rendered story composition is long enough.
+        actual_delays = story_vo_result.get("actual_delays") or []
+        if actual_delays and len(actual_delays) == len(messages):
+            for m, d in zip(messages, actual_delays):
+                m["delay"] = float(d)
+            story_dur = max(
+                story_dur,
+                _story_duration_seconds(messages),
+                float(story_vo_result.get("total_duration", 0)) + 0.4,
+            )
+            story_dur = min(STORY_DURATION_MAX, story_dur)
 
         demo_vo_result = generate_demo_voiceover(
             DEMO_NARRATION_LINES, render_dir, target_duration=DEMO_DURATION
@@ -560,7 +598,7 @@ def render_variants(n: int = 3) -> list[dict]:
 
         # ── 2. Shared story duration (used by story VO + story render) ────
         story_dur = _story_duration_seconds(messages)
-        story_dur = max(STORY_DURATION - 1.0, min(STORY_DURATION + 2.0, story_dur))
+        story_dur = max(STORY_DURATION_MIN, min(STORY_DURATION_MAX, story_dur))
 
         # ── 3. Shared VOs — generated BEFORE story/demo so we can pass
         # caption timings to their compositions. ONCE, reused. ────────────
