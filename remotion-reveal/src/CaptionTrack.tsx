@@ -52,7 +52,7 @@ export const CaptionTrack: React.FC<CaptionTrackProps> = ({
   fontSize = 46,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, height } = useVideoConfig();
   const nowSec = frame / fps;
 
   if (!captions || captions.length === 0) return null;
@@ -93,7 +93,11 @@ export const CaptionTrack: React.FC<CaptionTrackProps> = ({
       style={{
         justifyContent: "flex-start",
         alignItems: "center",
-        paddingTop: `${positionY * 100}%`,
+        // Absolute pixel offset — CSS percent paddingTop resolves against
+        // CONTAINING-BLOCK WIDTH, not height. For a 1080x1920 portrait
+        // composition, 79% would put us at y=853 (way too high) instead of
+        // the intended y=1517. Use the composition's actual height in px.
+        paddingTop: `${Math.round(positionY * height)}px`,
         pointerEvents: "none",
         zIndex: 9999,
       }}

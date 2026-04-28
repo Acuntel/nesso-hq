@@ -57,6 +57,16 @@ async function ensureBundle(): Promise<string> {
   if (bundlePromise) return bundlePromise;
 
   bundlePromise = (async () => {
+    // Prefer a pre-built bundle (./build with index.html) if one exists —
+    // it's faster and avoids any in-memory bundling quirks across Remotion
+    // versions. The Dockerfile/local dev runs `npm run build` once.
+    const prebuilt = path.resolve(__dirname, "..", "build");
+    if (fs.existsSync(path.join(prebuilt, "index.html"))) {
+      console.log(`[remotion] Using prebuilt bundle: ${prebuilt}`);
+      bundleLocation = prebuilt;
+      return prebuilt;
+    }
+
     console.log("[remotion] Bundling project...");
     const t0 = Date.now();
     const loc = await bundle({

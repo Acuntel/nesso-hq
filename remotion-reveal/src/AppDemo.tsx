@@ -1401,8 +1401,14 @@ export const AppDemo: React.FC<AppDemoProps> = ({
           />
         )}
 
-      {/* Burned-in captions synced to demo narration — top z-index */}
-      <CaptionTrack captions={captions} />
+      {/* Burned-in captions synced to demo narration. y≈1421 (positionY=0.74)
+          lands in the dead zone clear across all 3 demo screens:
+          - Home: card grid ends at y=1300 → 121px gap above caption
+          - Person: Recent interactions card ends at y=1200 → 221px gap
+          - Reach Out sheet: Text/Email buttons end at y=1210 → 211px gap
+          Font 36 keeps the ribbon compact (caption box ends at y≈1561, well
+          above the home indicator at y=1872). */}
+      <CaptionTrack captions={captions} positionY={0.74} fontSize={36} />
 
       {/* Opening whip-flash into the app demo — 5 frames of white fading
           out. Pairs with the sub-drop SFX on the story → demo cut so the

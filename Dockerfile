@@ -39,6 +39,11 @@ RUN mkdir -p remotion-reveal/public && \
 # Build the SFX library at image build time (requires ffmpeg, installed above)
 RUN python scripts/build_sfx.py || echo "WARN: sfx build failed — videos will render without sfx layer"
 
+# Pre-build the Remotion bundle so the server can serve it from disk instead
+# of bundling in-memory at startup. The in-memory `bundle()` call in some
+# Remotion versions doesn't emit an index.html, breaking renderMedia.
+RUN cd remotion-reveal && npm run build || echo "WARN: remotion bundle failed — server will retry in-memory at boot"
+
 RUN mkdir -p /app/tmp
 
 # entrypoint starts Remotion server in background, then Python bot
