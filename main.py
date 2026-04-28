@@ -1,5 +1,5 @@
 """
-Nesso Content Engine V22 — Entry Point
+Nesso Content Engine V23 — Entry Point
 
 Starts the Telegram bot + a lightweight HTTP health check server
 so Railway doesn't kill the container for not binding a port.
@@ -24,7 +24,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-log = logging.getLogger("nesso-v22")
+log = logging.getLogger("nesso-v23")
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -32,7 +32,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Nesso Content Engine V22 OK")
+        self.wfile.write(b"Nesso Content Engine V23 OK")
 
     def log_message(self, format, *args):
         pass
@@ -74,7 +74,7 @@ def main():
     start_health_server()
     verify_remotion_ready()
 
-    log.info("Starting Nesso Content Engine V22...")
+    log.info("Starting Nesso Content Engine V23...")
 
     from telegram_bot import create_bot
     app = create_bot(token)

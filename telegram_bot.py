@@ -335,7 +335,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status command."""
     status_lines = [
-        "📊 **Nesso Content Engine V22 Status**\n",
+        "📊 **Nesso Content Engine V23 Status**\n",
         f"Total renders: {_total_renders}",
         f"Total failures: {_total_failures}",
     ]

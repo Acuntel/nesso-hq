@@ -1,4 +1,4 @@
-# CLAUDE.md -- Nesso Content Engine V21
+# CLAUDE.md -- Nesso Content Engine V23
 
 ## What This Is
 
