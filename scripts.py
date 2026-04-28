@@ -111,8 +111,12 @@ def generate_script(hook_context: str = "") -> dict:
         "Return ONLY the JSON object described in the system prompt."
     )
 
+    # Bounded timeout + small retry budget — without these the Anthropic
+    # SDK can sit on a hung TLS handshake or transient 5xx for minutes
+    # and stall the whole render pipeline.
+    client = anthropic.Anthropic(api_key=api_key, timeout=45.0, max_retries=2)
+
     try:
-        client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=900,
@@ -130,7 +134,6 @@ def generate_script(hook_context: str = "") -> dict:
     if not _has_specificity(script["messages"]):
         log.info("Script lacks specificity — retrying once")
         try:
-            client = anthropic.Anthropic(api_key=api_key)
             resp = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=900,

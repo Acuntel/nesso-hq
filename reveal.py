@@ -103,8 +103,14 @@ def _generate_demo_voiceover(temp_dir: str) -> tuple[str, list[float]]:
         return "", [d for _, d in DEMO_NARRATION]
 
     try:
+        import httpx
         from elevenlabs import ElevenLabs
-        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        client = ElevenLabs(
+            api_key=ELEVENLABS_API_KEY,
+            httpx_client=httpx.Client(
+                timeout=httpx.Timeout(connect=10.0, read=60.0, write=20.0, pool=10.0)
+            ),
+        )
     except ImportError:
         return "", [d for _, d in DEMO_NARRATION]
 

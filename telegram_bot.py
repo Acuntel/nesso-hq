@@ -8,22 +8,42 @@ Commands:
   /stats               — Show render analytics
 """
 
+import asyncio
 import logging
 import os
 import time
 from datetime import datetime
 
 from telegram import Update
+from telegram.error import NetworkError, TimedOut
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
 )
+from telegram.request import HTTPXRequest
 
 from analytics import get_stats
 from pipeline import render_batch, render_single_video
 
 log = logging.getLogger(__name__)
+
+# Telegram upload tuning. The default python-telegram-bot timeouts
+# (read=5s, write=5s, media_write=20s) are way too tight for video
+# uploads from Railway. On a 5-10MB MP4 a network blip blows past 20s
+# and the user sees `telegram.error.TimedOut: Timed out`. We push
+# these to values that cover a worst-case Railway → Telegram upload
+# (~3min) and let our own watchdog handle real hangs.
+TG_CONNECT_TIMEOUT = 30.0
+TG_READ_TIMEOUT = 120.0
+TG_WRITE_TIMEOUT = 300.0
+TG_POOL_TIMEOUT = 30.0
+TG_MEDIA_WRITE_TIMEOUT = 300.0
+
+# How long any single render is allowed to take before we abort and
+# tell the user it timed out. Pipeline normally takes ~90s; we give
+# generous headroom for cold Remotion bundles + slow Reddit fetches.
+RENDER_BUDGET_SECONDS = 8 * 60
 
 # Track state
 _last_render_time: float | None = None
@@ -47,6 +67,79 @@ THEME_QUERIES = {
     "replaced": "being replaced by new friends story",
     "distance": "long distance friendship struggle",
 }
+
+
+async def _render_with_watchdog(render_fn, **kwargs) -> dict:
+    """
+    Run a synchronous render in a worker thread with a hard wall-clock
+    budget. If it exceeds RENDER_BUDGET_SECONDS, return a structured
+    error instead of letting the bot hang forever.
+
+    The underlying thread is NOT killed (Python can't kill threads),
+    but each pipeline stage has its own subprocess timeout, so the
+    thread will eventually unwind on its own.
+    """
+    loop = asyncio.get_running_loop()
+    fut = loop.run_in_executor(None, lambda: render_fn(**kwargs))
+    try:
+        return await asyncio.wait_for(fut, timeout=RENDER_BUDGET_SECONDS)
+    except asyncio.TimeoutError:
+        log.error(
+            "render exceeded %ds budget — returning timeout error",
+            RENDER_BUDGET_SECONDS,
+        )
+        return {
+            "output_path": "",
+            "tiktok_caption": "",
+            "ig_caption": "",
+            "ig_pin_comment": "",
+            "hook_query": "",
+            "hook_description": "",
+            "duration": 0,
+            "error": (
+                f"Render exceeded {RENDER_BUDGET_SECONDS}s budget. "
+                "Likely a stuck subprocess (Remotion bundle, ffmpeg, "
+                "or yt-dlp). Try /make again — the pipeline is now "
+                "free."
+            ),
+        }
+
+
+async def _reply_video_with_retry(update, output_path, caption, attempts=3):
+    """
+    Upload a video to Telegram with explicit large timeouts and retry.
+
+    Telegram's bot API can be flaky on big uploads — connection resets,
+    transient `Timed out` from python-telegram-bot, or 502s from the edge.
+    We retry up to `attempts` times with backoff, re-opening the file
+    each time so the read pointer is at byte 0.
+    """
+    last_err: Exception | None = None
+    for i in range(attempts):
+        try:
+            with open(output_path, "rb") as video_file:
+                await update.message.reply_video(
+                    video=video_file,
+                    caption=caption,
+                    supports_streaming=True,
+                    read_timeout=TG_READ_TIMEOUT,
+                    write_timeout=TG_WRITE_TIMEOUT,
+                    connect_timeout=TG_CONNECT_TIMEOUT,
+                    pool_timeout=TG_POOL_TIMEOUT,
+                )
+            return True
+        except (TimedOut, NetworkError) as e:
+            last_err = e
+            log.warning(
+                "reply_video attempt %d/%d failed (%s) — retrying",
+                i + 1, attempts, e,
+            )
+            await asyncio.sleep(2 ** i)
+        except Exception as e:
+            last_err = e
+            log.error("reply_video unrecoverable: %s", e, exc_info=True)
+            break
+    raise last_err if last_err else RuntimeError("reply_video failed silently")
 
 
 async def _send_video_result(update, result, video_num=""):
@@ -73,12 +166,11 @@ async def _send_video_result(update, result, video_num=""):
 
     # Message 1: The video file
     try:
-        with open(output_path, "rb") as video_file:
-            await update.message.reply_video(
-                video=video_file,
-                caption=f"{video_num}Nesso V22 — {duration:.0f}s",
-                supports_streaming=True,
-            )
+        await _reply_video_with_retry(
+            update,
+            output_path,
+            caption=f"{video_num}Nesso V23 — {duration:.0f}s",
+        )
     except Exception as e:
         await update.message.reply_text(
             f"❌ {video_num}Video rendered but failed to send: {e}"
@@ -145,7 +237,7 @@ async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_time = time.time()
 
     if count == 1:
-        result = render_single_video()
+        result = await _render_with_watchdog(render_single_video)
         await _send_video_result(update, result)
         elapsed = time.time() - start_time
         if not result.get("error"):
@@ -156,7 +248,9 @@ async def cmd_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
     used_hooks: list[str] = []
     successful = 0
     for i in range(count):
-        r = render_single_video(exclude_queries=used_hooks)
+        r = await _render_with_watchdog(
+            render_single_video, exclude_queries=used_hooks
+        )
         if r.get("hook_query"):
             used_hooks.append(r["hook_query"])
         video_num = f"[{i+1}/{count}] "
@@ -202,7 +296,7 @@ async def cmd_theme(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     start_time = time.time()
-    result = render_single_video(theme=theme)
+    result = await _render_with_watchdog(render_single_video, theme=theme)
     elapsed = time.time() - start_time
 
     await _send_video_result(update, result)
@@ -297,7 +391,27 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def create_bot(token: str) -> Application:
     """Create and configure the Telegram bot."""
-    app = Application.builder().token(token).build()
+    request = HTTPXRequest(
+        connect_timeout=TG_CONNECT_TIMEOUT,
+        read_timeout=TG_READ_TIMEOUT,
+        write_timeout=TG_WRITE_TIMEOUT,
+        pool_timeout=TG_POOL_TIMEOUT,
+        media_write_timeout=TG_MEDIA_WRITE_TIMEOUT,
+    )
+    get_updates_request = HTTPXRequest(
+        connect_timeout=TG_CONNECT_TIMEOUT,
+        read_timeout=TG_READ_TIMEOUT,
+        write_timeout=TG_WRITE_TIMEOUT,
+        pool_timeout=TG_POOL_TIMEOUT,
+    )
+
+    app = (
+        Application.builder()
+        .token(token)
+        .request(request)
+        .get_updates_request(get_updates_request)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("make", cmd_make))

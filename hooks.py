@@ -17,11 +17,13 @@ falls back to gradient-only hook if this returns None.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import os
 import random
 import subprocess
+import time
 from typing import Optional
 
 import yt_dlp
@@ -30,6 +32,18 @@ from config import FFMPEG_THREADS, FFMPEG_TIMEOUT
 from verify import get_duration
 
 log = logging.getLogger(__name__)
+
+# Hard upper bound on a single yt-dlp download. yt-dlp's socket_timeout
+# only covers per-socket reads; a stuck DASH manifest or fragment loop
+# can still exceed it. We wrap the call in a thread + timeout so a
+# wedged download cannot stall the pipeline.
+YT_DLP_DEADLINE_SECONDS = 60
+
+# Total wall-clock budget for the whole hook-sourcing stage. Five
+# subreddits × (curl + ytdlp + ffmpeg trim) can pile up. If we exceed
+# this, fall back to gradient-only hook so the rest of the pipeline
+# can finish.
+FETCH_BG_BUDGET_SECONDS = 90
 
 # Action-first pool: lions hunting, explosions, skiing wipeouts, motorcycles,
 # stunts, crashes, extreme nature. High kinetic energy — the stuff that
@@ -179,6 +193,8 @@ def _download_via_ytdlp(reddit_url: str, output_path: str) -> bool:
     """
     Download a v.redd.it post via yt-dlp.
     yt-dlp handles Reddit's DASH audio+video merge automatically.
+    Wrapped in a thread + hard deadline so a stuck DASH manifest or
+    fragment retry loop cannot hang the render.
     """
     opts = {
         "format": "bestvideo+bestaudio/bestvideo/best",
@@ -186,13 +202,26 @@ def _download_via_ytdlp(reddit_url: str, output_path: str) -> bool:
         "quiet": True,
         "no_warnings": True,
         "outtmpl": output_path,
-        "socket_timeout": 30,
-        "retries": 2,
+        "socket_timeout": 15,
+        "retries": 1,
+        "fragment_retries": 1,
     }
-    try:
+
+    def _run() -> None:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([reddit_url])
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_run)
+            fut.result(timeout=YT_DLP_DEADLINE_SECONDS)
         return os.path.exists(output_path) and os.path.getsize(output_path) > 10_000
+    except concurrent.futures.TimeoutError:
+        log.warning(
+            "yt-dlp exceeded %ds deadline for %s — abandoning",
+            YT_DLP_DEADLINE_SECONDS, reddit_url,
+        )
+        return False
     except Exception as e:
         log.debug("yt-dlp download failed: %s", str(e)[:200])
         return False
@@ -250,8 +279,15 @@ def fetch_background_clip(
     Returns (clip_path, duration, description) or None.
     """
     subs = random.sample(SUBREDDIT_POOL, min(5, len(SUBREDDIT_POOL)))
+    deadline = time.time() + FETCH_BG_BUDGET_SECONDS
 
     for sub in subs:
+        if time.time() > deadline:
+            log.warning(
+                "hook fetch exceeded %ds budget — falling back to gradient-only",
+                FETCH_BG_BUDGET_SECONDS,
+            )
+            return None
         time_filter = random.choice(["day", "week", "week"])
         posts = _fetch_top_posts(sub, time_filter=time_filter)
         if not posts:

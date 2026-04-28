@@ -108,9 +108,19 @@ def _tts_clip(
     endpoint if the timestamped one fails, in which case words = [].
     """
     try:
+        import httpx
         from elevenlabs import ElevenLabs
 
-        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        # Explicit httpx client with a per-request timeout. Without this
+        # ElevenLabs' default has no upper bound and a stalled TLS or slow
+        # voice generation can hang the whole render. 60s is plenty for
+        # a sub-200-char message.
+        client = ElevenLabs(
+            api_key=ELEVENLABS_API_KEY,
+            httpx_client=httpx.Client(
+                timeout=httpx.Timeout(connect=10.0, read=60.0, write=20.0, pool=10.0)
+            ),
+        )
         model_id = "eleven_multilingual_v2" if expressive else "eleven_turbo_v2_5"
 
         # First try with timestamps (per-character alignment)
