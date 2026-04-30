@@ -37,7 +37,7 @@ from config import (
 # Music gain during the hook segment — pulled out as a module-level alias so
 # it appears verbatim inside the `volume=` filter expression.
 MUSIC_VOLUME_HOOK_GAIN = MUSIC_VOLUME_HOOK
-from verify import get_duration
+from verify import get_duration, has_audio_stream
 
 log = logging.getLogger(__name__)
 
@@ -217,7 +217,16 @@ def _build_audio(
     has_close_vo = bool(close_vo_path) and os.path.exists(close_vo_path)
     has_music = bool(music_path) and os.path.exists(music_path)
     has_psych = bool(psych_sfx_path) and os.path.exists(psych_sfx_path)
-    has_hook_video = bool(hook_video_path) and os.path.exists(hook_video_path)
+    # V24: only mix in the hook's native audio if the file actually has an
+    # audio stream. Some Reddit clips are video-only, and on a video-only
+    # input the [0:a] mapping would crash the whole filter graph.
+    has_hook_video = (
+        bool(hook_video_path)
+        and os.path.exists(hook_video_path)
+        and has_audio_stream(hook_video_path)
+    )
+    if hook_video_path and os.path.exists(hook_video_path) and not has_hook_video:
+        log.info("hook video has no audio stream — skipping native audio layer")
 
     any_vo = has_story_vo or has_demo_vo or has_hook_vo or has_close_vo
     # When ducking is active, bump music base volume so it "breathes" up between VO beats.
@@ -308,27 +317,27 @@ def _build_audio(
         idx += 1
 
     # Music — V24 starts at 0 with HARD duck during hook (0..hook_dur) so the
-    # chaos clip's native audio dominates, then ramps to baseline for story/
-    # demo/close. The sidechain compress later applies VO ducking on top.
+    # chaos clip's native audio dominates, then snaps to baseline for story/
+    # demo/close. The sub_drop SFX hits exactly on the snap so the level
+    # change is invisible. Sidechain compress later applies VO ducking on top.
     #
-    # We avoid an `if()` volume expression with embedded commas (those collide
-    # with -filter_complex chain separators). Instead, two `volume` calls
-    # gated by the `enable=...` timeline switch — straightforward and robust.
+    # Approach: apply BASELINE volume always, then a SECOND volume filter that
+    # multiplies by an extra duck factor only while `enable` is true. When
+    # enable is false the filter is a passthrough (×1.0). Combining two
+    # multiplicative filters this way avoids the "if() with commas inside
+    # -filter_complex" escaping headache entirely.
     music_pre_label = None
     if has_music:
         music_dur = total_dur - 0.2
         fade_out_start = music_dur - MUSIC_FADE_OUT
-        duck_end = max(0.05, hook_dur - 0.1)        # last moment we duck hard
-        rise_end = duck_end + 0.4                    # 0.4s ramp into baseline
+        duck_end = max(0.05, hook_dur - 0.05)
+        # extra_duck * music_vol = MUSIC_VOLUME_HOOK_GAIN
+        extra_duck = MUSIC_VOLUME_HOOK_GAIN / max(0.001, music_vol)
         inputs.extend(["-i", music_path])
         filter_parts.append(
             f"[{idx}:a]atrim=0:{music_dur:.2f},"
-            # Stage 1: hard duck during hook segment.
-            f"volume=volume={MUSIC_VOLUME_HOOK_GAIN}:enable='lt(t\\,{duck_end:.2f})',"
-            # Stage 2: baseline volume for story/demo/close (kicks in after duck_end).
-            f"volume=volume={music_vol}:enable='gte(t\\,{rise_end:.2f})',"
-            # Stage 3: brief fade between the two states so the swap isn't a click.
-            f"afade=t=in:st={duck_end:.2f}:d={(rise_end - duck_end):.2f},"
+            f"volume={music_vol},"
+            f"volume={extra_duck:.4f}:enable='lt(t\\,{duck_end:.2f})',"
             f"afade=t=in:st=0:d={MUSIC_FADE_IN},"
             f"afade=t=out:st={fade_out_start:.2f}:d={MUSIC_FADE_OUT}"
             f"[music_a]"

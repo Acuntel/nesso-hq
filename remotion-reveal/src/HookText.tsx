@@ -160,9 +160,14 @@ export const HookText: React.FC<HookTextProps> = ({
             transformOrigin: "center center",
           }}
         >
+          {/* V24: native audio passes through (was muted) — chaos clip's
+              tire screech / screams / impact ARE the hook soundtrack. Volume
+              is full (1.0); morph.py ducks the music bed to 0.06 during
+              0..hook_dur so the native track dominates the first 2.5s. */}
           <OffthreadVideo
             src={backgroundVideoUrl}
-            muted
+            muted={false}
+            volume={1.0}
             style={{
               width: "100%",
               height: "100%",

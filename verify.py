@@ -10,6 +10,23 @@ import subprocess
 log = logging.getLogger(__name__)
 
 
+def has_audio_stream(filepath: str) -> bool:
+    """Return True iff the file has at least one audio stream."""
+    if not filepath or not os.path.exists(filepath):
+        return False
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_streams", "-select_streams", "a", filepath],
+            capture_output=True, text=True, timeout=10,
+        )
+        data = json.loads(result.stdout or "{}")
+        return bool(data.get("streams"))
+    except Exception as e:
+        log.warning("has_audio_stream: ffprobe failed for %s: %s", filepath, e)
+        return False
+
+
 def verify_clip(filepath: str) -> bool:
     """
     Check that a video file exists, has size, has video frames, and duration > 0.5s.
