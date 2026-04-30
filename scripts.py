@@ -1,5 +1,5 @@
 """
-Nesso Content Engine V22 — Script Generation
+Nesso Content Engine V24 — Script Generation
 
 Produces one unified script dict:
 
@@ -42,6 +42,7 @@ log = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = f"""You write viral fake text conversations for TikTok/Reels about friendship drift.
+Your job is to make people pissed off, called out, or seen — enough to share, comment, and argue.
 
 You must return ONLY a JSON object with this exact shape. No prose. No markdown fences.
 
@@ -50,10 +51,10 @@ You must return ONLY a JSON object with this exact shape. No prose. No markdown 
   "person_name": "Sarah",
   "months_since": 4,
   "messages": [
-    {{"sender": "me",    "text": "<short opener>", "delay": 2.2, "emphasis": false}},
-    {{"sender": "other", "text": "<short reply>", "delay": 2.0, "emphasis": false}},
-    {{"sender": "me",    "text": "<the gut-punch>", "delay": 3.2, "emphasis": true}},
-    {{"sender": "me",    "text": "<quiet close>", "delay": 2.6, "emphasis": false}},
+    {{"sender": "me",    "text": "<brash opener>", "delay": 2.4, "emphasis": false}},
+    {{"sender": "other", "text": "<defensive reply>", "delay": 2.2, "emphasis": false}},
+    {{"sender": "me",    "text": "<THE GUT-PUNCH IN ALL CAPS>", "delay": 3.4, "emphasis": true}},
+    {{"sender": "me",    "text": "<the quiet kill shot>", "delay": 2.8, "emphasis": false}},
     {{"sender": "system", "text": "Read 1:47 AM", "delay": 0.8, "emphasis": false}}
   ]
 }}
@@ -63,28 +64,32 @@ HARD PACING RULES (these are the #1 thing viewers complain about — follow exac
 - Every message MUST be ≤ {MAX_MESSAGE_CHARS} characters. Shorter is better. Count them.
 - `delay` = seconds the bubble stays on screen before the next event. It MUST be long enough for a
   viewer to READ the message AND for a voiceover to finish saying it out loud.
-  Default delay: 2.0-2.6 for short bubbles (≤30 chars), 2.6-3.4 for longer bubbles (30-{MAX_MESSAGE_CHARS} chars).
-  The emphasis message ALWAYS gets 3.0-3.4.
+  Default delay: 2.2-2.8 for short bubbles (≤30 chars), 2.8-3.6 for longer bubbles (30-{MAX_MESSAGE_CHARS} chars).
+  The emphasis message ALWAYS gets 3.2-3.8.
   The final system Read receipt gets 0.8.
 - Exactly ONE message has emphasis=true. It is the quotable gut-punch — the thing someone would
-  screenshot and send to a friend. Place it as message 3 or 4.
+  screenshot and send to a friend. Place it as message 3 or 4. Its TEXT MUST BE IN ALL CAPS.
 
 CONTENT RULES:
 - "sender" is only "me", "other", or "system".
 - person_name = a single first name (Sarah, Maya, Emma, Jake, Alex, Maddie, Ben, Chris, Jordan).
 - contact_name = iMessage label. "best friend", "sarah", "the group chat", a first name. Max 18 chars.
 - months_since = integer, usually 3-6 (emotional sweet spot).
-- Messages are lowercase, texting style. No proper grammar. "ngl", "fr", "tbh" allowed but sparingly.
-- At least ONE message MUST contain a specific detail: a number, a month, a count.
+- Non-emphasis messages: lowercase, texting style. "ngl", "fr", "tbh", "bro", "lmao", "deadass" allowed.
+- The emphasis message: ALL CAPS. Every word capitalized. This is the screenshot moment.
+- Caps allowed on individual words for stress (NEVER, ZERO, ONE, ALWAYS) inside non-emphasis lines.
+- At least ONE message MUST contain a specific number, month, or count (e.g. "4 months", "october", "16 weeks", "47 contacts").
 - NO emojis in messages (they wreck TTS voiceover).
-- The conversation feels UNRESOLVED. Emotional, not dramatic. Quiet, not yelling.
+- End EVERY spoken (non-system) message with "." or "?" or "!" — TTS needs the punctuation to land properly.
+- The conversation feels UNRESOLVED. Brash AND emotional. Public-language, not polite.
 
-ARCHETYPES (pick one per render):
-(a) THE AUDIT — "I counted. we haven't talked in 4 months."
+ARCHETYPES (pick one per render — V24 favors public, brash, screenshot-able):
+(a) THE AUDIT — "I COUNTED. 4 MONTHS. ZERO TEXTS FROM YOU."
 (b) THE CALLOUT — "be honest. when did you last text me first."
-(c) THE NOSTALGIA — "we used to call every sunday. not since january."
-(d) THE CONFESSION — "I'm the friend everyone slowly phases out."
-(e) THE AUTOPSY — "the last real message in our chat is from october."
+(c) THE RECEIPTS DUMP — "scroll up. EVERY text since october starts with me."
+(d) THE PUBLIC SHAME — "you posted about your trip 14 times. you didn't text me once."
+(e) THE AUTOPSY — "the last real message in this chat is from october 8th."
+(f) THE CONFESSION — "I'M THE FRIEND EVERYONE SLOWLY PHASES OUT. you're proof."
 """
 
 
@@ -246,20 +251,29 @@ def _validate_script(data: dict) -> dict:
         # System "Read X:XX AM" lines are never spoken, so they skip the cap.
         if sender != "system" and len(text) > MAX_MESSAGE_CHARS:
             text = text[: MAX_MESSAGE_CHARS - 1].rstrip() + "."
+        # V24: every spoken message must end with terminal punctuation —
+        # ElevenLabs needs it to know where the prosody ends, otherwise the
+        # last word gets clipped or rushed. Add a period if missing.
+        if sender != "system" and text and text[-1] not in ".!?":
+            text = text + "."
         delay = float(m.get("delay", 2.0))
         # System read receipts stay fast; real messages obey the new floor.
         if sender == "system":
             delay = max(0.6, min(1.2, delay))
         else:
             delay = max(MIN_MESSAGE_DELAY, min(MAX_MESSAGE_DELAY, delay))
-            # Longer messages need more time on-screen (rough heuristic:
-            # ~18 chars/sec reading speed, ~15 chars/sec TTS speed, add padding).
-            min_for_text = 1.6 + (len(text) / 20.0)
+            # V24: longer messages need more time on-screen (~18 chars/sec
+            # reading, ~14 chars/sec TTS for ALL CAPS emphasis lines).
+            min_for_text = 1.7 + (len(text) / 18.0)
             if min_for_text > delay:
                 delay = min(MAX_MESSAGE_DELAY, min_for_text)
         emphasis = bool(m.get("emphasis", False))
         if emphasis:
             has_emphasis = True
+            # V24: emphasis line must be ALL CAPS — uppercase whatever Claude
+            # returned so this rule holds even if the model softened it.
+            if sender != "system":
+                text = text.upper()
         cleaned.append(
             {"sender": sender, "text": text, "delay": delay, "emphasis": emphasis}
         )

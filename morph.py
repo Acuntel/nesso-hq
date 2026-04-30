@@ -1,11 +1,15 @@
 """
-Nesso Content Engine V22 — Video Concat + Audio Mix
+Nesso Content Engine V24 — Video Concat + Audio Mix
 
 4 segments: hook → story → demo → close (no morph, hard cuts between).
-3 audio layers:
-  1. Voiceover (story VO during story, demo VO during demo)
-  2. Background music (15%/20% with/without VO, fade in/out)
-  3. PSYCH sfx at hook → story cut
+V24 audio layers:
+  1. Hook native audio — passed through from the chaos clip at full volume.
+  2. Story VO (during story).
+  3. Demo VO (during demo).
+  4. Close VO (during close, dynamic length).
+  5. Background music — 0.06 during hook (deep duck so chaos audio dominates),
+     0.22 during story/demo/close (sidechained to VO).
+  6. PSYCH sfx at hook → story cut + per-beat SFX placements.
 """
 
 from __future__ import annotations
@@ -22,12 +26,17 @@ from config import (
     HEIGHT,
     MUSIC_FADE_IN,
     MUSIC_FADE_OUT,
+    MUSIC_VOLUME_HOOK,
     MUSIC_VOLUME_NO_VO,
     MUSIC_VOLUME_WITH_VO,
     PSYCH_SFX_VOLUME,
     VOICEOVER_VOLUME,
     WIDTH,
 )
+
+# Music gain during the hook segment — pulled out as a module-level alias so
+# it appears verbatim inside the `volume=` filter expression.
+MUSIC_VOLUME_HOOK_GAIN = MUSIC_VOLUME_HOOK
 from verify import get_duration
 
 log = logging.getLogger(__name__)
@@ -48,6 +57,7 @@ def morph_and_concat(
     psych_sfx_path: str,
     output_path: str,
     hook_vo_path: str = "",
+    close_vo_path: str = "",
     sfx_placements: list[dict] | None = None,
 ) -> str:
     temp_dir = os.path.dirname(output_path)
@@ -87,6 +97,8 @@ def morph_and_concat(
         story_vo_path=story_vo_path,
         demo_vo_path=demo_vo_path,
         hook_vo_path=hook_vo_path,
+        close_vo_path=close_vo_path,
+        hook_video_path=hook_video,
         music_path=music_path,
         psych_sfx_path=psych_sfx_path,
         sfx_placements=sfx_placements or [],
@@ -180,6 +192,8 @@ def _build_audio(
     total_dur: float,
     output_path: str,
     hook_vo_path: str = "",
+    close_vo_path: str = "",
+    hook_video_path: str = "",
     sfx_placements: list[dict] | None = None,
 ) -> str:
     """
@@ -195,14 +209,17 @@ def _build_audio(
     """
     story_start = hook_dur
     demo_start = hook_dur + story_dur
+    close_start = hook_dur + story_dur + demo_dur
 
     has_story_vo = bool(story_vo_path) and os.path.exists(story_vo_path)
     has_demo_vo = bool(demo_vo_path) and os.path.exists(demo_vo_path)
     has_hook_vo = bool(hook_vo_path) and os.path.exists(hook_vo_path)
+    has_close_vo = bool(close_vo_path) and os.path.exists(close_vo_path)
     has_music = bool(music_path) and os.path.exists(music_path)
     has_psych = bool(psych_sfx_path) and os.path.exists(psych_sfx_path)
+    has_hook_video = bool(hook_video_path) and os.path.exists(hook_video_path)
 
-    any_vo = has_story_vo or has_demo_vo or has_hook_vo
+    any_vo = has_story_vo or has_demo_vo or has_hook_vo or has_close_vo
     # When ducking is active, bump music base volume so it "breathes" up between VO beats.
     # Sidechaincompress will pull it down to ~0.10 while VO speaks.
     if any_vo:
@@ -223,7 +240,23 @@ def _build_audio(
 
     vo_labels: list[str] = []
 
-    # Hook voiceover (read the hook_line over the 2.5s segment)
+    # V24: hook NATIVE audio — pulled from the chaos clip itself, mixed full
+    # volume during 0..hook_dur. This is the soundtrack of the moment (tire
+    # screech, screaming, crash impact). Music is hard-ducked to 0.06 here
+    # so the chaos audio dominates the first 2.5s.
+    if has_hook_video:
+        inputs.extend(["-i", hook_video_path])
+        filter_parts.append(
+            f"[{idx}:a]volume=1.0,"
+            f"atrim=0:{hook_dur:.2f},"
+            f"afade=t=out:st={max(0.0, hook_dur - 0.4):.2f}:d=0.4"
+            f"[hook_native]"
+        )
+        mix_labels.append("[hook_native]")
+        idx += 1
+
+    # Hook voiceover — V24 makes this a no-op (always returns "") but we keep
+    # the wiring so a future "punchline VO" experiment can flip back on.
     if has_hook_vo:
         inputs.extend(["-i", hook_vo_path])
         filter_parts.append(
@@ -259,20 +292,46 @@ def _build_audio(
         vo_labels.append("[demo_vo]")
         idx += 1
 
-    # Music — starts at hook_dur-0.8 (fade in over hook end), fades out during close
-    music_pre_label = None  # label before ducking (if any VO present)
-    if has_music:
-        music_start = max(0, hook_dur - 0.8)
-        music_dur = total_dur - music_start - 0.2
-        fade_out_start = music_dur - MUSIC_FADE_OUT
-        inputs.extend(["-i", music_path])
-        delay_ms = int(music_start * 1000)
+    # V24: Close VO — reads the close payoff over the dynamic-length close.
+    # Starts at close_start (hook+story+demo). The VO already includes 0.2s
+    # intro silence and 0.5s tail silence, so adelay is exact.
+    if has_close_vo:
+        inputs.extend(["-i", close_vo_path])
+        delay_ms = int(close_start * 1000)
         filter_parts.append(
-            f"[{idx}:a]volume={music_vol},"
-            f"atrim=0:{music_dur:.2f},"
+            f"[{idx}:a]volume={VOICEOVER_VOLUME},"
+            f"afade=t=in:st=0:d=0.15,"
+            f"adelay={delay_ms}|{delay_ms}[close_vo]"
+        )
+        mix_labels.append("[close_vo]")
+        vo_labels.append("[close_vo]")
+        idx += 1
+
+    # Music — V24 starts at 0 with HARD duck during hook (0..hook_dur) so the
+    # chaos clip's native audio dominates, then ramps to baseline for story/
+    # demo/close. The sidechain compress later applies VO ducking on top.
+    #
+    # We avoid an `if()` volume expression with embedded commas (those collide
+    # with -filter_complex chain separators). Instead, two `volume` calls
+    # gated by the `enable=...` timeline switch — straightforward and robust.
+    music_pre_label = None
+    if has_music:
+        music_dur = total_dur - 0.2
+        fade_out_start = music_dur - MUSIC_FADE_OUT
+        duck_end = max(0.05, hook_dur - 0.1)        # last moment we duck hard
+        rise_end = duck_end + 0.4                    # 0.4s ramp into baseline
+        inputs.extend(["-i", music_path])
+        filter_parts.append(
+            f"[{idx}:a]atrim=0:{music_dur:.2f},"
+            # Stage 1: hard duck during hook segment.
+            f"volume=volume={MUSIC_VOLUME_HOOK_GAIN}:enable='lt(t\\,{duck_end:.2f})',"
+            # Stage 2: baseline volume for story/demo/close (kicks in after duck_end).
+            f"volume=volume={music_vol}:enable='gte(t\\,{rise_end:.2f})',"
+            # Stage 3: brief fade between the two states so the swap isn't a click.
+            f"afade=t=in:st={duck_end:.2f}:d={(rise_end - duck_end):.2f},"
             f"afade=t=in:st=0:d={MUSIC_FADE_IN},"
-            f"afade=t=out:st={fade_out_start:.2f}:d={MUSIC_FADE_OUT},"
-            f"adelay={delay_ms}|{delay_ms}[music_a]"
+            f"afade=t=out:st={fade_out_start:.2f}:d={MUSIC_FADE_OUT}"
+            f"[music_a]"
         )
         music_pre_label = "[music_a]"
         idx += 1

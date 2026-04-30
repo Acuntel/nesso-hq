@@ -92,11 +92,14 @@ export const RemotionRoot: React.FC = () => {
         }}
       />
 
-      {/* ── V22: logo close (2.5s) ─────────────────────────────────────── */}
+      {/* ── V24: logo close (3.5s default, pipeline grows to 3.0–5.0s
+          dynamically based on close VO duration). The composition's
+          durationInFrames is overridden per-render via the /render
+          endpoint; this default is just the Remotion preview length. ─── */}
       <Composition
         id="LogoClose"
         component={LogoClose}
-        durationInFrames={Math.round(2.5 * FPS)}
+        durationInFrames={Math.round(3.5 * FPS)}
         fps={FPS}
         width={VIDEO_WIDTH}
         height={VIDEO_HEIGHT}
@@ -105,6 +108,7 @@ export const RemotionRoot: React.FC = () => {
           payoff: "it's free",
           handle: "nesso.ai",
           appStoreHint: "on the App Store",
+          commentBait: "what's their name? 👇",
           backdropUrl: "",
         }}
       />

@@ -19,6 +19,12 @@ export type LogoCloseProps = {
   handle?: string;
   /** Small hint line under the handle. e.g. "on the App Store". */
   appStoreHint?: string;
+  /**
+   * V24: comment-bait CTA shown BELOW the handle. Prompts the viewer to
+   * comment, which is the #1 TikTok ranking signal. e.g. "what's their name? 👇".
+   * Empty string suppresses the line.
+   */
+  commentBait?: string;
   /** Optional dim-behind PNG (last frame of demo). Renders under at 35% opacity. */
   backdropUrl?: string;
 };
@@ -28,6 +34,7 @@ export const LogoClose: React.FC<LogoCloseProps> = ({
   payoff = "it's free",
   handle = "nesso.ai",
   appStoreHint = "on the App Store",
+  commentBait = "",
   backdropUrl,
 }) => {
   const frame = useCurrentFrame();
@@ -281,6 +288,56 @@ export const LogoClose: React.FC<LogoCloseProps> = ({
             {appStoreHint}
           </div>
         )}
+
+        {/* V24: comment-bait CTA — lands AFTER the handle/hint are read.
+            Sized big enough to actually drive comments, never overlaps the
+            logo or payoff. Lives in the safe zone above TikTok's bottom UI. */}
+        {commentBait &&
+          (() => {
+            const baitStart = Math.round(durationInFrames * 0.6);
+            const baitOpacity = interpolate(
+              frame,
+              [baitStart, baitStart + 14],
+              [0, 1],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+            );
+            const baitY = interpolate(
+              frame,
+              [baitStart, baitStart + 14],
+              [16, 0],
+              {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+                easing: Easing.out(Easing.cubic),
+              },
+            );
+            // Subtle pulse so the eye lands on it, not the logo.
+            const pulse = 1.0 + Math.sin((frame - baitStart) * 0.18) * 0.02;
+            return (
+              <div
+                style={{
+                  opacity: baitOpacity,
+                  transform: `translateY(${baitY}px) scale(${pulse})`,
+                  marginTop: 56,
+                  padding: "16px 28px",
+                  borderRadius: 999,
+                  background: "rgba(255, 255, 255, 0.10)",
+                  border: `1px solid ${accentRose}66`,
+                  fontFamily:
+                    "'SF Pro Display', 'Geist', 'Manrope', sans-serif",
+                  fontSize: 36,
+                  fontWeight: 600,
+                  color: "white",
+                  letterSpacing: "-0.01em",
+                  textAlign: "center",
+                  maxWidth: "82%",
+                  boxShadow: `0 8px 32px ${accentRose}33`,
+                }}
+              >
+                {commentBait}
+              </div>
+            );
+          })()}
       </AbsoluteFill>
     </AbsoluteFill>
   );

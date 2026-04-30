@@ -89,26 +89,23 @@ export const HookText: React.FC<HookTextProps> = ({
   const P = PALETTES[palette];
 
   const words = line.split(" ");
-  // Window 8% → 65% of duration for word stagger (feels punchier than 0-70)
-  const startFrame = durationInFrames * 0.08;
-  const endFrame = durationInFrames * 0.65;
+  // V24: word stagger window pushed to 40% → 92% of duration so the FIRST
+  // ~1.0s of the hook is pure raw clip — no overlay competing with the chaos.
+  // The thumb stops because the visual is unhinged, then the typography
+  // lands on the back half as a payoff.
+  const startFrame = Math.max(durationInFrames * 0.4, fps * 1.0);
+  const endFrame = durationInFrames * 0.92;
   const perWordGap = (endFrame - startFrame) / Math.max(1, words.length);
   const fadeFrames = Math.max(6, Math.round(fps * 0.22));
 
-  // Ghost preview — full line visible at frame 0 so the TikTok thumbnail isn't blank.
-  // Fades to 0 by frame 6, handing off to the word-by-word stagger.
-  const ghostEnd = 6;
-  const ghostOpacity = interpolate(frame, [0, ghostEnd], [0.22, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const ghostBlur = interpolate(frame, [0, ghostEnd], [2, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  // V24: ghost preview disabled. We deliberately want frame 0 to be CLIP-ONLY
+  // so the TikTok thumbnail also pulls just the chaos visual. (Algorithm
+  // rewards thumbnails that look "real" — typography-heavy thumbs read as ads.)
+  const ghostOpacity = 0;
+  const ghostBlur = 0;
 
-  // Subline appears at 70%
-  const sublineStart = durationInFrames * 0.7;
+  // Subline appears 0.3s after the main line finishes
+  const sublineStart = endFrame + Math.round(fps * 0.1);
 
   // Whole-line settle: subtle scale breath in the last 20% so it feels alive, not frozen
   const settleScale = interpolate(

@@ -1,26 +1,26 @@
 """
-Nesso Content Engine V22 — ElevenLabs TTS Voiceover
+Nesso Content Engine V24 — ElevenLabs TTS Voiceover
 
-Three functions:
-  generate_hook_voiceover(hook_line, render_dir, target_duration)
-    -> single MP3, hook line read over the 2.5s hook segment. 0.25s intro silence.
+V24 contract:
+  generate_hook_voiceover(...) → "" ALWAYS. The hook is raw chaos clip + native
+    audio, no VO, no overlay text in the first 1s. Function kept for
+    backward-compat with pipeline.py's call signature.
 
   generate_story_voiceover(messages, render_dir, target_duration)
-    -> {"path": str, "timings": [{text, startSec, endSec, words: [...]}]}
-       messages spoken in sequence with silence padding aligned to the
-       IMessageStory bubble appearance timeline. Word timings are relative to
-       the segment's local 0 (not absolute in the final video).
+    -> {"path": str, "timings": [...], "actual_delays": [...], "total_duration": float}
+       messages spoken in sequence with +0.7s breathing room after each line so
+       ElevenLabs trailing tails don't get clipped (was +0.4s in V23).
 
   generate_demo_voiceover(narration_lines, render_dir, target_duration)
-    -> {"path": str, "timings": [{text, startSec, endSec, words: [...]}]}
+    -> {"path": str, "timings": [...]}
        each demo line placed at its scene-start timestamp.
 
-Hook returns a plain path string (no captions — HookText is kinetic typography
-and doubles as its own caption). Story and demo return dicts so we can burn
-word-by-word captions into those segments.
+  generate_close_voiceover(close_line, render_dir, target_duration)
+    -> {"path": str, "duration": float}
+       NEW IN V24. Reads the close payoff and reports the actual measured
+       duration so pipeline.py can flex CLOSE_DURATION to fit.
 
-All three gracefully degrade to empty output on any failure — the pipeline
-handles silent/uncaptioned segments.
+All gracefully degrade to empty output on any failure.
 """
 
 from __future__ import annotations
@@ -238,61 +238,14 @@ def generate_hook_voiceover(
     intro_pad: float = 0.25,
 ) -> str:
     """
-    Read the hook line over the 2.5s hook segment.
-    Short intro silence so the first word lands after the segment settles in.
+    V24: hook is RAW chaos clip + native audio. No VO. No overlay text in the
+    first 1s. We keep the signature so pipeline.py doesn't have to change its
+    call site, but the function is now a no-op that always returns "".
+
+    Hook line still drives kinetic typography in HookText.tsx (starting at 1s).
     """
-    if not _have_tts() or not hook_line.strip():
-        return ""
-
-    output_path = os.path.join(render_dir, "hook_vo.mp3")
-    raw = os.path.join(render_dir, "hook_vo_raw.mp3")
-
-    ok, _words = _tts_clip(hook_line, ELEVENLABS_VOICE_ID, raw, expressive=True)
-    if not ok:
-        return ""
-
-    raw_dur = get_duration(raw)
-    max_dur = max(0.5, target_duration - intro_pad - 0.1)
-
-    # If the line is too long, speed it up slightly with atempo
-    if raw_dur > max_dur:
-        tempo = min(1.25, raw_dur / max_dur)
-        sped = os.path.join(render_dir, "hook_vo_sped.mp3")
-        subprocess.run(
-            [
-                "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
-                "-i", raw,
-                "-af", f"atempo={tempo:.3f}",
-                "-c:a", "libmp3lame", "-b:a", "128k",
-                sped,
-            ],
-            capture_output=True, timeout=FFMPEG_TIMEOUT,
-        )
-        try:
-            os.remove(raw)
-        except OSError:
-            pass
-        raw = sped
-
-    # Build final: [intro_silence] + [VO] padded to target_duration
-    parts = []
-    if intro_pad > 0:
-        intro = os.path.join(render_dir, "hook_vo_intro.mp3")
-        parts.append(_silence(intro_pad, intro))
-    parts.append(raw)
-
-    _concat_audio(parts, output_path, target_duration=target_duration)
-
-    for p in parts:
-        if p != output_path:
-            try:
-                os.remove(p)
-            except OSError:
-                pass
-
-    actual = get_duration(output_path)
-    log.info("hook VO: %.2fs (target %.2fs)", actual, target_duration)
-    return output_path if actual > 0.3 else ""
+    log.info("hook VO suppressed (V24: raw chaos clip carries the moment)")
+    return ""
 
 
 # ── Story voiceover ─────────────────────────────────────────────────────────
@@ -376,10 +329,13 @@ def generate_story_voiceover(
         clip_offset = cursor
 
         # NEVER trim a VO mid-word. Instead, extend the on-screen slot so the
-        # viewer actually hears the full message. Target slot = max(delay, tts+0.4).
+        # viewer actually hears the full message. V24: bumped breathing room
+        # to 0.7s (was 0.4s) — ElevenLabs trailing tails were getting clipped
+        # on the gut-punch line. The bubble can stay on a beat longer; nobody
+        # complains about a punchline holding for an extra third of a second.
         slot_dur = max(0.3, delay - 0.1)
         if clip_dur + 0.2 > slot_dur:
-            slot_dur = clip_dur + 0.4  # 0.4s breathing room after VO ends
+            slot_dur = clip_dur + 0.7
 
         # Pad the raw clip with trailing silence so its playback matches slot_dur
         padded = os.path.join(render_dir, f"story_vo_{i:02d}_p.mp3")
@@ -596,4 +552,65 @@ def generate_demo_voiceover(
     return {
         "path": output_path if actual > 0.5 else "",
         "timings": caption_lines if actual > 0.5 else [],
+    }
+
+
+# ── Close voiceover (V24) ──────────────────────────────────────────────────
+
+def generate_close_voiceover(
+    close_line: str,
+    render_dir: str,
+    intro_pad: float = 0.2,
+    tail_pad: float = 0.5,
+) -> dict:
+    """
+    V24: render the close payoff ("nesso. it's free. on the app store.") and
+    return its measured duration so pipeline.py can flex CLOSE_DURATION to fit.
+
+    Returns {"path": str, "duration": float}. Empty path on failure — pipeline
+    falls back to a silent close at CLOSE_DURATION_MIN.
+    """
+    if not _have_tts() or not close_line.strip():
+        return {"path": "", "duration": 0.0}
+
+    output_path = os.path.join(render_dir, "close_vo.mp3")
+    raw = os.path.join(render_dir, "close_vo_raw.mp3")
+
+    ok, _words = _tts_clip(close_line, ELEVENLABS_VOICE_ID, raw, expressive=True)
+    if not ok:
+        return {"path": "", "duration": 0.0}
+
+    raw_dur = get_duration(raw)
+    if raw_dur <= 0.2:
+        try:
+            os.remove(raw)
+        except OSError:
+            pass
+        return {"path": "", "duration": 0.0}
+
+    # Build: [intro silence] + [VO] + [tail silence], no atempo speed-up.
+    # We trust pipeline to extend CLOSE_DURATION instead of cramping the VO.
+    parts: list[str] = []
+    if intro_pad > 0:
+        intro = os.path.join(render_dir, "close_vo_intro.mp3")
+        parts.append(_silence(intro_pad, intro))
+    parts.append(raw)
+    if tail_pad > 0:
+        tail = os.path.join(render_dir, "close_vo_tail.mp3")
+        parts.append(_silence(tail_pad, tail))
+
+    _concat_audio(parts, output_path)
+
+    for p in parts:
+        if p != output_path:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+    actual = get_duration(output_path)
+    log.info("close VO: %.2fs (raw VO=%.2fs)", actual, raw_dur)
+    return {
+        "path": output_path if actual > 0.3 else "",
+        "duration": actual,
     }

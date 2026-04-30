@@ -1,12 +1,14 @@
 """
-Nesso Content Engine V22 — Reddit Hook Scraper (background clip only)
+Nesso Content Engine V24 — Reddit Hook Scraper (background clip only)
 
-Unlike V21, this module does NOT drive the hook's emotional content — the
-kinetic text in HookText.tsx does that. Instead, this fetches a visceral
-viral clip that sits UNDER the text as a dimmed, desaturated background —
-giving the first 2.5 seconds both:
-  - a scroll-stopping visual (the clip)
-  - an emotionally connected bridge to the story (the typography)
+V24 changes the hook contract: no overlay text or VO in the first 1.0s, the
+RAW chaos clip carries the moment. So this module is now the single most
+important step in the engine — pick the wildest possible 3.5s.
+
+Tier-1 (60% weight): full chaos — bike crashes, public freakouts, hold-my-beer
+moments, fast-paced chases, instant regret. Pure stop-the-thumb visual.
+Tier-2 (30%): nature predators, extreme sports, skydiving, wipeouts.
+Tier-3 (10%): close-call / wtf moments — long-tail variety.
 
 Source: www.reddit.com /r/<sub>/top.json with a browser User-Agent.
 No OAuth, no API key. Public JSON endpoint.
@@ -45,37 +47,65 @@ YT_DLP_DEADLINE_SECONDS = 60
 # can finish.
 FETCH_BG_BUDGET_SECONDS = 90
 
-# Action-first pool: lions hunting, explosions, skiing wipeouts, motorcycles,
-# stunts, crashes, extreme nature. High kinetic energy — the stuff that
-# genuinely stops a thumb mid-swipe. All clips get dim + desat so the scroll-
-# stopping chaos never overpowers the kinetic typography.
-SUBREDDIT_POOL = [
-    # extreme sports / stunts / skiing / motorcycles / jumps
-    "sendittards",
-    "HoldMyRedbull",
-    "holdmybeer",
+# V24: tiered chaos pool. Hook fetcher samples mostly from tier 1, with
+# occasional dips into tier 2/3 for variety. Tier-1 is pure thumb-stopper
+# fuel — bike crashes, public freakouts, instant regret moments. Tier-2 is
+# nature predators + extreme sports. Tier-3 is the long tail of "wtf" clips.
+SUBREDDITS_TIER1 = [
+    "PublicFreakout",     # public meltdowns, screaming, fights
+    "IdiotsInCars",       # crashes, dashcam carnage
+    "HoldMyRedbull",      # bike jumps, skydives, parkour fails
+    "holdmybeer",         # backyard chaos
+    "AbruptChaos",        # something normal → instant chaos
+    "instant_regret",     # second of regret right before disaster
+    "sendittards",        # ski/skate/bike send-it wipeouts
+    "Whatcouldgowrong",   # the predictable disaster
+    "SweatyPalms",        # vertigo / heights / close calls
+]
+SUBREDDITS_TIER2 = [
     "nevertellmetheodds",
     "extremesports",
-    # crashes / high-speed / dashcam / motorcycle
-    "IdiotsInCars",
-    "roadcam",
-    "Whatcouldgowrong",
-    "winstupidprizes",
-    # nature action — lions, sharks, predator moments
     "natureismetal",
     "NatureIsFuckingLit",
     "NatureIsBrutal",
     "hardcorenature",
-    # explosions / abrupt chaos / public chaos
-    "AbruptChaos",
-    "PublicFreakout",
     "ThingsThatBlowUp",
-    # heights / close calls / visceral stop-scroll
-    "SweatyPalms",
+    "roadcam",
+    "winstupidprizes",
+]
+SUBREDDITS_TIER3 = [
     "nextfuckinglevel",
     "Unexpected",
-    "instant_regret",
+    "maybemaybemaybe",
+    "BeAmazed",
 ]
+
+# Backwards-compat alias for any external import. Don't use directly — call
+# `_pick_subreddit_batch()` instead so tier weighting applies.
+SUBREDDIT_POOL = SUBREDDITS_TIER1 + SUBREDDITS_TIER2 + SUBREDDITS_TIER3
+
+
+def _pick_subreddit_batch(n: int = 5) -> list[str]:
+    """Pick `n` subs weighted toward tier 1 (60%), tier 2 (30%), tier 3 (10%)."""
+    weights = [
+        (SUBREDDITS_TIER1, 0.60),
+        (SUBREDDITS_TIER2, 0.30),
+        (SUBREDDITS_TIER3, 0.10),
+    ]
+    chosen: list[str] = []
+    while len(chosen) < n:
+        r = random.random()
+        acc = 0.0
+        pool = SUBREDDITS_TIER1
+        for p, w in weights:
+            acc += w
+            if r <= acc:
+                pool = p
+                break
+        candidate = random.choice(pool)
+        if candidate not in chosen:
+            chosen.append(candidate)
+    return chosen
 
 # Reddit fingerprints and blocks Python's `requests` TLS handshake as "bot".
 # curl with a real browser User-Agent passes through. We shell out to curl
@@ -101,7 +131,7 @@ REJECT_TITLE_KEYWORDS = [
 # Target clip duration for the hook BACKGROUND (2.5s segment)
 # We grab a slightly longer window then trim to the hook duration.
 HOOK_CLIP_TARGET_SEC = 3.5
-MIN_SCORE = 2000
+MIN_SCORE = 1500          # V24: was 2000 — let fresh chaos through faster
 MAX_POSTS_PER_SUB = 50
 CANDIDATES_TO_TRY = 3
 
@@ -252,6 +282,9 @@ def _trim_and_center_crop(
         "crop=1080:1920,setsar=1"
     )
 
+    # V24: keep the chaos clip's NATIVE AUDIO. Tire screech, screaming, crash
+    # impacts ARE the soundtrack of the hook. morph.py mixes it under the
+    # ducked music bed so the first 2.5s sound real, not produced.
     cmd = [
         "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
         "-ss", f"{start:.2f}",
@@ -261,7 +294,8 @@ def _trim_and_center_crop(
         "-c:v", "libx264",
         "-preset", "ultrafast",
         "-pix_fmt", "yuv420p",
-        "-an",
+        "-c:a", "aac",
+        "-b:a", "128k",
         output_path,
     ]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT)
@@ -278,7 +312,7 @@ def fetch_background_clip(
     Try to get a viral Reddit clip for the hook background.
     Returns (clip_path, duration, description) or None.
     """
-    subs = random.sample(SUBREDDIT_POOL, min(5, len(SUBREDDIT_POOL)))
+    subs = _pick_subreddit_batch(5)
     deadline = time.time() + FETCH_BG_BUDGET_SECONDS
 
     for sub in subs:

@@ -169,7 +169,7 @@ async def _send_video_result(update, result, video_num=""):
         await _reply_video_with_retry(
             update,
             output_path,
-            caption=f"{video_num}Nesso V23 — {duration:.0f}s",
+            caption=f"{video_num}Nesso V24 — {duration:.0f}s",
         )
     except Exception as e:
         await update.message.reply_text(
@@ -335,7 +335,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status command."""
     status_lines = [
-        "📊 **Nesso Content Engine V23 Status**\n",
+        "📊 **Nesso Content Engine V24 Status**\n",
         f"Total renders: {_total_renders}",
         f"Total failures: {_total_failures}",
     ]
@@ -377,7 +377,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
     await update.message.reply_text(
-        "🎬 **Nesso Content Engine V23**\n\n"
+        "🎬 **Nesso Content Engine V24**\n\n"
         "Commands:\n"
         "/make — Generate 1 video (22s)\n"
         "/make 4 — Generate 4 videos back-to-back\n"

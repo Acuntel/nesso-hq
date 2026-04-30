@@ -7,7 +7,7 @@ import {
   Easing,
   spring,
 } from "remotion";
-import { CaptionTrack, type CaptionLine } from "./CaptionTrack";
+import type { CaptionLine } from "./CaptionTrack";
 
 export type IMessageStoryMessage = {
   /** "me" = outgoing blue bubble (right), "other" = incoming gray (left), "system" = centered gray text. */
@@ -269,23 +269,23 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
       <BackChevron />
       <ContactHeader name={contactName} />
 
-      {/* Messages container — bottom anchored, column.
-          Bottom padding = 460 so bubbles stop at y≈1460, which leaves
-          a clean 60px gap above the caption ribbon (top at y≈1516,
-          positionY=0.79 below) and keeps bubbles well clear of TikTok's
-          bottom UI band (≈180px). Messages area = y 220 → 1460. */}
+      {/* V24: Messages container — bigger, bolder, fills the screen.
+          Bottom padding dropped from 460 → 240 so bubbles run almost down
+          to TikTok's UI band. Bubbles ARE the captions now (no separate
+          caption ribbon on the story segment) so we can use the full
+          vertical real estate. Messages area = y 220 → 1680. */}
       <div
         style={{
           position: "absolute",
           top: TOP_BAR_HEIGHT + 40,
           left: 0,
           right: 0,
-          bottom: 460,
-          padding: "0 28px",
+          bottom: 240,
+          padding: "0 24px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-end",
-          gap: 6,
+          gap: 10,
         }}
       >
         {bubbles.map((b, i) => {
@@ -323,7 +323,8 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
             },
           );
 
-          // Emphasis: extra scale-pop + glow pulse
+          // V24: Emphasis pop — bigger (1.0 → 1.18) since bubbles are larger
+          // and the extra punch sells the gut-punch ALL CAPS line.
           let emphasisScale = 1.0;
           let emphasisGlow = 0;
           if (msg.emphasis && !isSys) {
@@ -331,7 +332,7 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
             emphasisScale = interpolate(
               frame,
               [popStart, popStart + 6, popStart + 14, popStart + 26],
-              [1.0, 1.12, 1.0, 1.0],
+              [1.0, 1.18, 1.04, 1.0],
               { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
             );
             emphasisGlow = interpolate(
@@ -351,7 +352,7 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
             );
           }
 
-          // System message (centered gray text)
+          // System message (centered gray text — V24 bumped to 36px)
           if (isSys) {
             return (
               <div
@@ -359,9 +360,9 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
                 style={{
                   alignSelf: "center",
                   color: SYSTEM_GRAY,
-                  fontSize: 28,
+                  fontSize: 36,
                   fontWeight: 500,
-                  padding: "12px 0",
+                  padding: "16px 0",
                   opacity: bubbleOpacity,
                   transform: `translateY(${bubbleY}px)`,
                 }}
@@ -381,7 +382,11 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
               key={i}
               style={{
                 alignSelf: isMe ? "flex-end" : "flex-start",
-                maxWidth: "75%",
+                // V24: bubbles get 86% of the screen width (was 75%) so they
+                // visually dominate. Combined with bottom: 240 above, this
+                // means bubbles fill almost the whole screen — exactly what
+                // a phone screenshot looks like.
+                maxWidth: "86%",
                 marginTop,
                 position: "relative",
                 opacity: bubbleOpacity,
@@ -389,17 +394,17 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
                 transformOrigin: isMe ? "right bottom" : "left bottom",
               }}
             >
-              {/* Emphasis glow */}
+              {/* Emphasis glow — V24 stronger because the bubble is bigger */}
               {msg.emphasis && emphasisGlow > 0 && (
                 <div
                   style={{
                     position: "absolute",
-                    inset: -16,
-                    borderRadius: 32,
+                    inset: -22,
+                    borderRadius: 40,
                     background: isMe
-                      ? `radial-gradient(ellipse, rgba(10,132,255,${emphasisGlow * 0.6}) 0%, transparent 70%)`
-                      : `radial-gradient(ellipse, rgba(255,255,255,${emphasisGlow * 0.3}) 0%, transparent 70%)`,
-                    filter: "blur(20px)",
+                      ? `radial-gradient(ellipse, rgba(10,132,255,${emphasisGlow * 0.75}) 0%, transparent 70%)`
+                      : `radial-gradient(ellipse, rgba(255,255,255,${emphasisGlow * 0.4}) 0%, transparent 70%)`,
+                    filter: "blur(28px)",
                     pointerEvents: "none",
                   }}
                 />
@@ -409,12 +414,16 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
                 style={{
                   background: isMe ? IOS_BLUE : OTHER_GRAY,
                   color: "white",
-                  borderRadius: 26,
-                  padding: "16px 22px",
-                  fontSize: 40,
-                  lineHeight: 1.2,
-                  fontWeight: 400,
-                  letterSpacing: "-0.01em",
+                  // V24 bubble — chunkier, bigger, takes most of the screen.
+                  // fontSize 60 (was 40), padding 24x32 (was 16x22), radius 32
+                  // (was 26). Emphasis bumps to 700 weight to feel like the
+                  // viewer just read a screenshot they'd actually share.
+                  borderRadius: 32,
+                  padding: "24px 32px",
+                  fontSize: 60,
+                  lineHeight: 1.18,
+                  fontWeight: msg.emphasis ? 700 : 500,
+                  letterSpacing: msg.emphasis ? "0" : "-0.01em",
                   position: "relative",
                   wordBreak: "break-word",
                 }}
@@ -430,10 +439,10 @@ export const IMessageStory: React.FC<IMessageStoryProps> = ({
         })}
       </div>
 
-      {/* Burned-in captions for muted viewers. Positioned at y≈0.79 in the
-          clean band between bubble area (ends ~y1460) and TikTok UI (y1740),
-          with a smaller font size so the ribbon stays compact. */}
-      <CaptionTrack captions={captions} positionY={0.79} fontSize={38} />
+      {/* V24: NO caption ribbon on the story segment. The bubbles ARE the
+          captions — bigger, bolder, fill most of the screen. CaptionTrack
+          would otherwise overlap the larger bubbles AND fight the close CTA
+          for attention. Pipeline passes captions=[] for this segment. */}
 
       {/* Opening whip-flash — 4 frames of white fading out on the cut from
           the kinetic hook. Mirrors the hook's closing flash so the hard

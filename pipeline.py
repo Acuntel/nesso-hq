@@ -1,5 +1,5 @@
 """
-Nesso Content Engine V22 — Render Pipeline
+Nesso Content Engine V24 — Render Pipeline
 
 Flow:
   1. Generate script (hook line, messages, person_name, months_since, ai_message)
@@ -24,6 +24,9 @@ import uuid
 
 from config import (
     CLOSE_DURATION,
+    CLOSE_DURATION_MAX,
+    CLOSE_DURATION_MIN,
+    CLOSE_NARRATION_LINE,
     DEMO_DURATION,
     DEMO_NARRATION_LINES,
     FFMPEG_PRESET,
@@ -57,6 +60,7 @@ from config import (
     generate_ig_caption,
     generate_ig_pin_comment,
     generate_tiktok_caption,
+    get_random_comment_bait,
 )
 from analytics import log_render
 from hooks import fetch_background_clip
@@ -66,6 +70,7 @@ from remotion_client import RemotionError, delete_asset, render_composition, upl
 from scripts import generate_hook_variants, generate_script
 from verify import get_duration, verify_clip
 from voiceover import (
+    generate_close_voiceover,
     generate_demo_voiceover,
     generate_hook_voiceover,
     generate_story_voiceover,
@@ -358,7 +363,20 @@ def render_single_video(
         demo_vo_path = demo_vo_result.get("path", "")
         demo_captions = demo_vo_result.get("timings", [])
 
-        # ── 5. Story segment (captions burned in) ─────────────────────────
+        # V24: close VO is generated BEFORE rendering LogoClose so we can
+        # flex the composition duration to fit the spoken payoff. Without
+        # this, the last word ("...app store.") gets clipped on hard cut.
+        close_vo_result = generate_close_voiceover(
+            CLOSE_NARRATION_LINE, render_dir
+        )
+        close_vo_path = close_vo_result.get("path", "")
+        close_vo_dur = float(close_vo_result.get("duration", 0.0))
+        close_dur = max(
+            CLOSE_DURATION_MIN,
+            min(CLOSE_DURATION_MAX, close_vo_dur + 0.7),
+        )
+
+        # ── 5. Story segment (V24: bubbles ARE the message — no captions) ─
         story_video = os.path.join(render_dir, "story.mp4")
         render_composition(
             "IMessageStory",
@@ -374,7 +392,9 @@ def render_single_video(
                     }
                     for m in messages
                 ],
-                "captions": story_captions,
+                # V24: deliberately NO captions ribbon on the story segment.
+                # Bigger bubbles fill the screen and double as their own captions.
+                "captions": [],
             },
             duration_seconds=story_dur,
             fps=FPS,
@@ -400,7 +420,7 @@ def render_single_video(
         if not verify_clip(demo_video):
             raise RuntimeError("demo video failed verification")
 
-        # ── 7. Close segment ──────────────────────────────────────────────
+        # ── 7. Close segment (V24: dynamic length, comment-bait CTA) ──────
         close_video = os.path.join(render_dir, "close.mp4")
         render_composition(
             "LogoClose",
@@ -410,9 +430,10 @@ def render_single_video(
                 "payoff": "it's free",
                 "handle": "nesso.ai",
                 "appStoreHint": "on the App Store",
+                "commentBait": get_random_comment_bait(),
                 "backdropUrl": "",
             },
-            duration_seconds=CLOSE_DURATION,
+            duration_seconds=close_dur,
             fps=FPS,
         )
         if not verify_clip(close_video):
@@ -433,7 +454,7 @@ def render_single_video(
             hook_dur=HOOK_DURATION,
             story_dur=story_dur,
             demo_dur=DEMO_DURATION,
-            close_dur=CLOSE_DURATION,
+            close_dur=close_dur,
             ai_message=script["ai_message"],
         )
 
@@ -447,10 +468,11 @@ def render_single_video(
             hook_dur=HOOK_DURATION,
             story_dur=story_dur,
             demo_dur=DEMO_DURATION,
-            close_dur=CLOSE_DURATION,
+            close_dur=close_dur,
             story_vo_path=story_vo_path,
             demo_vo_path=demo_vo_path,
             hook_vo_path=hook_vo_path,
+            close_vo_path=close_vo_path,
             music_path=music_path,
             psych_sfx_path=psych_path,
             sfx_placements=sfx_placements,
@@ -459,7 +481,8 @@ def render_single_video(
 
         # Clean intermediates
         for p in [hook_video, story_video, demo_video, close_video,
-                  hook_vo_path, story_vo_path, demo_vo_path, music_path]:
+                  hook_vo_path, story_vo_path, demo_vo_path,
+                  close_vo_path, music_path]:
             if p and os.path.exists(p):
                 try:
                     os.remove(p)
@@ -572,6 +595,7 @@ def render_variants(n: int = 3) -> list[dict]:
     close_video = os.path.join(render_dir, "close.mp4")
     story_vo_path = ""
     demo_vo_path = ""
+    close_vo_path = ""
     music_path = ""
 
     results: list[dict] = []
@@ -614,7 +638,18 @@ def render_variants(n: int = 3) -> list[dict]:
         demo_vo_path = demo_vo_result.get("path", "")
         demo_captions = demo_vo_result.get("timings", [])
 
-        # ── 4. Render STORY segment ONCE (with captions) ──────────────────
+        # V24: shared close VO + dynamic close duration (same for all variants)
+        close_vo_result = generate_close_voiceover(
+            CLOSE_NARRATION_LINE, render_dir
+        )
+        close_vo_path = close_vo_result.get("path", "")
+        close_vo_dur = float(close_vo_result.get("duration", 0.0))
+        close_dur = max(
+            CLOSE_DURATION_MIN,
+            min(CLOSE_DURATION_MAX, close_vo_dur + 0.7),
+        )
+
+        # ── 4. Render STORY segment ONCE (V24: no caption ribbon) ─────────
         render_composition(
             "IMessageStory",
             story_video,
@@ -629,7 +664,7 @@ def render_variants(n: int = 3) -> list[dict]:
                     }
                     for m in messages
                 ],
-                "captions": story_captions,
+                "captions": [],
             },
             duration_seconds=story_dur,
             fps=FPS,
@@ -654,7 +689,7 @@ def render_variants(n: int = 3) -> list[dict]:
         if not verify_clip(demo_video):
             raise RuntimeError("demo video failed verification")
 
-        # ── 6. Render CLOSE segment ONCE ──────────────────────────────────
+        # ── 6. Render CLOSE segment ONCE (V24: dynamic + comment-bait) ────
         render_composition(
             "LogoClose",
             close_video,
@@ -663,9 +698,10 @@ def render_variants(n: int = 3) -> list[dict]:
                 "payoff": "it's free",
                 "handle": "nesso.ai",
                 "appStoreHint": "on the App Store",
+                "commentBait": get_random_comment_bait(),
                 "backdropUrl": "",
             },
-            duration_seconds=CLOSE_DURATION,
+            duration_seconds=close_dur,
             fps=FPS,
         )
         if not verify_clip(close_video):
@@ -685,7 +721,7 @@ def render_variants(n: int = 3) -> list[dict]:
             hook_dur=HOOK_DURATION,
             story_dur=story_dur,
             demo_dur=DEMO_DURATION,
-            close_dur=CLOSE_DURATION,
+            close_dur=close_dur,
             ai_message=base_script["ai_message"],
         )
 
@@ -803,10 +839,11 @@ def render_variants(n: int = 3) -> list[dict]:
                 hook_dur=HOOK_DURATION,
                 story_dur=story_dur,
                 demo_dur=DEMO_DURATION,
-                close_dur=CLOSE_DURATION,
+                close_dur=close_dur,
                 story_vo_path=story_vo_path,
                 demo_vo_path=demo_vo_path,
                 hook_vo_path=hook_vo_path,
+                close_vo_path=close_vo_path,
                 music_path=music_path,
                 psych_sfx_path=psych_path,
                 sfx_placements=sfx_placements,
@@ -895,7 +932,7 @@ def render_variants(n: int = 3) -> list[dict]:
 
     # ── 9. Cleanup shared intermediates (safe now — all variants done) ────
     for p in [story_video, demo_video, close_video,
-              story_vo_path, demo_vo_path, music_path]:
+              story_vo_path, demo_vo_path, close_vo_path, music_path]:
         if p and os.path.exists(p):
             try:
                 os.remove(p)
