@@ -411,9 +411,12 @@ def fetch_background_clip(
 
         chosen = None
         time_filter_used = None
+        any_posts_seen = False
         for tf in ("week", "day", "month"):
             posts = _fetch_top_posts(sub, time_filter=tf)
-            if not posts:
+            if posts:
+                any_posts_seen = True
+            else:
                 continue
             chosen = _find_viable_post(posts)
             if chosen:
@@ -421,7 +424,12 @@ def fetch_background_clip(
                 break
 
         if not chosen:
-            diag.append(f"r/{sub}=empty")
+            # V24.2: distinguish "Reddit blocked / returned no posts"
+            # (=noposts) from "Reddit responded but nothing met the
+            # viable filters" (=novideos). The first is a network/IP
+            # block; the second is a content/filter problem.
+            tag = "novideos" if any_posts_seen else "noposts"
+            diag.append(f"r/{sub}={tag}")
             continue
 
         log.info(

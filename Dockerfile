@@ -39,6 +39,14 @@ RUN mkdir -p remotion-reveal/public && \
 # Build the SFX library at image build time (requires ffmpeg, installed above)
 RUN python scripts/build_sfx.py || echo "WARN: sfx build failed — videos will render without sfx layer"
 
+# V24: pre-download chaos clip seed pool via yt-dlp at BUILD time. Reddit
+# blocks Railway's runtime egress IP aggressively; YouTube via yt-dlp
+# during build (different IP egress than runtime) reliably succeeds.
+# Tolerate failure — even partial pool is better than empty, and
+# users can drop their own MP4s into assets/hook_clips/ as a permanent
+# manual seed. Hook fetcher falls back to this pool when Reddit returns 0.
+RUN python scripts/fetch_seed_clips.py || echo "WARN: hook clip seed failed — assets/hook_clips/ may be empty; runtime will rely on Reddit only"
+
 # Pre-build the Remotion bundle so the server can serve it from disk instead
 # of bundling in-memory at startup. The in-memory `bundle()` call in some
 # Remotion versions doesn't emit an index.html, breaking renderMedia.

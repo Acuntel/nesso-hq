@@ -11,6 +11,9 @@ tmp/
 !assets/imessage_sounds/*.mp3
 !assets/music/*.mp3
 !assets/sfx/*.mp3
+!assets/hook_clips/*.mp4
+!assets/hook_clips/*.webm
+!assets/hook_clips/*.mov
 !remotion-reveal/public/nesso_logo.png
 
 # Dev-only helpers
