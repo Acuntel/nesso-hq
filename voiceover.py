@@ -468,23 +468,82 @@ def generate_demo_voiceover(
 
         clip_offset = cursor  # when this clip begins in the demo timeline
         if dur > max_dur:
-            trim_path = os.path.join(render_dir, f"demo_vo_{i:02d}_t.mp3")
-            subprocess.run(
+            # V24: speed up the VO with atempo so EVERY word lands in the
+            # slot, instead of trimming mid-word like V23 did. The user
+            # complained the demo VO got cut off; this is the V23-story-VO
+            # bug applied to the demo segment, but here we can't extend the
+            # slot (scene boundaries are baked into AppDemo.tsx), so we
+            # speed up the playback rate. atempo accepts 0.5–2.0; cap at
+            # 1.5x so it doesn't sound chipmunk. If even 1.5x isn't enough
+            # we fall back to trimming as a last resort.
+            tempo_needed = dur / max_dur
+            tempo = min(1.5, tempo_needed)
+            sped_path = os.path.join(render_dir, f"demo_vo_{i:02d}_s.mp3")
+            atempo_proc = subprocess.run(
                 [
                     "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
                     "-i", rec["path"],
-                    "-t", f"{max_dur:.3f}",
+                    "-af", f"atempo={tempo:.3f}",
                     "-c:a", "libmp3lame", "-b:a", "128k",
-                    trim_path,
+                    sped_path,
                 ],
                 capture_output=True, timeout=FFMPEG_TIMEOUT,
             )
-            parts.append(trim_path)
-            actual_dur = max_dur
-            # Drop words past the trim
-            words = [w for w in rec["words"] if w["start_sec"] < max_dur - 0.02]
-            for w in words:
-                w["end_sec"] = min(w["end_sec"], max_dur)
+            if atempo_proc.returncode == 0 and os.path.exists(sped_path):
+                sped_dur = get_duration(sped_path)
+                # If sped clip still overshoots (tempo was capped), do a
+                # tail trim as fallback so we never run past the next scene.
+                if sped_dur > max_dur + 0.05:
+                    trim_path = os.path.join(render_dir, f"demo_vo_{i:02d}_t.mp3")
+                    subprocess.run(
+                        [
+                            "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+                            "-i", sped_path,
+                            "-t", f"{max_dur:.3f}",
+                            "-c:a", "libmp3lame", "-b:a", "128k",
+                            trim_path,
+                        ],
+                        capture_output=True, timeout=FFMPEG_TIMEOUT,
+                    )
+                    try:
+                        os.remove(sped_path)
+                    except OSError:
+                        pass
+                    parts.append(trim_path)
+                    actual_dur = max_dur
+                else:
+                    parts.append(sped_path)
+                    actual_dur = sped_dur
+                # Word timings: scale by 1/tempo to match the new playback.
+                words = [
+                    {
+                        "word": w["word"],
+                        "start_sec": w["start_sec"] / tempo,
+                        "end_sec": w["end_sec"] / tempo,
+                    }
+                    for w in rec["words"]
+                    if w["start_sec"] / tempo < actual_dur
+                ]
+                for w in words:
+                    w["end_sec"] = min(w["end_sec"], actual_dur)
+            else:
+                # atempo failed — last-resort trim (matches V23 behavior).
+                trim_path = os.path.join(render_dir, f"demo_vo_{i:02d}_t.mp3")
+                subprocess.run(
+                    [
+                        "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+                        "-i", rec["path"],
+                        "-t", f"{max_dur:.3f}",
+                        "-c:a", "libmp3lame", "-b:a", "128k",
+                        trim_path,
+                    ],
+                    capture_output=True, timeout=FFMPEG_TIMEOUT,
+                )
+                parts.append(trim_path)
+                actual_dur = max_dur
+                words = [w for w in rec["words"] if w["start_sec"] < max_dur - 0.02]
+                for w in words:
+                    w["end_sec"] = min(w["end_sec"], max_dur)
         else:
             parts.append(rec["path"])
             actual_dur = dur

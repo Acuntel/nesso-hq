@@ -289,41 +289,51 @@ def render_single_video(
             script["palette"],
         )
 
-        # ── 2. Hook segment (Reddit clip background + kinetic text) ───────
-        hook_clip_info = fetch_background_clip(render_dir, target_seconds=HOOK_DURATION)
-        hook_bg_url = ""
-        hook_remote_name = ""
-        if hook_clip_info:
-            clip_path, clip_dur, clip_desc = hook_clip_info
-            result["hook_description"] = f"{script['hook_line']} | {clip_desc}"
-            hook_remote_name = f"hook_{render_id}.mp4"
-            try:
-                hook_bg_url = upload_asset(clip_path, remote_name=hook_remote_name)
-            except Exception as e:
-                log.warning("[%s] hook clip upload failed: %s", render_id, e)
-                hook_bg_url = ""
-            try:
-                os.remove(clip_path)
-            except OSError:
-                pass
+        # ── 2. Hook segment — V24: RAW chaos clip only. No text, no overlay,
+        # no Remotion render. The clip carries the entire moment + native
+        # audio. If fetch_background_clip returns None we FAIL the render
+        # so the pipeline retries with different subs — a text-only hook is
+        # the worst possible outcome (anti-viral, looks like a content farm).
+        hook_clip_info = fetch_background_clip(
+            render_dir, target_seconds=HOOK_DURATION
+        )
+        if not hook_clip_info:
+            raise RuntimeError(
+                "no hook clip available — chaos pool returned nothing in budget"
+            )
+
+        clip_path, _clip_dur, clip_desc = hook_clip_info
+        result["hook_description"] = clip_desc
+        result["hook_query"] = clip_desc[:60]
 
         hook_video = os.path.join(render_dir, "hook.mp4")
-        render_composition(
-            "HookText",
+        # Re-encode to canonical 1080x1920 / 30fps / yuv420p so concat with
+        # the Remotion-rendered story segment is byte-clean. Cap at exactly
+        # HOOK_DURATION; preserve native audio.
+        hook_cmd = [
+            "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+            "-i", clip_path,
+            "-t", f"{HOOK_DURATION:.2f}",
+            "-vf",
+            f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
+            f"crop={WIDTH}:{HEIGHT},setsar=1,fps={FPS}",
+            "-c:v", "libx264",
+            "-preset", FFMPEG_PRESET,
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "128k",
             hook_video,
-            props={
-                "line": script["hook_line"],
-                "subline": script["hook_subline"],
-                "palette": script["palette"],
-                "backgroundVideoUrl": hook_bg_url,
-            },
-            duration_seconds=HOOK_DURATION,
-            fps=FPS,
+        ]
+        proc = subprocess.run(
+            hook_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT
         )
+        if proc.returncode != 0:
+            raise RuntimeError(f"hook re-encode failed: {proc.stderr[-400:]}")
 
-        # Clean up the uploaded asset once the hook has been rendered
-        if hook_remote_name:
-            delete_asset(hook_remote_name)
+        try:
+            os.remove(clip_path)
+        except OSError:
+            pass
 
         if not verify_clip(hook_video):
             raise RuntimeError("hook video failed verification")
@@ -778,46 +788,47 @@ def render_variants(n: int = 3) -> list[dict]:
         }
 
         try:
-            # 8a. Fetch a fresh Reddit background clip for this variant
+            # 8a. V24: fetch fresh chaos clip per variant. Raw clip IS the
+            # hook — no Remotion render, no text, no overlay. If fetch
+            # returns None this variant fails and the next one tries again.
             hook_clip_info = fetch_background_clip(
                 variant_dir, target_seconds=HOOK_DURATION
             )
-            hook_bg_url = ""
-            hook_remote_name = ""
-            if hook_clip_info:
-                clip_path, _clip_dur, clip_desc = hook_clip_info
-                result["hook_description"] = f"{variant['hook_line']} | {clip_desc}"
-                hook_remote_name = f"hook_{render_id}_v{variant_num}.mp4"
-                try:
-                    hook_bg_url = upload_asset(clip_path, remote_name=hook_remote_name)
-                except Exception as e:
-                    log.warning(
-                        "[%s] variant %d: hook clip upload failed: %s",
-                        render_id, variant_num, e,
-                    )
-                    hook_bg_url = ""
-                try:
-                    os.remove(clip_path)
-                except OSError:
-                    pass
+            if not hook_clip_info:
+                raise RuntimeError(
+                    "no hook clip available for variant — chaos pool empty"
+                )
+            clip_path, _clip_dur, clip_desc = hook_clip_info
+            result["hook_description"] = clip_desc
+            result["hook_query"] = clip_desc[:60]
 
-            # 8b. Render HOOK with this variant's line + palette + bg
+            # 8b. Re-encode raw clip → hook.mp4 at canonical 1080x1920/30fps,
+            # preserving native audio. No HookText composition; no upload.
             hook_video = os.path.join(variant_dir, "hook.mp4")
-            render_composition(
-                "HookText",
+            hook_cmd = [
+                "ffmpeg", "-y", "-threads", FFMPEG_THREADS,
+                "-i", clip_path,
+                "-t", f"{HOOK_DURATION:.2f}",
+                "-vf",
+                f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
+                f"crop={WIDTH}:{HEIGHT},setsar=1,fps={FPS}",
+                "-c:v", "libx264",
+                "-preset", FFMPEG_PRESET,
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "128k",
                 hook_video,
-                props={
-                    "line": variant["hook_line"],
-                    "subline": variant["hook_subline"],
-                    "palette": variant["palette"],
-                    "backgroundVideoUrl": hook_bg_url,
-                },
-                duration_seconds=HOOK_DURATION,
-                fps=FPS,
+            ]
+            proc = subprocess.run(
+                hook_cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT
             )
+            if proc.returncode != 0:
+                raise RuntimeError(f"variant hook re-encode failed: {proc.stderr[-400:]}")
 
-            if hook_remote_name:
-                delete_asset(hook_remote_name)
+            try:
+                os.remove(clip_path)
+            except OSError:
+                pass
 
             if not verify_clip(hook_video):
                 raise RuntimeError("hook video failed verification")
