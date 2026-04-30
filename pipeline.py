@@ -63,6 +63,7 @@ from config import (
     get_random_comment_bait,
 )
 from analytics import log_render
+import hooks
 from hooks import fetch_background_clip
 from morph import morph_and_concat
 from music import download_background_music, download_psych_sfx
@@ -298,8 +299,9 @@ def render_single_video(
             render_dir, target_seconds=HOOK_DURATION
         )
         if not hook_clip_info:
+            diag = getattr(hooks, "LAST_FETCH_DIAGNOSIS", "") or "unknown"
             raise RuntimeError(
-                "no hook clip available — chaos pool returned nothing in budget"
+                f"no hook clip available [{diag}]"
             )
 
         clip_path, _clip_dur, clip_desc = hook_clip_info
@@ -795,8 +797,9 @@ def render_variants(n: int = 3) -> list[dict]:
                 variant_dir, target_seconds=HOOK_DURATION
             )
             if not hook_clip_info:
+                diag = getattr(hooks, "LAST_FETCH_DIAGNOSIS", "") or "unknown"
                 raise RuntimeError(
-                    "no hook clip available for variant — chaos pool empty"
+                    f"no hook clip available for variant [{diag}]"
                 )
             clip_path, _clip_dur, clip_desc = hook_clip_info
             result["hook_description"] = clip_desc

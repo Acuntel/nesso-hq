@@ -43,9 +43,8 @@ YT_DLP_DEADLINE_SECONDS = 60
 
 # Total wall-clock budget for the whole hook-sourcing stage. Five
 # subreddits × (curl + ytdlp + ffmpeg trim) can pile up. If we exceed
-# this, fall back to gradient-only hook so the rest of the pipeline
-# can finish.
-FETCH_BG_BUDGET_SECONDS = 90
+# this, fall through to the bundled-clips fallback in fetch_background_clip.
+FETCH_BG_BUDGET_SECONDS = 120  # V24.1: was 90 — Railway egress is slower
 
 # V24: tiered chaos pool. Hook fetcher samples mostly from tier 1, with
 # occasional dips into tier 2/3 for variety. Tier-1 is pure thumb-stopper
@@ -115,9 +114,12 @@ REDDIT_UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
+# V24.1: www.reddit.com first — old.reddit.com has been blocking datacenter
+# IPs more aggressively lately. www. is the canonical redirect target and
+# tends to pass our browser UA through.
 REDDIT_ENDPOINTS = [
-    "https://old.reddit.com",
     "https://www.reddit.com",
+    "https://old.reddit.com",
 ]
 
 # Titles we DON'T want — talking heads, interviews, news, porn-adjacent, gore
@@ -142,7 +144,14 @@ def _title_rejected(title: str) -> bool:
 
 
 def _fetch_top_posts(subreddit: str, time_filter: str = "week") -> list[dict]:
-    """Hit the public JSON endpoint via curl (Reddit blocks requests' TLS)."""
+    """Hit the public JSON endpoint via curl (Reddit blocks requests' TLS).
+
+    V24.1: stronger browser-mimicking headers (Sec-Fetch-*, DNT, Upgrade-
+    Insecure-Requests) so Reddit's anti-bot filter is less likely to flag
+    us as datacenter automation. Also logs WHY each endpoint fails so the
+    Railway logs can tell us if it's network, JSON parse, or HTML block.
+    """
+    last_err = None
     for base in REDDIT_ENDPOINTS:
         url = (
             f"{base}/r/{subreddit}/top.json"
@@ -153,24 +162,43 @@ def _fetch_top_posts(subreddit: str, time_filter: str = "week") -> list[dict]:
                 [
                     "curl", "-sL",
                     "--max-time", "15",
+                    "--compressed",
                     "-A", REDDIT_UA,
-                    "-H", "Accept: application/json,*/*",
+                    "-H", "Accept: application/json,text/javascript,*/*;q=0.9",
                     "-H", "Accept-Language: en-US,en;q=0.9",
+                    "-H", "Accept-Encoding: gzip, deflate, br",
+                    "-H", "Sec-Fetch-Dest: empty",
+                    "-H", "Sec-Fetch-Mode: cors",
+                    "-H", "Sec-Fetch-Site: same-origin",
+                    "-H", "DNT: 1",
+                    "-H", "Upgrade-Insecure-Requests: 1",
+                    "-H", "Cache-Control: no-cache",
                     url,
                 ],
                 capture_output=True, text=True, timeout=20,
             )
-            if r.returncode != 0 or not r.stdout:
+            if r.returncode != 0:
+                last_err = f"curl rc={r.returncode}"
                 continue
-            # Tiny HTML payload = anti-bot block page
-            if r.stdout.lstrip().startswith("<"):
+            if not r.stdout:
+                last_err = "empty body"
+                continue
+            stripped = r.stdout.lstrip()
+            if stripped.startswith("<"):
+                last_err = "HTML block page"
                 continue
             data = json.loads(r.stdout)
-            return data.get("data", {}).get("children", [])
-        except json.JSONDecodeError:
+            children = data.get("data", {}).get("children", [])
+            if children:
+                return children
+            last_err = "0 children in JSON"
+        except json.JSONDecodeError as e:
+            last_err = f"JSONDecode: {e}"
             continue
         except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
             log.debug("reddit %s r/%s: %s", base, subreddit, e)
+    log.info("r/%s: all endpoints failed (%s)", subreddit, last_err)
     return []
 
 
@@ -304,54 +332,122 @@ def _trim_and_center_crop(
     return output_path
 
 
+# Bundled chaos-clip fallback: drop MP4s into assets/hook_clips/ and they
+# get baked into the Docker image. fetch_background_clip uses one of them
+# whenever Reddit is unreachable / blocked / empty. The user can refresh
+# this pool periodically with hand-picked viral clips.
+BUNDLED_HOOK_CLIPS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "assets", "hook_clips"
+)
+
+
+def _bundled_clip_fallback(
+    temp_dir: str, target_seconds: float
+) -> Optional[tuple[str, float, str]]:
+    """Pick a random bundled chaos clip and trim/crop it like a fresh fetch."""
+    if not os.path.isdir(BUNDLED_HOOK_CLIPS_DIR):
+        return None
+    candidates = [
+        os.path.join(BUNDLED_HOOK_CLIPS_DIR, f)
+        for f in os.listdir(BUNDLED_HOOK_CLIPS_DIR)
+        if f.lower().endswith((".mp4", ".mov", ".webm"))
+        and not f.startswith(".")
+    ]
+    if not candidates:
+        return None
+    src = random.choice(candidates)
+    src_dur = get_duration(src)
+    if src_dur < target_seconds:
+        log.warning("bundled clip %s too short (%.1fs)", src, src_dur)
+        return None
+    out = os.path.join(temp_dir, "hook_bg.mp4")
+    try:
+        _trim_and_center_crop(src, out, src_dur, target_seconds=target_seconds)
+    except Exception as e:
+        log.warning("bundled clip trim/crop failed for %s: %s", src, e)
+        return None
+    name = os.path.basename(src)
+    log.info("bundled hook clip: %.1fs — %s", target_seconds, name)
+    return out, target_seconds, f"bundled: {name}"
+
+
+# V24.1: module-level diagnostic from the most recent fetch_background_clip
+# call. pipeline.py reads this when raising the "no hook clip available"
+# error so the Telegram reply tells the user *why* each sub failed without
+# needing Railway log access.
+LAST_FETCH_DIAGNOSIS: str = ""
+
+
 def fetch_background_clip(
     temp_dir: str,
     target_seconds: float = HOOK_CLIP_TARGET_SEC,
 ) -> Optional[tuple[str, float, str]]:
     """
     Try to get a viral Reddit clip for the hook background.
+
+    V24.1 strategy:
+      1. Sample 8 subs from the tiered chaos pool (was 5).
+      2. For each sub try [week, day, month] in turn.
+      3. Skip a sub fast if curl/JSON fails — diagnose in logs.
+      4. If Reddit yields nothing in budget, fall back to assets/hook_clips/.
+      5. Only return None when even the bundled pool is empty.
+
     Returns (clip_path, duration, description) or None.
     """
-    subs = _pick_subreddit_batch(5)
+    global LAST_FETCH_DIAGNOSIS
+    LAST_FETCH_DIAGNOSIS = ""
+    subs = _pick_subreddit_batch(8)
     deadline = time.time() + FETCH_BG_BUDGET_SECONDS
+    diag: list[str] = []  # one tag per sub, surfaced in pipeline error msg
 
     for sub in subs:
         if time.time() > deadline:
             log.warning(
-                "hook fetch exceeded %ds budget — falling back to gradient-only",
+                "hook fetch exceeded %ds budget — falling back to bundled clips",
                 FETCH_BG_BUDGET_SECONDS,
             )
-            return None
-        time_filter = random.choice(["day", "week", "week"])
-        posts = _fetch_top_posts(sub, time_filter=time_filter)
-        if not posts:
-            log.info("r/%s returned 0 posts (top/%s)", sub, time_filter)
-            continue
+            diag.append(f"r/{sub}=budget")
+            break
 
-        chosen = _find_viable_post(posts)
+        chosen = None
+        time_filter_used = None
+        for tf in ("week", "day", "month"):
+            posts = _fetch_top_posts(sub, time_filter=tf)
+            if not posts:
+                continue
+            chosen = _find_viable_post(posts)
+            if chosen:
+                time_filter_used = tf
+                break
+
         if not chosen:
-            log.info("r/%s: no viable video posts", sub)
+            diag.append(f"r/{sub}=empty")
             continue
 
         log.info(
             "hook candidate: r/%s (top/%s) %s (score=%d, dur=%ds)",
-            sub, time_filter, chosen["title"][:60], chosen["score"], int(chosen["duration"]),
+            sub, time_filter_used, chosen["title"][:60],
+            chosen["score"], int(chosen["duration"]),
         )
 
         raw = os.path.join(temp_dir, "hook_raw.mp4")
         if not _download_via_ytdlp(chosen["url"], raw):
-            log.warning("r/%s download failed, trying next sub", sub)
+            log.warning("r/%s ytdlp failed, trying next sub", sub)
+            diag.append(f"r/{sub}=ytdlp")
             continue
 
         try:
             trimmed = os.path.join(temp_dir, "hook_bg.mp4")
-            _trim_and_center_crop(raw, trimmed, chosen["duration"], target_seconds=target_seconds)
+            _trim_and_center_crop(
+                raw, trimmed, chosen["duration"], target_seconds=target_seconds
+            )
         except Exception as e:
             log.warning("r/%s trim/crop failed: %s", sub, e)
             try:
                 os.remove(raw)
             except OSError:
                 pass
+            diag.append(f"r/{sub}=trim")
             continue
 
         try:
@@ -364,5 +460,24 @@ def fetch_background_clip(
         log.info("hook clip: %.1fs — %s", duration, desc)
         return trimmed, duration, desc
 
-    log.info("no Reddit clip available — hook will be gradient-only")
+    diag_str = ",".join(diag) or "no-attempts"
+    LAST_FETCH_DIAGNOSIS = diag_str
+
+    # Reddit pool exhausted — try the bundled fallback.
+    log.warning(
+        "Reddit chaos pool yielded nothing (diag: %s). Trying bundled clips.",
+        diag_str,
+    )
+    fallback = _bundled_clip_fallback(temp_dir, target_seconds)
+    if fallback:
+        return fallback
+
+    # Even the bundled pool was empty. The pipeline raises and tells the user.
+    LAST_FETCH_DIAGNOSIS = (
+        f"reddit:{diag_str}; bundled:empty "
+        f"(add MP4s to assets/hook_clips/ to seed)"
+    )
+    log.error(
+        "no hook clip from Reddit OR bundled pool. diag=%s", LAST_FETCH_DIAGNOSIS,
+    )
     return None
