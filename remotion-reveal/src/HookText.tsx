@@ -89,14 +89,18 @@ export const HookText: React.FC<HookTextProps> = ({
   const P = PALETTES[palette];
 
   const words = line.split(" ");
-  // V24: word stagger window pushed to 40% → 92% of duration so the FIRST
-  // ~1.0s of the hook is pure raw clip — no overlay competing with the chaos.
-  // The thumb stops because the visual is unhinged, then the typography
-  // lands on the back half as a payoff.
-  const startFrame = Math.max(durationInFrames * 0.4, fps * 1.0);
-  const endFrame = durationInFrames * 0.92;
-  const perWordGap = (endFrame - startFrame) / Math.max(1, words.length);
+  // V24: word stagger pushed off the front so the FIRST ~1.0s is pure raw
+  // chaos clip — no overlay competing for attention. End is computed
+  // BACKWARDS from durationInFrames so the last word's fade-in + glow peak
+  // always lands before the cut, regardless of word count. (Without this,
+  // a 7-word hook had the glow's input range overshoot durationInFrames
+  // and Remotion's `interpolate()` rejected the non-monotonic range.)
   const fadeFrames = Math.max(6, Math.round(fps * 0.22));
+  const glowPeakOffset = 14;
+  const tailMargin = fadeFrames + glowPeakOffset + 4; // 4f safety
+  const startFrame = Math.max(durationInFrames * 0.35, fps * 1.0);
+  const endFrame = Math.max(startFrame + 1, durationInFrames - tailMargin);
+  const perWordGap = (endFrame - startFrame) / Math.max(1, words.length);
 
   // V24: ghost preview disabled. We deliberately want frame 0 to be CLIP-ONLY
   // so the TikTok thumbnail also pulls just the chaos visual. (Algorithm
@@ -107,10 +111,13 @@ export const HookText: React.FC<HookTextProps> = ({
   // Subline appears 0.3s after the main line finishes
   const sublineStart = endFrame + Math.round(fps * 0.1);
 
-  // Whole-line settle: subtle scale breath in the last 20% so it feels alive, not frozen
+  // Whole-line settle: subtle scale breath in the last 20% so it feels alive,
+  // not frozen. Clamp the input range — for very short hook durations
+  // endFrame could equal durationInFrames and Remotion would reject the
+  // zero-width range.
   const settleScale = interpolate(
     frame,
-    [endFrame, durationInFrames],
+    [endFrame, Math.max(endFrame + 1, durationInFrames)],
     [1.0, 1.015],
     {
       extrapolateLeft: "clamp",
@@ -309,25 +316,29 @@ export const HookText: React.FC<HookTextProps> = ({
                 easing: Easing.out(Easing.cubic),
               },
             );
-            // Glow trail on the final word only (the payoff)
+            // Glow trail on the final word only (the payoff). V24 belt-and-
+            // suspenders: clamp every interpolate input so it's strictly
+            // monotonic regardless of word count. Without this, a long hook
+            // line could push the glow peak past durationInFrames and
+            // Remotion would throw "inputRange must be strictly monotonically
+            // increasing" — which is exactly what crashed the V24 first run.
             const isLast = i === words.length - 1;
+            const lastIn0 = wordStart + fadeFrames;
+            const lastIn1 = Math.max(lastIn0 + 1, wordStart + fadeFrames + 14);
+            const lastIn2 = Math.max(lastIn1 + 1, durationInFrames);
+            const nonLastIn0 = wordStart + fadeFrames;
+            const nonLastIn1 = nonLastIn0 + 10;
             const glowOpacity = isLast
               ? interpolate(
                   frame,
-                  [
-                    wordStart + fadeFrames,
-                    wordStart + fadeFrames + 14,
-                    durationInFrames,
-                  ],
+                  [lastIn0, lastIn1, lastIn2],
                   [0, 0.85, 0.3],
                   { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
                 )
-              : interpolate(
-                  frame,
-                  [wordStart + fadeFrames, wordStart + fadeFrames + 10],
-                  [0.6, 0],
-                  { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-                );
+              : interpolate(frame, [nonLastIn0, nonLastIn1], [0.6, 0], {
+                  extrapolateLeft: "clamp",
+                  extrapolateRight: "clamp",
+                });
 
             return (
               <span
