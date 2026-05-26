@@ -65,8 +65,11 @@ export const LogoClose: React.FC<LogoCloseProps> = ({
   const payoffWordGap = Math.max(4, Math.round(fps * 0.08));
   const payoffFade = Math.max(6, Math.round(fps * 0.18));
 
-  // Handle — fades in last, slight slide
-  const handleStart = Math.round(durationInFrames * 0.55);
+  // Handle — fades in last, slight slide. V25: reveal earlier (was 0.55) so
+  // the nesso.ai / App Store CTA — the most conversion-critical text — is at
+  // full opacity for longer before the short close cuts. Comment-bait still
+  // lands after at 0.6, so nothing overflows the composition end.
+  const handleStart = Math.round(durationInFrames * 0.42);
   const handleOpacity = interpolate(
     frame,
     [handleStart, handleStart + 12],

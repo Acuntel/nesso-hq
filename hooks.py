@@ -30,6 +30,7 @@ from typing import Optional
 
 import yt_dlp
 
+import config
 from config import FFMPEG_THREADS, FFMPEG_TIMEOUT
 from verify import get_duration
 
@@ -396,6 +397,20 @@ def fetch_background_clip(
     """
     global LAST_FETCH_DIAGNOSIS
     LAST_FETCH_DIAGNOSIS = ""
+
+    # V25: Higgsfield-first. Try generating an AI hook clip before touching
+    # Reddit. Slow (minutes) + costs credits, so it's gated on HIGGSFIELD_ENABLED
+    # and falls through to the Reddit + bundled path on ANY failure.
+    if config.HIGGSFIELD_ENABLED:
+        try:
+            from higgsfield_hooks import generate_hook_clip
+            hf = generate_hook_clip(temp_dir, target_seconds)
+            if hf:
+                return hf
+            log.warning("higgsfield gen returned nothing — falling back to Reddit")
+        except Exception as e:  # defensive: never let gen break the pipeline
+            log.warning("higgsfield gen raised (%s) — falling back to Reddit", e)
+
     subs = _pick_subreddit_batch(8)
     deadline = time.time() + FETCH_BG_BUDGET_SECONDS
     diag: list[str] = []  # one tag per sub, surfaced in pipeline error msg

@@ -6,24 +6,50 @@ Autonomous short-form video pipeline that generates viral TikTok/Reels/Shorts co
 
 ## Tech Stack
 
-- Python 3.11, FFmpeg, yt-dlp, Pillow
+- Python 3.11, FFmpeg, yt-dlp
+- **Remotion** (Node 20 + headless Chromium) renders the story/demo/close — a Remotion server runs on port 3100, `pipeline.py` drives it via `remotion_client.py`
 - Claude API (script generation), ElevenLabs (TTS voiceover)
 - Telegram bot (trigger + delivery), Railway (hosting)
+
+> **Render architecture note:** the story, app demo, and logo close are React
+> compositions under `remotion-reveal/src/` (`IMessageStory.tsx`, `AppDemo.tsx`,
+> `LogoClose.tsx`). The old Pillow renderers (`renderer.py`, `reveal.py`,
+> `app_screens.py`) are **dead code** — nothing imports them. Don't edit them
+> expecting a change in the output; edit the `.tsx` compositions instead.
 
 ## The 11-Stage Pipeline
 
 ```
-/make → hooks.py → scripts.py → voiceover.py → renderer.py → reveal.py → music.py → morph.py → pipeline.py (final encode) → Telegram delivery
+/make → hooks.py → scripts.py → voiceover.py
+      → Remotion render (IMessageStory + AppDemo + LogoClose via remotion_client.py)
+      → music.py → morph.py → pipeline.py (final encode) → Telegram delivery
 ```
 
 ### Stage 1: Hook Sourcing (`hooks.py`)
 
-- Primary: Reddit (top endpoint, category-aware subreddit mapping, quality score ranking)
+- **V25 Higgsfield-first** (`higgsfield_hooks.py`): when `HIGGSFIELD_ENABLED`,
+  `fetch_background_clip` generates the hook clip via Higgsfield BEFORE Reddit.
+  Higgsfield DoP is image-to-video, so it's a two-step async job — text2image
+  (Soul) → image2video (DoP) → poll → download → `_trim_and_center_crop`. Slow
+  (minutes) and costs credits PER `/make`; bounded by `HIGGSFIELD_GEN_DEADLINE_SEC`
+  (default 300s). ANY failure (no key, HTTP error, NSFW, timeout) falls through
+  to the Reddit + bundled path below — it never hard-fails the pipeline.
+  - Auth is an API-key PAIR from platform.higgsfield.ai (`Authorization: Key
+id:secret`), **separate from the Claude Code MCP**. Endpoint paths + model
+    IDs are config constants in `config.py` — verify against your dashboard's
+    API reference on first use.
+- Primary fallback: Reddit (top endpoint, category-aware subreddit mapping, quality score ranking)
 - Fallback: YouTube (cookies + heatmap peak extraction)
 - No Pexels — stock video is anti-viral, better to fail and retry
 - Smart segment extraction: skips buildup, targets peak moments based on duration heuristics
 - No text overlay — raw hook video, no processing that signals content farm
 - Min 5s / Max 15s hook, 720p max height, Reddit score >= 2000
+- **Bundled fallback pool** (`assets/hook_clips/`): when Reddit is blocked, a
+  random clip from here is used instead of hard-failing. Whitelisted in
+  `.gitignore`, baked into the Docker image. Seed it with hand-picked viral
+  MP4s, or generate cinematic vertical B-roll with **free Higgsfield**
+  (web UI or the `higgsfield` MCP in Claude Code), download, and drop the
+  `.mp4`s here (≥3.5s, peak in first 2s, 9:16). See `assets/hook_clips/README.md`.
 
 ### Stage 2: Script Generation (`scripts.py`)
 
@@ -43,27 +69,32 @@ Autonomous short-form video pipeline that generates viral TikTok/Reels/Shorts co
 - Variable post-speech buffer: 0.2s (short), 0.3s (normal), 0.4s (gut-punch)
 - Drift correction: scales durations if accumulated measurement error > 0.01s
 
-### Stage 4: Frame Rendering (`renderer.py`)
+### Stage 4: Story Render — `IMessageStory` (Remotion)
 
-- Pillow renders iMessage-style bubbles as PNG frames (1080x1920)
-- Blue (#007AFF) right-aligned = "me", dark gray (#1C1C1E) left-aligned = others
-- Safe zones: top 150px, bottom 250px, right 200px (TikTok UI)
-- iMessage top bar with contact name + late-night timestamp (2am vibe)
-- Typing indicator (three dots) before incoming messages (when no voiceover)
-- "Delivered" status rendering on final "me" message
-- Bottom-aligned messages with scroll overflow
+- React composition `remotion-reveal/src/IMessageStory.tsx`, rendered headless
+  via `remotion_client.render_composition("IMessageStory", ...)`
+- iMessage-style bubbles: blue right-aligned = "me", gray left-aligned = others
+- Word-timed captions + typing indicators driven by the voiceover timings
+  passed in as composition props
+- Replaces the old Pillow `renderer.py` (now dead code)
 
-### Stage 5: Frame Compilation (`renderer.py`)
+### Stage 5: App Demo Render — `AppDemo` (Remotion)
 
-- FFmpeg concat demuxer compiles PNGs to story.mp4 at 30fps
-- Repeats last frame to avoid black frame at end
+- `remotion-reveal/src/AppDemo.tsx` — a hand-coded, brand-accurate, 8s
+  click-through of the Nesso UI, beat-matched to 80 BPM
+- Scenes: Inner Circle grid (Sarah's bar drains) → tap card → iOS slide →
+  person detail → tap Reach out → sheet up → AI message types → tap send + flash
+- **`pipeline.py` hard-codes SFX hits to this composition's scene timings**
+  (`demo_start + 1.75` ui_tap, `+5.55` ai reveal, `+7.05` send swoosh, …).
+  If you re-time the `SCENES` map in `AppDemo.tsx`, update those offsets too.
+- Burned-in captions synced to the demo narration VO (`CaptionTrack.tsx`)
 
-### Stage 6: Nesso Reveal (`reveal.py`)
+### Stage 6: Logo Close — `LogoClose` (Remotion)
 
-- 3 SECONDS TOTAL: feature text (1.5s) → logo + "it's free" + @nesso.app (1.5s)
-- Subtle dark gradient background (not pure black)
-- Punchier reveal lines — no brand name in text, logo handles recognition
-- No app screenshots, no panning, no separate CTA frame
+- `remotion-reveal/src/LogoClose.tsx` — dynamic-length close: logo + "it's free"
+  - @nesso.app + a rotating comment-bait line (`COMMENT_BAIT_LINES` in config)
+- Duration grows to fit the measured close-narration TTS length
+- Replaces the old Pillow `reveal.py` / `app_screens.py` (now dead code)
 
 ### Stage 7: Background Music (`music.py`)
 
@@ -139,28 +170,36 @@ ELEVENLABS_VOICE_ID    (optional — default: pFZP5JQG7iQjIQuC4Bku)
 ELEVENLABS_VOICE_ID_2  (optional — friend voice, default: Rachel)
 YT_COOKIES_B64         (optional — YouTube cookie auth)
 PEXELS_API_KEY         (optional — last-resort hook fallback)
+HIGGSFIELD_API_KEY     (optional — "KEY_ID:KEY_SECRET" from platform.higgsfield.ai; enables Higgsfield-first hooks)
+HIGGSFIELD_ENABLED     (optional — default 1 when key set; 0 to force Reddit-first)
+HIGGSFIELD_GEN_DEADLINE_SEC (optional — total budget for the gen path, default 300)
 ```
 
 ## File Structure
 
 ```
-config.py          — All constants, queries, captions, reveal lines
+config.py          — All constants, queries, captions, narration lines
 pipeline.py        — Orchestrator: calls all stages in sequence
-hooks.py           — Reddit/YouTube hook sourcing (category-aware, smart segment extraction)
+hooks.py           — Reddit hook sourcing + assets/hook_clips/ bundled fallback pool
 scripts.py         — Claude API → iMessage conversation JSON (5 archetypes)
-voiceover.py       — ElevenLabs TTS → per-message audio + durations
-renderer.py        — Pillow frame rendering + typing indicators + FFmpeg compilation
-reveal.py          — 3-second Nesso reveal (text + logo)
+voiceover.py       — ElevenLabs TTS → per-message + demo/close narration audio
+remotion_client.py — Drives the Remotion server: upload_asset / render_composition / delete_asset
+remotion-reveal/   — Remotion project (Node). src/*.tsx = the live render compositions:
+                       IMessageStory.tsx (story), AppDemo.tsx (app demo), LogoClose.tsx (close)
 music.py           — Bundled lo-fi tracks OR FFmpeg synthesis
 morph.py           — xfade transition + 5-layer audio mix + iMessage SFX
 verify.py          — ffprobe duration/codec/health checks
 telegram_bot.py    — /make, /status commands, video delivery
-main.py            — Entry point (starts Telegram bot)
-app_screens.py     — Fake app screenshot renderer (unused in current reveal)
-assets/            — nesso_logo.png, psych_sfx.mp3, imessage_sounds/, music/
+main.py            — Entry point (starts Telegram bot + waits for Remotion server)
+assets/            — nesso_logo.png, psych_sfx.mp3, imessage_sounds/, music/, hook_clips/
 fallbacks/         — scripts.json (pre-written conversation fallbacks)
 tmp/               — Per-render temp directories (auto-cleaned)
-Dockerfile         — python:3.11-slim + ffmpeg + fonts-dejavu-core
+Dockerfile         — python:3.11-slim + Node 20 + ffmpeg + Chromium libs (Remotion)
+
+LEGACY / DEAD CODE (not imported anywhere — superseded by Remotion):
+renderer.py        — old Pillow iMessage frame renderer
+reveal.py          — old Pillow 3-second reveal
+app_screens.py     — old fake app-screenshot renderer
 ```
 
 ## Known Failure Modes

@@ -106,6 +106,56 @@ ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "pFZP5JQG7iQjIQuC4Bk
 ELEVENLABS_VOICE_ID_2 = os.environ.get("ELEVENLABS_VOICE_ID_2", "21m00Tcm4TlvDq8ikWAM")
 VOICEOVER_ENABLED = True
 
+# ── Higgsfield (AI-generated hook clips) ───────────────────────────────────
+# V25: generate the hook background with Higgsfield instead of scraping Reddit.
+# Higgsfield's DoP engine is IMAGE-to-video, so a from-scratch clip is a
+# two-step job: text2image (Soul) -> image2video (DoP), then poll -> download.
+# This is SLOW (minutes) and costs credits PER /make — it runs first, and the
+# Reddit + bundled-clip path remains as the fallback if generation fails.
+#
+# Auth is an API-KEY PAIR generated at platform.higgsfield.ai (NOT the Claude
+# Code MCP OAuth). Set HIGGSFIELD_API_KEY to the full "KEY_ID:KEY_SECRET"
+# string; the client sends `Authorization: Key KEY_ID:KEY_SECRET`.
+#
+# Endpoint paths + model IDs below are config constants because the public REST
+# docs disagree on specifics — VERIFY these against your dashboard's API
+# reference after generating the key, then adjust here (no code change needed).
+HIGGSFIELD_API_KEY = os.environ.get("HIGGSFIELD_API_KEY", "")
+# Master switch: defaults on whenever a key is present. Set HIGGSFIELD_ENABLED=0
+# to force the old Reddit-first behavior without removing the key.
+HIGGSFIELD_ENABLED = bool(HIGGSFIELD_API_KEY) and os.environ.get(
+    "HIGGSFIELD_ENABLED", "1"
+) not in ("0", "false", "False", "")
+HIGGSFIELD_BASE_URL = os.environ.get(
+    "HIGGSFIELD_BASE_URL", "https://platform.higgsfield.ai"
+)
+HIGGSFIELD_IMAGE_ENDPOINT = "/v1/text2image/soul"   # text -> still image
+HIGGSFIELD_VIDEO_ENDPOINT = "/v1/image2video/dop"   # still image -> video
+HIGGSFIELD_IMAGE_MODEL = "soul"
+HIGGSFIELD_VIDEO_MODEL = "dop-turbo"
+HIGGSFIELD_ASPECT_RATIO = "9:16"
+# Hard wall-clock budget for the WHOLE Higgsfield path (both jobs + download).
+# If exceeded, abort and fall through to Reddit/bundled.
+HIGGSFIELD_GEN_DEADLINE_SEC = int(os.environ.get("HIGGSFIELD_GEN_DEADLINE_SEC", "300"))
+HIGGSFIELD_POLL_INTERVAL_SEC = 5
+# Chaos-style prompt pool. Higgsfield is cinematic by nature, so prompts lean
+# into high-energy thumb-stopping motion to fight the "too smooth = anti-viral"
+# problem. One is picked at random per /make.
+HIGGSFIELD_HOOK_PROMPTS = [
+    "extreme POV mountain bike crash on a rocky downhill trail, dust and gravel "
+    "flying, violent camera shake, vertical 9:16, hyper-real",
+    "first-person skydiver tumbling out of control through clouds, GoPro fisheye, "
+    "ground spinning into frame, vertical 9:16",
+    "car drifting sideways toward the camera on a wet city street at night, tire "
+    "smoke, neon reflections, dramatic motion blur, vertical 9:16",
+    "huge wave wiping out a surfer, whitewater explosion, spray hitting the lens, "
+    "slow-motion then snap to real time, vertical 9:16",
+    "skateboarder slamming a handrail trick and bailing hard, sparks, fast push-in, "
+    "gritty urban concrete, vertical 9:16",
+    "avalanche of snow rushing down a slope straight at a fleeing camera, powder "
+    "billowing, chaotic shake, vertical 9:16",
+]
+
 # ── Script constraints ────────────────────────────────────────────────────
 # 4 messages + 1 "Read" system line = 5 total; fewer messages means each
 # bubble gets enough on-screen time for the viewer to *read* and the
