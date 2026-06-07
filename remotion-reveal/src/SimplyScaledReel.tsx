@@ -10,16 +10,12 @@ import {
 } from "remotion";
 
 // ════════════════════════════════════════════════════════════════════════════
-//  SIMPLY SCALED — 60s vertical sales reel ("One Builder. Any Business.")
-//  Cinematic recreation of two real dashboards Brady built:
-//    • Stolen Mule  — law-firm "Command Deck"  (indigo / near-black)
-//    • Restoration One — restoration "$20k dashboard" (copper / black)
-//  Jarvis/Higgsfield product-cinema: weightless camera, glow blooms, count-ups,
-//  charts that draw themselves, a Telegram-text→live-lead miracle, founder close.
-//
-//  Timing is DATA-DRIVEN: pass `beats` (per-beat start+dur in seconds, derived
-//  from the real ElevenLabs VO) so visuals lock to the voiceover. Defaults sum
-//  to exactly 60.0s so the comp renders standalone in Remotion Studio.
+//  SIMPLY SCALED — 60s vertical sales reel  v2
+//  "What are the 5 things you waste the most time on?" → the full products I built:
+//    • Stolen Mule (law firm — The REAL Law Group): full app, 30+ tools + AI
+//    • Restoration One (restoration crew): dashboard + pipeline + CRM + AI intake
+//  Named real businesses, full-screen Telegram demo, Jarvis proof slider,
+//  tight ~9s contact close. Timing is data-driven (beats prop ← real VO).
 // ════════════════════════════════════════════════════════════════════════════
 
 export type ReelBeat = { key: string; start: number; dur: number };
@@ -27,32 +23,27 @@ export type ReelBeat = { key: string; start: number; dur: number };
 export type SimplyScaledReelProps = {
   beats?: ReelBeat[];
   brand?: string;
-  phone?: string; // display form, e.g. "(847) 212-2142"
+  phone?: string;
   email?: string;
   offer?: string;
-  logoUrl?: string; // optional brand PNG
-  founderPhotoUrl?: string; // optional headshot for the human beat
-  lite?: boolean; // Railway/low-mem mode: skip the most expensive per-frame FX
+  logoUrl?: string;
+  founderPhotoUrl?: string;
+  lite?: boolean;
 };
 
-// ─── Default beat durations (seconds). Sum = 60.0 ───────────────────────────
 const DEFAULT_DURS: { key: string; dur: number }[] = [
-  { key: "HOOK", dur: 1.5 },
-  { key: "CHAOS", dur: 2.5 },
-  { key: "SNAP", dur: 2.0 },
-  { key: "SM_KPI", dur: 3.0 },
-  { key: "SM_MONEY", dur: 4.0 },
-  { key: "SM_STUCK", dur: 4.0 },
+  { key: "HOOK", dur: 4.6 },
+  { key: "BRIDGE", dur: 2.4 },
+  { key: "SM_TOOLS", dur: 6.0 },
+  { key: "SM_MONEY", dur: 5.2 },
   { key: "PIVOT", dur: 3.0 },
-  { key: "RO_HEAD", dur: 4.0 },
-  { key: "RO_CHARTS", dur: 4.0 },
-  { key: "DEMO_TEXT", dur: 5.0 },
-  { key: "DEMO_WON", dur: 4.0 },
-  { key: "PROOF", dur: 4.0 },
-  { key: "HUMAN", dur: 4.0 },
-  { key: "TURN", dur: 4.0 },
-  { key: "CLOSE", dur: 5.0 },
-  { key: "CTA", dur: 6.0 },
+  { key: "RO_HEAD", dur: 5.2 },
+  { key: "RO_CRM", dur: 6.0 },
+  { key: "TG_DEMO", dur: 6.8 },
+  { key: "PROOF", dur: 5.6 },
+  { key: "TURN", dur: 2.4 },
+  { key: "CLOSE", dur: 4.0 },
+  { key: "CTA", dur: 8.8 },
 ];
 
 function buildDefaultBeats(): ReelBeat[] {
@@ -65,33 +56,29 @@ function buildDefaultBeats(): ReelBeat[] {
 }
 
 const CAPTIONS: Record<string, string> = {
-  HOOK: "A MESSY TEXT → A $9,000 JOB. IN 4 SECONDS.",
-  CHAOS: "THIS IS HOW MOST BUSINESSES STILL RUN.",
-  SNAP: "UNTIL YOU SEE IT BUILT RIGHT.",
-  SM_KPI: "ONE SCREEN. EVERY DOLLAR EARNED & OWED.",
-  SM_MONEY: "WATCH IT GROW. NO GUESSING.",
-  SM_STUCK: "SEE WHAT'S STUCK — GO GET IT.",
-  PIVOT: "WHATEVER YOUR BUSINESS IS — WATCH ME DO IT AGAIN.",
-  RO_HEAD: "EVERY JOB. EVERY LEAD. LIVE.",
-  RO_CHARTS: "WHERE LEADS SLIP. WHERE MONEY STICKS.",
-  DEMO_TEXT: "MESSY TEXT IN → CLEAN LEAD OUT. NOTHING MISSED.",
-  DEMO_WON: "WIN A JOB → REVENUE UPDATES ITSELF.",
-  PROOF: "TWO INDUSTRIES. ONE DEVELOPER. BUILT BY ME.",
-  HUMAN: "WHATEVER YOU RUN — I'LL BUILD THE SYSTEM THAT RUNS IT.",
+  HOOK: "WHAT EATS YOUR TIME EVERY DAY?",
+  BRIDGE: "NOW IMAGINE IT ALL — HANDLED.",
+  SM_TOOLS: "STOLEN MULE · 30+ TOOLS + AI",
+  SM_MONEY: "EVERY DOLLAR. WATCH IT GROW.",
+  PIVOT: "NOW — A COMPLETELY DIFFERENT BUSINESS.",
+  RO_HEAD: "RESTORATION ONE · UPDATING LIVE",
+  RO_CRM: "PIPELINE · CRM · REAL CONTACTS",
+  TG_DEMO: "MESSY TEXT → CLEAN LEAD. NOTHING MISSED.",
+  PROOF: "REAL BUSINESSES. ONE DEVELOPER.",
   TURN: "IMAGINE YOURS.",
   CLOSE: "FREE 15-MIN TEARDOWN — NO PITCH.",
   CTA: "CALL / TEXT (847) 212-2142",
 };
 
-// ─── Palettes (exact hexes pulled from the live repos) ──────────────────────
 const SM = {
   canvas: "#0A0E17",
-  grid: "rgba(99,102,241,0.06)",
+  sidebar: "#0C1019",
   indigo: "#6366F1",
   indigoLite: "#818CF8",
   sky: "#52A9FF",
   amber: "#FBBF24",
   danger: "#F43F5E",
+  emerald: "#34D399",
   text: "#E6EAF2",
   textSoft: "rgba(230,234,242,0.55)",
   tile: "rgba(255,255,255,0.035)",
@@ -100,6 +87,7 @@ const SM = {
 const RO = {
   canvas: "#0B0E11",
   card: "#14181D",
+  sidebar: "#0E1216",
   copper: "#F0742A",
   copperHi: "#FF8A45",
   teal: "#1FB6A6",
@@ -115,22 +103,18 @@ const RO = {
 const SANS =
   "'SF Pro Display','SF Pro Text','Helvetica Neue','Inter','Arial',sans-serif";
 const MONO = "'SF Mono','Roboto Mono','Menlo',monospace";
-
 const W = 1080;
 const H = 1920;
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Helpers
-// ════════════════════════════════════════════════════════════════════════════
-
+// ─── helpers ────────────────────────────────────────────────────────────────
 type BeatInfo = {
   active: boolean;
-  visible: boolean; // active + small lead/tail pad
+  visible: boolean;
   sF: number;
   eF: number;
   durF: number;
   localF: number;
-  p: number; // 0..1 progress across the beat
+  p: number;
 };
 
 function useBeats(beats: ReelBeat[], fps: number, frame: number) {
@@ -140,11 +124,9 @@ function useBeats(beats: ReelBeat[], fps: number, frame: number) {
     const durF = Math.max(1, Math.round(b.dur * fps));
     const eF = sF + durF;
     const localF = frame - sF;
-    const active = frame >= sF && frame < eF;
-    const visible = frame >= sF - 6 && frame < eF + 2;
     map[b.key] = {
-      active,
-      visible,
+      active: frame >= sF && frame < eF,
+      visible: frame >= sF - 6 && frame < eF + 2,
       sF,
       eF,
       durF,
@@ -155,13 +137,12 @@ function useBeats(beats: ReelBeat[], fps: number, frame: number) {
   return map;
 }
 
-const ease = Easing.bezier(0.16, 1, 0.3, 1); // smooth "weightless settle"
+const ease = Easing.bezier(0.16, 1, 0.3, 1);
 
 function fmtMoney(n: number): string {
   return "$" + Math.round(n).toLocaleString("en-US");
 }
 
-// Count-up that eases to a target across a window
 function countUp(
   frame: number,
   startF: number,
@@ -177,10 +158,21 @@ function countUp(
   return from + (to - from) * p;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Global atmosphere: dot-grid, horizon bloom, grain, vignette, chroma bloom
-// ════════════════════════════════════════════════════════════════════════════
+const clampI = (
+  f: number,
+  a: number,
+  b: number,
+  lo: number,
+  hi: number,
+  e?: any,
+) =>
+  interpolate(f, [a, b], [lo, hi], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: e,
+  });
 
+// ─── atmosphere ─────────────────────────────────────────────────────────────
 const DotGrid: React.FC<{ color: string; opacity?: number; frame: number }> = ({
   color,
   opacity = 1,
@@ -257,10 +249,21 @@ const Vignette: React.FC = () => (
   />
 );
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Caption stamp (bold, muted-viewer legible, per beat)
-// ════════════════════════════════════════════════════════════════════════════
+const Scanlines: React.FC<{ opacity?: number }> = ({ opacity = 0.08 }) => (
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      backgroundImage:
+        "repeating-linear-gradient(0deg, rgba(255,255,255,0.5) 0px, rgba(255,255,255,0.5) 1px, transparent 2px, transparent 4px)",
+      opacity,
+      pointerEvents: "none",
+      mixBlendMode: "overlay",
+    }}
+  />
+);
 
+// ─── caption ────────────────────────────────────────────────────────────────
 const Caption: React.FC<{
   text: string;
   localF: number;
@@ -270,17 +273,8 @@ const Caption: React.FC<{
   big?: boolean;
 }> = ({ text, localF, durF, fps, accent = "#FFFFFF", big = false }) => {
   if (localF < 0) return null;
-  const inP = interpolate(localF, [0, Math.round(fps * 0.22)], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
-  const outP = interpolate(
-    localF,
-    [durF - Math.round(fps * 0.25), durF],
-    [1, 0],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-  );
+  const inP = clampI(localF, 0, Math.round(fps * 0.22), 0, 1, ease);
+  const outP = clampI(localF, durF - Math.round(fps * 0.25), durF, 1, 0);
   const op = Math.min(inP, outP);
   const y = (1 - inP) * 34;
   return (
@@ -300,12 +294,11 @@ const Caption: React.FC<{
         style={{
           fontFamily: SANS,
           fontWeight: 800,
-          fontSize: big ? 70 : 56,
+          fontSize: big ? 72 : 56,
           lineHeight: 1.08,
           letterSpacing: "-0.02em",
           color: "#FFFFFF",
-          textShadow: `0 4px 30px rgba(0,0,0,0.85), 0 0 22px ${accent}55`,
-          padding: "0 8px",
+          textShadow: `0 4px 30px rgba(0,0,0,0.9), 0 0 22px ${accent}66`,
           display: "inline-block",
         }}
       >
@@ -315,105 +308,82 @@ const Caption: React.FC<{
   );
 };
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Reusable dashboard pieces
-// ════════════════════════════════════════════════════════════════════════════
-
+// ─── dashboard primitives ───────────────────────────────────────────────────
 const KpiTile: React.FC<{
   label: string;
   value: string;
   accent?: string;
   hero?: boolean;
   delta?: string;
-  appear: number; // 0..1
-  glanceLabel?: string;
-}> = ({ label, value, accent = SM.text, hero, delta, appear, glanceLabel }) => {
-  const y = (1 - appear) * 40;
-  return (
+  appear: number;
+  compact?: boolean;
+}> = ({ label, value, accent = SM.text, hero, delta, appear, compact }) => (
+  <div
+    style={{
+      background: hero
+        ? "linear-gradient(160deg, rgba(99,102,241,0.18), rgba(99,102,241,0.04))"
+        : SM.tile,
+      border: `1px solid ${hero ? "rgba(99,102,241,0.5)" : SM.tileBorder}`,
+      borderRadius: 22,
+      padding: compact ? "16px 18px" : "24px 26px",
+      opacity: appear,
+      transform: `translateY(${(1 - appear) * 36}px)`,
+      boxShadow: hero
+        ? `0 0 50px ${SM.indigo}50`
+        : "0 8px 24px rgba(0,0,0,0.4)",
+      overflow: "hidden",
+    }}
+  >
     <div
       style={{
-        background: hero
-          ? "linear-gradient(160deg, rgba(99,102,241,0.18), rgba(99,102,241,0.04))"
-          : SM.tile,
-        border: `1px solid ${hero ? "rgba(99,102,241,0.5)" : SM.tileBorder}`,
-        borderRadius: 26,
-        padding: "26px 28px",
-        opacity: appear,
-        transform: `translateY(${y}px)`,
-        boxShadow: hero
-          ? `0 0 60px ${SM.indigo}55, inset 0 0 0 1px ${SM.indigo}33`
-          : "0 10px 30px rgba(0,0,0,0.4)",
-        position: "relative",
-        overflow: "hidden",
+        fontFamily: SANS,
+        fontSize: compact ? 16 : 20,
+        fontWeight: 700,
+        letterSpacing: "0.14em",
+        color: SM.textSoft,
+        textTransform: "uppercase",
       }}
     >
+      {label}
+    </div>
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: hero ? 64 : compact ? 40 : 54,
+        fontWeight: 800,
+        letterSpacing: "-0.03em",
+        color: accent,
+        marginTop: 6,
+        textShadow: hero ? `0 0 30px ${SM.indigo}aa` : "none",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {value}
+    </div>
+    {delta && (
       <div
         style={{
+          display: "inline-block",
+          marginTop: 10,
           fontFamily: SANS,
           fontSize: 22,
           fontWeight: 700,
-          letterSpacing: "0.16em",
-          color: SM.textSoft,
-          textTransform: "uppercase",
+          color: "#04150E",
+          background: SM.emerald,
+          borderRadius: 999,
+          padding: "3px 12px",
         }}
       >
-        {label}
+        ▲ {delta}
       </div>
-      <div
-        style={{
-          fontFamily: SANS,
-          fontSize: hero ? 76 : 58,
-          fontWeight: 800,
-          letterSpacing: "-0.03em",
-          color: accent,
-          marginTop: 8,
-          textShadow: hero ? `0 0 36px ${SM.indigo}aa` : "none",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </div>
-      {delta && (
-        <div
-          style={{
-            display: "inline-block",
-            marginTop: 12,
-            fontFamily: SANS,
-            fontSize: 24,
-            fontWeight: 700,
-            color: SM.canvas,
-            background: "#34D399",
-            borderRadius: 999,
-            padding: "4px 14px",
-          }}
-        >
-          ▲ {delta}
-        </div>
-      )}
-      {glanceLabel && (
-        <div
-          style={{
-            marginTop: 10,
-            fontFamily: SANS,
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            color: SM.indigoLite,
-          }}
-        >
-          {glanceLabel}
-        </div>
-      )}
-    </div>
-  );
-};
+    )}
+  </div>
+);
 
-// Animated revenue area chart with dashed comparison line + glowing brush
 const RevenueChart: React.FC<{
-  draw: number; // 0..1 how much of the line is drawn
-  scrub: number; // 0..1 brush position
+  draw: number;
+  scrub: number;
   area: string;
-  line: string;
   glow: string;
   width: number;
   height: number;
@@ -422,7 +392,6 @@ const RevenueChart: React.FC<{
   draw,
   scrub,
   area,
-  line,
   glow,
   width,
   height,
@@ -430,40 +399,37 @@ const RevenueChart: React.FC<{
 }) => {
   const n = data.length;
   const max = Math.max(...data) * 1.12;
-  const padB = 26;
+  const padB = 22;
   const xs = (i: number) => (i / (n - 1)) * width;
-  const ys = (v: number) => height - padB - (v / max) * (height - padB - 16);
-  // smooth-ish polyline
+  const ys = (v: number) => height - padB - (v / max) * (height - padB - 14);
   const pts = data.map((v, i) => [xs(i), ys(v)] as const);
   const linePath = pts
     .map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1])
     .join(" ");
   const areaPath = `${linePath} L ${width} ${height - padB} L 0 ${height - padB} Z`;
-  const billed = data.map((v) => v * 1.18);
+  const billed = data.map((v) => v * 1.16);
   const billedPath = billed
     .map((v, i) => (i ? "L" : "M") + xs(i) + " " + ys(v))
     .join(" ");
-  const totalLen = 2600;
-  const dashOffset = (1 - draw) * totalLen;
   const brushX = scrub * width;
   return (
     <svg width={width} height={height} style={{ overflow: "visible" }}>
       <defs>
-        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={area} stopOpacity="0.55" />
           <stop offset="100%" stopColor={area} stopOpacity="0.02" />
         </linearGradient>
-        <radialGradient id="bloomGrad" cx="50%" cy="80%" r="70%">
+        <radialGradient id="bg2" cx="50%" cy="80%" r="70%">
           <stop offset="0%" stopColor={glow} stopOpacity="0.35" />
           <stop offset="100%" stopColor={glow} stopOpacity="0" />
         </radialGradient>
-        <clipPath id="drawClip">
+        <clipPath id="dc">
           <rect x="0" y="0" width={width * draw} height={height} />
         </clipPath>
       </defs>
-      <rect x="0" y="0" width={width} height={height} fill="url(#bloomGrad)" />
-      <g clipPath="url(#drawClip)">
-        <path d={areaPath} fill="url(#areaGrad)" />
+      <rect x="0" y="0" width={width} height={height} fill="url(#bg2)" />
+      <g clipPath="url(#dc)">
+        <path d={areaPath} fill="url(#ag)" />
         <path
           d={linePath}
           fill="none"
@@ -483,17 +449,6 @@ const RevenueChart: React.FC<{
           opacity={0.85}
         />
       </g>
-      {/* "now" marker */}
-      <line
-        x1={width}
-        y1={8}
-        x2={width}
-        y2={height - padB}
-        stroke={glow}
-        strokeWidth={2}
-        opacity={0.35 * draw}
-      />
-      {/* glowing brush traveller */}
       {scrub > 0 && (
         <g>
           <rect
@@ -508,7 +463,7 @@ const RevenueChart: React.FC<{
           <circle
             cx={brushX}
             cy={height - padB}
-            r={12}
+            r={11}
             fill={glow}
             style={{ filter: `drop-shadow(0 0 14px ${glow})` }}
           />
@@ -523,21 +478,21 @@ const ARAging: React.FC<{ appear: number; label: string }> = ({
   label,
 }) => {
   const segs = [
-    { w: 34, c: SM.sky, t: "0–30" },
-    { w: 26, c: "#3E82C8", t: "31–60" },
-    { w: 22, c: SM.amber, t: "61–90" },
-    { w: 18, c: SM.danger, t: "90+" },
+    { w: 34, c: SM.sky },
+    { w: 26, c: "#3E82C8" },
+    { w: 22, c: SM.amber },
+    { w: 18, c: SM.danger },
   ];
   return (
     <div style={{ width: "100%" }}>
       <div
         style={{
           fontFamily: SANS,
-          fontSize: 20,
+          fontSize: 18,
           fontWeight: 800,
-          letterSpacing: "0.14em",
+          letterSpacing: "0.12em",
           color: SM.danger,
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
         {label}
@@ -545,7 +500,7 @@ const ARAging: React.FC<{ appear: number; label: string }> = ({
       <div
         style={{
           display: "flex",
-          height: 42,
+          height: 38,
           borderRadius: 12,
           overflow: "hidden",
           gap: 3,
@@ -558,72 +513,10 @@ const ARAging: React.FC<{ appear: number; label: string }> = ({
               width: `${s.w * appear}%`,
               background: s.c,
               opacity: 0.9,
-              transition: "none",
               boxShadow: i === 3 ? `0 0 18px ${SM.danger}` : "none",
             }}
           />
         ))}
-      </div>
-    </div>
-  );
-};
-
-const RadialGauge: React.FC<{ p: number; accent: string; label: string }> = ({
-  p,
-  accent,
-  label,
-}) => {
-  const r = 58;
-  const c = 2 * Math.PI * r;
-  return (
-    <div
-      style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-    >
-      <svg width={150} height={150}>
-        <circle
-          cx={75}
-          cy={75}
-          r={r}
-          fill="none"
-          stroke="rgba(255,255,255,0.1)"
-          strokeWidth={12}
-        />
-        <circle
-          cx={75}
-          cy={75}
-          r={r}
-          fill="none"
-          stroke={accent}
-          strokeWidth={12}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - p)}
-          transform="rotate(-90 75 75)"
-          style={{ filter: `drop-shadow(0 0 10px ${accent})` }}
-        />
-        <text
-          x={75}
-          y={86}
-          textAnchor="middle"
-          fontFamily={SANS}
-          fontSize={40}
-          fontWeight={800}
-          fill={SM.text}
-        >
-          {Math.round(p * 100)}%
-        </text>
-      </svg>
-      <div
-        style={{
-          fontFamily: SANS,
-          fontSize: 18,
-          fontWeight: 700,
-          letterSpacing: "0.1em",
-          color: SM.textSoft,
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
       </div>
     </div>
   );
@@ -639,30 +532,26 @@ const Funnel: React.FC<{ appear: number }> = ({ appear }) => {
   return (
     <div style={{ width: "100%" }}>
       {steps.map((s, i) => {
-        const a = interpolate(appear, [i * 0.14, i * 0.14 + 0.4], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: ease,
-        });
+        const a = clampI(appear, i * 0.14, i * 0.14 + 0.4, 0, 1, ease);
         return (
           <div
             key={i}
-            style={{ display: "flex", alignItems: "center", marginBottom: 14 }}
+            style={{ display: "flex", alignItems: "center", marginBottom: 12 }}
           >
             <div
               style={{
-                height: 56,
+                height: 48,
                 width: `${s.w * a}%`,
                 background: s.leak
                   ? `linear-gradient(90deg, ${RO.copper}, ${RO.amber})`
                   : `linear-gradient(90deg, ${RO.copper}, ${RO.copperHi})`,
-                borderRadius: 12,
+                borderRadius: 10,
                 display: "flex",
                 alignItems: "center",
-                paddingLeft: 22,
+                paddingLeft: 18,
                 fontFamily: SANS,
                 fontWeight: 700,
-                fontSize: 26,
+                fontSize: 24,
                 color: "#fff",
                 boxShadow: s.leak ? `0 0 24px ${RO.amber}88` : "none",
               }}
@@ -672,9 +561,9 @@ const Funnel: React.FC<{ appear: number }> = ({ appear }) => {
             {s.drop && (
               <div
                 style={{
-                  marginLeft: 16,
+                  marginLeft: 14,
                   fontFamily: MONO,
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: 700,
                   color: s.leak ? RO.amber : RO.textSoft,
                   opacity: a,
@@ -690,19 +579,318 @@ const Funnel: React.FC<{ appear: number }> = ({ appear }) => {
   );
 };
 
-// Kanban board (Restoration One) with a card that can be highlighted / dragged
-const KanbanBoard: React.FC<{
-  cardAppear: number; // 0..1 new card materializes in col 0
-  dragP: number; // 0..1 drag from col0 to "Won"
-  wonFlash: number; // 0..1 flash on drop
-}> = ({ cardAppear, dragP, wonFlash }) => {
+// ─── App shell sidebar ──────────────────────────────────────────────────────
+type NavItem = { label: string; icon: string; ai?: boolean };
+
+const Sidebar: React.FC<{
+  brandName: string;
+  brandSub?: string;
+  accent: string;
+  bg: string;
+  items: NavItem[];
+  activeIdx: number;
+  glowIdx: number;
+  extra?: string;
+}> = ({
+  brandName,
+  brandSub,
+  accent,
+  bg,
+  items,
+  activeIdx,
+  glowIdx,
+  extra,
+}) => (
+  <div
+    style={{
+      width: 330,
+      height: "100%",
+      background: bg,
+      borderRight: `1px solid ${accent}22`,
+      padding: "30px 18px 20px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      flexShrink: 0,
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 8,
+        padding: "0 8px",
+      }}
+    >
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: accent,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontFamily: SANS,
+          fontWeight: 800,
+          fontSize: 22,
+          boxShadow: `0 0 20px ${accent}88`,
+        }}
+      >
+        {brandName[0]}
+      </div>
+      <div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontWeight: 800,
+            fontSize: 24,
+            color: "#fff",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {brandName}
+        </div>
+        {brandSub && (
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 14,
+              color: accent,
+              fontWeight: 600,
+            }}
+          >
+            {brandSub}
+          </div>
+        )}
+      </div>
+    </div>
+    {items.map((it, i) => {
+      const active = i === activeIdx;
+      const glow = i === glowIdx;
+      return (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: active
+              ? `${accent}26`
+              : glow
+                ? `${accent}18`
+                : "transparent",
+            boxShadow: glow
+              ? `0 0 22px ${accent}66, inset 0 0 0 1px ${accent}55`
+              : "none",
+            fontFamily: SANS,
+            fontSize: 20,
+            fontWeight: active || glow ? 700 : 500,
+            color: active || glow ? "#fff" : "rgba(255,255,255,0.62)",
+          }}
+        >
+          <span style={{ fontSize: 20, width: 26, textAlign: "center" }}>
+            {it.icon}
+          </span>
+          <span style={{ flex: 1 }}>{it.label}</span>
+          {it.ai && (
+            <span
+              style={{
+                fontFamily: SANS,
+                fontSize: 13,
+                fontWeight: 800,
+                color: "#04150E",
+                background: accent,
+                borderRadius: 6,
+                padding: "2px 7px",
+                letterSpacing: "0.06em",
+              }}
+            >
+              AI
+            </span>
+          )}
+        </div>
+      );
+    })}
+    {extra && (
+      <div
+        style={{
+          marginTop: "auto",
+          fontFamily: SANS,
+          fontSize: 18,
+          fontWeight: 600,
+          color: accent,
+          padding: "10px 14px",
+        }}
+      >
+        {extra}
+      </div>
+    )}
+  </div>
+);
+
+const SM_NAV: NavItem[] = [
+  { label: "Dashboard", icon: "▦" },
+  { label: "Matters", icon: "⚖" },
+  { label: "Contacts", icon: "👥" },
+  { label: "Invoices", icon: "🧾" },
+  { label: "Trust / IOLTA", icon: "🏦" },
+  { label: "Calendar", icon: "📅" },
+  { label: "Time & Fees", icon: "⏱" },
+  { label: "Tasks", icon: "✓" },
+  { label: "Closings", icon: "🔑" },
+  { label: "Intake", icon: "📥" },
+  { label: "AI Email Scrape", icon: "✉", ai: true },
+  { label: "AI PDF Scanner", icon: "📄", ai: true },
+  { label: "AI Doc Drafter", icon: "✍", ai: true },
+  { label: "AI Summarizer", icon: "✨", ai: true },
+];
+
+const RO_NAV: NavItem[] = [
+  { label: "Dashboard", icon: "▦" },
+  { label: "Pipeline", icon: "🗂" },
+  { label: "Contacts", icon: "👥" },
+  { label: "Jobs", icon: "🛠" },
+  { label: "Calendar", icon: "📅" },
+  { label: "Estimates", icon: "💲" },
+  { label: "Reports", icon: "📊" },
+  { label: "AI Lead Intake", icon: "🤖", ai: true },
+  { label: "AI Follow-up", icon: "✨", ai: true },
+];
+
+// ─── Restoration contacts (CRM) ─────────────────────────────────────────────
+const RO_CONTACTS = [
+  { n: "John Smith", p: "(312) 555-1234", s: "Water", st: "New", c: RO.info },
+  {
+    n: "Maria Alvarez",
+    p: "(773) 555-8890",
+    s: "Fire",
+    st: "Estimate",
+    c: RO.copper,
+  },
+  { n: "David Chen", p: "(847) 555-2201", s: "Mold", st: "Won", c: RO.emerald },
+  {
+    n: "Sarah Johnson",
+    p: "(630) 555-7745",
+    s: "Water",
+    st: "Follow-up",
+    c: RO.amber,
+  },
+  { n: "Mike Rossi", p: "(312) 555-9012", s: "Remodel", st: "New", c: RO.info },
+  { n: "Linda Park", p: "(708) 555-3367", s: "Fire", st: "Won", c: RO.emerald },
+];
+
+const ContactsList: React.FC<{ appear: number }> = ({ appear }) => (
+  <div style={{ width: "100%" }}>
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: 26,
+        fontWeight: 800,
+        color: RO.text,
+        marginBottom: 4,
+      }}
+    >
+      Contacts
+    </div>
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: 18,
+        color: RO.textSoft,
+        marginBottom: 18,
+      }}
+    >
+      905 in your book of business
+    </div>
+    {RO_CONTACTS.map((c, i) => {
+      const a = clampI(appear, i * 0.08, i * 0.08 + 0.3, 0, 1, ease);
+      return (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            background: RO.card,
+            border: `1px solid ${RO.border}`,
+            borderRadius: 14,
+            padding: "16px 20px",
+            marginBottom: 12,
+            opacity: a,
+            transform: `translateX(${(1 - a) * 30}px)`,
+          }}
+        >
+          <div
+            style={{
+              width: 50,
+              height: 50,
+              borderRadius: "50%",
+              background: `${c.c}33`,
+              color: c.c,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: SANS,
+              fontWeight: 800,
+              fontSize: 22,
+            }}
+          >
+            {c.n[0]}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontWeight: 700,
+                fontSize: 24,
+                color: RO.text,
+              }}
+            >
+              {c.n}
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 18, color: RO.textSoft }}>
+              {c.p}
+            </div>
+          </div>
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 16,
+              fontWeight: 700,
+              color: c.c,
+              background: `${c.c}22`,
+              borderRadius: 8,
+              padding: "5px 12px",
+            }}
+          >
+            {c.s}
+          </div>
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 16,
+              fontWeight: 700,
+              color: RO.textSoft,
+            }}
+          >
+            {c.st}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+);
+
+// ─── Kanban (Restoration pipeline) ──────────────────────────────────────────
+const KanbanBoard: React.FC<{ cardAppear: number }> = ({ cardAppear }) => {
   const cols = ["Initial Inquiry", "Follow-up", "Estimate", "Closed Won"];
-  const colW = 232;
-  const gap = 18;
-  const startX = 0;
-  const endX = (cols.length - 1) * (colW + gap);
-  const dragX = startX + (endX - startX) * dragP;
-  const dragY = dragP > 0 ? 0 : 0;
+  const colW = 210;
+  const gap = 14;
   return (
     <div style={{ display: "flex", gap, position: "relative" }}>
       {cols.map((c, i) => (
@@ -712,24 +900,22 @@ const KanbanBoard: React.FC<{
             width: colW,
             background: "rgba(255,255,255,0.03)",
             border: `1px solid ${RO.border}`,
-            borderRadius: 18,
-            padding: 14,
-            minHeight: 360,
+            borderRadius: 16,
+            padding: 12,
+            minHeight: 300,
           }}
         >
           <div
             style={{
               fontFamily: SANS,
-              fontSize: 19,
+              fontSize: 17,
               fontWeight: 700,
               color: i === 3 ? RO.emerald : RO.textSoft,
               marginBottom: 12,
-              letterSpacing: "0.02em",
             }}
           >
             {c}
           </div>
-          {/* static filler cards */}
           {[0, 1].map((k) => (
             <div
               key={k}
@@ -737,44 +923,28 @@ const KanbanBoard: React.FC<{
                 background: RO.card,
                 border: `1px solid ${RO.border}`,
                 borderRadius: 12,
-                height: 70,
+                height: 58,
                 marginBottom: 10,
                 opacity: 0.5,
               }}
             />
           ))}
-          {i === 3 && wonFlash > 0 && (
-            <div
-              style={{
-                position: "absolute",
-                inset: -2,
-                borderRadius: 18,
-                boxShadow: `0 0 0 3px ${RO.emerald}, 0 0 40px ${RO.emerald}`,
-                opacity: wonFlash,
-                pointerEvents: "none",
-              }}
-            />
-          )}
         </div>
       ))}
-      {/* the live John Smith card */}
       {cardAppear > 0 && (
         <div
           style={{
             position: "absolute",
-            top: 50 + dragY,
-            left: 14 + dragX,
-            width: colW - 28,
+            top: 48,
+            left: 12,
+            width: colW - 24,
             background: RO.card,
-            border: `1px solid ${dragP > 0.9 ? RO.emerald : RO.copper}`,
+            border: `1px solid ${RO.copper}`,
             borderRadius: 12,
-            padding: 14,
+            padding: 13,
             opacity: cardAppear,
             transform: `scale(${0.9 + 0.1 * cardAppear})`,
-            boxShadow:
-              dragP > 0 && dragP < 1
-                ? `0 18px 50px rgba(0,0,0,0.6)`
-                : `0 0 26px ${RO.copper}66`,
+            boxShadow: `0 0 26px ${RO.copper}66`,
             zIndex: 50,
           }}
         >
@@ -782,7 +952,7 @@ const KanbanBoard: React.FC<{
             style={{
               fontFamily: SANS,
               fontWeight: 800,
-              fontSize: 24,
+              fontSize: 20,
               color: RO.text,
             }}
           >
@@ -791,42 +961,28 @@ const KanbanBoard: React.FC<{
           <div
             style={{
               fontFamily: MONO,
-              fontSize: 18,
+              fontSize: 15,
               color: RO.textSoft,
-              marginTop: 4,
+              marginTop: 3,
             }}
           >
             (312) 555-1234
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <span
               style={{
                 background: `${RO.info}33`,
                 color: RO.info,
                 borderRadius: 8,
-                padding: "3px 10px",
+                padding: "3px 9px",
                 fontFamily: SANS,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: 700,
               }}
             >
               💧 Water
             </span>
-            <span
-              style={{
-                background: `${RO.amber}33`,
-                color: RO.amber,
-                borderRadius: 8,
-                padding: "3px 10px",
-                fontFamily: SANS,
-                fontSize: 16,
-                fontWeight: 700,
-              }}
-            >
-              by Fri
-            </span>
           </div>
-          {/* LIVE badge */}
           <div
             style={{
               position: "absolute",
@@ -837,9 +993,8 @@ const KanbanBoard: React.FC<{
               borderRadius: 999,
               padding: "3px 10px",
               fontFamily: SANS,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 800,
-              letterSpacing: "0.08em",
               boxShadow: `0 0 16px ${RO.emerald}`,
             }}
           >
@@ -851,122 +1006,7 @@ const KanbanBoard: React.FC<{
   );
 };
 
-// Telegram phone mockup with typing + send
-const PhoneMockup: React.FC<{
-  typeP: number; // 0..1 typing progress of the messy text
-  sendP: number; // 0..1 once sent (bubble flies + reading shimmer)
-  scale?: number;
-}> = ({ typeP, sendP, scale = 1 }) => {
-  const msg = "John Smith | 312-555-1234 | water damage, quote by Friday";
-  const shown = msg.slice(0, Math.floor(msg.length * typeP));
-  return (
-    <div
-      style={{
-        width: 460,
-        height: 720,
-        borderRadius: 54,
-        background: "#0E1621",
-        border: "8px solid #1b2a3a",
-        boxShadow: "0 40px 120px rgba(0,0,0,0.7)",
-        transform: `scale(${scale})`,
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      {/* TG header */}
-      <div
-        style={{
-          height: 92,
-          background: "#17212B",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 26px",
-          gap: 14,
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: "50%",
-            background: RO.copper,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontFamily: SANS,
-            fontWeight: 800,
-            color: "#fff",
-            fontSize: 20,
-          }}
-        >
-          R1
-        </div>
-        <div>
-          <div
-            style={{
-              fontFamily: SANS,
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 22,
-            }}
-          >
-            Leads Intake
-          </div>
-          <div style={{ fontFamily: SANS, color: "#5b6b7b", fontSize: 16 }}>
-            bot • online
-          </div>
-        </div>
-      </div>
-      {/* message bubble */}
-      <div style={{ padding: 24 }}>
-        <div
-          style={{
-            marginLeft: "auto",
-            maxWidth: "82%",
-            background: "#2B5278",
-            color: "#fff",
-            borderRadius: "18px 18px 4px 18px",
-            padding: "16px 18px",
-            fontFamily: SANS,
-            fontSize: 22,
-            lineHeight: 1.4,
-            opacity: typeP > 0 ? 1 : 0,
-            transform: sendP > 0 ? `translateY(${-sendP * 8}px)` : "none",
-          }}
-        >
-          {shown}
-          {typeP > 0 && typeP < 1 && <span style={{ opacity: 0.7 }}>▋</span>}
-        </div>
-        {/* bot reading shimmer */}
-        {sendP > 0 && (
-          <div
-            style={{
-              marginTop: 18,
-              maxWidth: "70%",
-              background: "#1f2c39",
-              borderRadius: "18px 18px 18px 4px",
-              padding: "14px 18px",
-              fontFamily: SANS,
-              fontSize: 20,
-              color: RO.copperHi,
-              opacity: interpolate(sendP, [0.1, 0.4], [0, 1], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              }),
-            }}
-          >
-            reading lead… ✨
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Persistent overlays (watermark + phone chip from RO_HEAD on)
-// ════════════════════════════════════════════════════════════════════════════
-
+// ─── persistent chip ────────────────────────────────────────────────────────
 const PersistentChip: React.FC<{
   show: boolean;
   phone: string;
@@ -988,9 +1028,7 @@ const PersistentChip: React.FC<{
         fontSize: 24,
         fontWeight: 700,
         color: "#fff",
-        backdropFilter: "blur(8px)",
         zIndex: 7500,
-        letterSpacing: "0.01em",
       }}
     >
       {brand} · {phone}
@@ -998,21 +1036,15 @@ const PersistentChip: React.FC<{
   );
 };
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Scene layers
-// ════════════════════════════════════════════════════════════════════════════
-
-// Generic "world" wrapper applying a per-beat virtual camera (scale + translate)
 const CameraRig: React.FC<{
   scale: number;
   x?: number;
   y?: number;
-  rotate?: number;
   children: React.ReactNode;
-}> = ({ scale, x = 0, y = 0, rotate = 0, children }) => (
+}> = ({ scale, x = 0, y = 0, children }) => (
   <AbsoluteFill
     style={{
-      transform: `translate(${x}px, ${y}px) scale(${scale}) rotate(${rotate}deg)`,
+      transform: `translate(${x}px, ${y}px) scale(${scale})`,
       transformOrigin: "50% 45%",
       willChange: "transform",
     }}
@@ -1021,1067 +1053,448 @@ const CameraRig: React.FC<{
   </AbsoluteFill>
 );
 
-// Stolen Mule full deck (reused, with progressive reveal flags)
-const StolenMuleDeck: React.FC<{
+// ════════════════════════════════════════════════════════════════════════════
+//  SCENES
+// ════════════════════════════════════════════════════════════════════════════
+
+// 1 — HOOK: the 5 things you waste time on
+const PAINS = [
+  { icon: "📞", t: "Chasing missed calls & leads" },
+  { icon: "🧾", t: "Hunting down unpaid invoices" },
+  { icon: "⌨️", t: "Typing the same data twice" },
+  { icon: "📅", t: "Scheduling & follow-ups" },
+  { icon: "🗂️", t: "Drowning in paperwork" },
+];
+
+const FiveThingsHook: React.FC<{
   frame: number;
   fps: number;
-  b: Record<string, BeatInfo>;
-}> = ({ frame, fps, b }) => {
-  const kpiA = (i: number) =>
-    interpolate(
-      frame,
-      [b.SM_KPI.sF + i * 4, b.SM_KPI.sF + i * 4 + 14],
-      [0, 1],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease },
-    );
-  const collected = countUp(frame, b.SM_KPI.sF + 6, b.SM_KPI.durF, 284900);
-  const unbilled = countUp(frame, b.SM_KPI.sF, b.SM_KPI.durF, 48200);
-  const unpaid = countUp(frame, b.SM_KPI.sF + 2, b.SM_KPI.durF, 112750);
-  const overdue = countUp(frame, b.SM_KPI.sF + 4, b.SM_KPI.durF, 19400);
-
-  const chartDraw = interpolate(
-    frame,
-    [b.SM_MONEY.sF, b.SM_MONEY.sF + b.SM_MONEY.durF * 0.7],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease },
-  );
-  const scrub = interpolate(
-    frame,
-    [b.SM_MONEY.sF + b.SM_MONEY.durF * 0.5, b.SM_STUCK.sF],
-    [0, 1],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-      easing: Easing.inOut(Easing.cubic),
-    },
-  );
-  const agingA = interpolate(
-    frame,
-    [b.SM_STUCK.sF, b.SM_STUCK.sF + 20],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease },
-  );
-  const gaugeP = countUp(frame, b.SM_STUCK.sF + 6, 26, 0.72);
-
-  return (
-    <AbsoluteFill style={{ background: SM.canvas }}>
-      <DotGrid color="#6366F1" opacity={0.5} frame={frame} />
-      <HorizonBloom color="rgba(99,102,241,0.5)" />
-      {/* Header */}
-      <div
-        style={{
-          position: "absolute",
-          top: 120,
-          left: 60,
-          right: 60,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 44,
-            fontWeight: 800,
-            color: SM.text,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Command Deck
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            fontFamily: SANS,
-            fontSize: 22,
-            color: SM.indigoLite,
-            fontWeight: 600,
-          }}
-        >
-          <span
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              background: SM.indigo,
-              boxShadow: `0 0 12px ${SM.indigo}`,
-              display: "inline-block",
-            }}
-          />
-          Live
-        </div>
-      </div>
-
-      {/* KPI row */}
-      <div
-        style={{
-          position: "absolute",
-          top: 210,
-          left: 60,
-          right: 60,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 22,
-        }}
-      >
-        <KpiTile label="Unbilled" value={fmtMoney(unbilled)} appear={kpiA(0)} />
-        <KpiTile label="Unpaid" value={fmtMoney(unpaid)} appear={kpiA(1)} />
-        <KpiTile
-          label="Overdue"
-          value={fmtMoney(overdue)}
-          accent={SM.danger}
-          appear={kpiA(2)}
-        />
-        <KpiTile
-          label="Collected this month"
-          value={fmtMoney(collected)}
-          accent={SM.indigoLite}
-          hero
-          delta="18% MoM"
-          appear={kpiA(3)}
-          glanceLabel="EVERY DOLLAR, ONE PLACE"
-        />
-      </div>
-
-      {/* Revenue chart */}
-      <div
-        style={{
-          position: "absolute",
-          top: 640,
-          left: 60,
-          right: 60,
-          background: SM.tile,
-          border: `1px solid ${SM.tileBorder}`,
-          borderRadius: 26,
-          padding: 28,
-          opacity:
-            chartDraw > 0
-              ? 1
-              : interpolate(frame, [b.SM_KPI.sF + 30, b.SM_MONEY.sF], [0, 1], {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                }),
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 22,
-            fontWeight: 800,
-            letterSpacing: "0.12em",
-            color: SM.sky,
-            marginBottom: 16,
-          }}
-        >
-          YOUR GROWTH, MONTH BY MONTH
-        </div>
-        <RevenueChart
-          draw={Math.max(0.001, chartDraw)}
-          scrub={scrub}
-          area={SM.sky}
-          line={SM.sky}
-          glow={SM.indigo}
-          width={900}
-          height={300}
-        />
-      </div>
-
-      {/* AR aging + gauge */}
-      <div
-        style={{
-          position: "absolute",
-          top: 1080,
-          left: 60,
-          right: 60,
-          display: "flex",
-          gap: 26,
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            background: SM.tile,
-            border: `1px solid ${SM.tileBorder}`,
-            borderRadius: 26,
-            padding: 28,
-            opacity: agingA,
-          }}
-        >
-          <ARAging appear={agingA} label="MONEY OWED TO YOU" />
-        </div>
-        <div
-          style={{
-            background: SM.tile,
-            border: `1px solid ${SM.tileBorder}`,
-            borderRadius: 26,
-            padding: "20px 28px",
-            opacity: agingA,
-          }}
-        >
-          <RadialGauge p={gaugeP} accent={SM.indigo} label="Closings" />
-        </div>
-      </div>
-
-      {/* lower quick-view cards */}
-      <div
-        style={{
-          position: "absolute",
-          top: 1320,
-          left: 60,
-          right: 60,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 22,
-          opacity: agingA * 0.9,
-        }}
-      >
-        {["Overdue Invoices (5)", "Alerts (3)"].map((t, i) => (
-          <div
-            key={i}
-            style={{
-              background: SM.tile,
-              border: `1px solid ${SM.tileBorder}`,
-              borderRadius: 22,
-              padding: 24,
-              fontFamily: SANS,
-              color: SM.textSoft,
-              fontSize: 22,
-              fontWeight: 700,
-            }}
-          >
-            {t}
-            {[0, 1, 2].map((k) => (
-              <div
-                key={k}
-                style={{
-                  height: 14,
-                  marginTop: 12,
-                  borderRadius: 6,
-                  background: "rgba(255,255,255,0.06)",
-                  width: `${90 - k * 18}%`,
-                }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {/* trust lower-third during SM_STUCK */}
-      {b.SM_STUCK.active && (
-        <div
-          style={{
-            position: "absolute",
-            top: 1560,
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            fontFamily: SANS,
-            fontSize: 26,
-            fontWeight: 700,
-            color: SM.indigoLite,
-            opacity: interpolate(
-              b.SM_STUCK.localF,
-              [10, 20, b.SM_STUCK.durF - 10, b.SM_STUCK.durF],
-              [0, 1, 1, 0],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            ),
-          }}
-        >
-          Real software. Live for a Chicago law firm.
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// Restoration One full deck
-const RestorationDeck: React.FC<{
-  frame: number;
-  fps: number;
-  b: Record<string, BeatInfo>;
-}> = ({ frame, fps, b }) => {
-  const revenue = countUp(frame, b.RO_HEAD.sF, b.RO_HEAD.durF * 0.85, 612480);
-  const headGlow = interpolate(
-    frame,
-    [b.RO_HEAD.sF, b.RO_HEAD.sF + 10],
-    [0, 1],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    },
-  );
-  const kpiA = (i: number) =>
-    interpolate(
-      frame,
-      [b.RO_HEAD.sF + 18 + i * 5, b.RO_HEAD.sF + 18 + i * 5 + 14],
-      [0, 1],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease },
-    );
-  const chartDraw = interpolate(
-    frame,
-    [b.RO_CHARTS.sF, b.RO_CHARTS.sF + b.RO_CHARTS.durF * 0.55],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease },
-  );
-  const funnelA = interpolate(
-    frame,
-    [b.RO_CHARTS.sF + b.RO_CHARTS.durF * 0.35, b.RO_CHARTS.eF],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-  );
-  // live revenue jump on DEMO_WON
-  const jump = interpolate(
-    frame,
-    [b.DEMO_WON.sF + 8, b.DEMO_WON.sF + 16],
-    [0, 1],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-      easing: ease,
-    },
-  );
-  const liveRevenue = 621880 * jump + 612480 * (1 - jump);
-  const showJump = frame >= b.DEMO_WON.sF;
-
-  return (
-    <AbsoluteFill style={{ background: RO.canvas }}>
-      <DotGrid color="#F0742A" opacity={0.4} frame={frame} />
-      <HorizonBloom color="rgba(240,116,42,0.42)" />
-      {/* Headline */}
-      <div
-        style={{
-          position: "absolute",
-          top: 150,
-          left: 0,
-          right: 0,
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 24,
-            fontWeight: 700,
-            letterSpacing: "0.18em",
-            color: RO.textSoft,
-            textTransform: "uppercase",
-          }}
-        >
-          Revenue Sold · June 2026
-        </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 128,
-            fontWeight: 800,
-            letterSpacing: "-0.04em",
-            color: RO.copperHi,
-            marginTop: 6,
-            textShadow: `0 0 ${40 + headGlow * 40}px ${RO.copper}`,
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {fmtMoney(showJump ? liveRevenue : revenue)}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 14,
-            justifyContent: "center",
-            marginTop: 14,
-          }}
-        >
-          {["▲ 22% MoM", "▲ 41% YoY"].map((d, i) => (
-            <span
-              key={i}
-              style={{
-                fontFamily: SANS,
-                fontSize: 26,
-                fontWeight: 800,
-                color: "#04150E",
-                background: RO.emerald,
-                borderRadius: 999,
-                padding: "6px 18px",
-                opacity: headGlow,
-                boxShadow:
-                  jump > 0 && i === 0 ? `0 0 24px ${RO.emerald}` : "none",
-              }}
-            >
-              {d}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* KPI strip */}
-      <div
-        style={{
-          position: "absolute",
-          top: 480,
-          left: 50,
-          right: 50,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr",
-          gap: 16,
-        }}
-      >
-        {[
-          { l: "Jobs", v: "38", s: "🟢 24 won" },
-          { l: "Close Rate", v: "31%", s: "20–40% band" },
-          { l: "Avg Job", v: "$16.1k", s: "▲" },
-          {
-            l: "Leads In",
-            v: showJump ? "53" : "52",
-            s: jump > 0 ? "+1 live" : "",
-          },
-        ].map((k, i) => (
-          <div
-            key={i}
-            style={{
-              background: RO.card,
-              border: `1px solid ${RO.border}`,
-              borderRadius: 18,
-              padding: "18px 16px",
-              opacity: kpiA(i),
-              transform: `translateY(${(1 - kpiA(i)) * 30}px)`,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 16,
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                color: RO.textSoft,
-                textTransform: "uppercase",
-              }}
-            >
-              {k.l}
-            </div>
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 46,
-                fontWeight: 800,
-                color: RO.text,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {k.v}
-            </div>
-            <div style={{ fontFamily: SANS, fontSize: 16, color: RO.copperHi }}>
-              {k.s}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Revenue area chart */}
-      <div
-        style={{
-          position: "absolute",
-          top: 700,
-          left: 50,
-          right: 50,
-          background: RO.card,
-          border: `1px solid ${RO.border}`,
-          borderRadius: 24,
-          padding: 26,
-          opacity: chartDraw > 0.001 ? 1 : 0,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 20,
-            fontWeight: 800,
-            letterSpacing: "0.1em",
-            color: RO.copperHi,
-            marginBottom: 14,
-          }}
-        >
-          13-MONTH REVENUE
-        </div>
-        <RevenueChart
-          draw={Math.max(0.001, chartDraw)}
-          scrub={0}
-          area={RO.copper}
-          line={RO.copper}
-          glow={RO.copper}
-          width={920}
-          height={240}
-          data={[28, 31, 30, 38, 44, 41, 52, 49, 58, 66, 72, 80, 92]}
-        />
-      </div>
-
-      {/* Funnel */}
-      <div
-        style={{
-          position: "absolute",
-          top: 1070,
-          left: 50,
-          right: 50,
-          background: RO.card,
-          border: `1px solid ${RO.border}`,
-          borderRadius: 24,
-          padding: 26,
-          opacity: funnelA,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 20,
-            fontWeight: 800,
-            letterSpacing: "0.1em",
-            color: RO.amber,
-            marginBottom: 18,
-          }}
-        >
-          WHERE LEADS GO COLD
-        </div>
-        <Funnel appear={funnelA} />
-      </div>
-
-      {/* Kanban (revealed during demo beats) */}
-      {(b.DEMO_TEXT.visible || b.DEMO_WON.visible) && (
-        <div
-          style={{
-            position: "absolute",
-            top: 1080,
-            left: 40,
-            right: 40,
-            opacity: interpolate(
-              frame,
-              [b.DEMO_TEXT.sF + 30, b.DEMO_TEXT.sF + 45],
-              [0, 1],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            ),
-          }}
-        >
-          <KanbanBoard
-            cardAppear={interpolate(
-              frame,
-              [
-                b.DEMO_TEXT.sF + b.DEMO_TEXT.durF * 0.62,
-                b.DEMO_TEXT.sF + b.DEMO_TEXT.durF * 0.78,
-              ],
-              [0, 1],
-              {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-                easing: ease,
-              },
-            )}
-            dragP={interpolate(
-              frame,
-              [b.DEMO_WON.sF + 4, b.DEMO_WON.sF + 14],
-              [0, 1],
-              {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-                easing: ease,
-              },
-            )}
-            wonFlash={interpolate(
-              frame,
-              [b.DEMO_WON.sF + 13, b.DEMO_WON.sF + 18, b.DEMO_WON.sF + 30],
-              [0, 1, 0],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            )}
-          />
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// ════════════════════════════════════════════════════════════════════════════
-//  MAIN COMPOSITION
-// ════════════════════════════════════════════════════════════════════════════
-
-export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
-  beats,
-  brand = "Simply Scaled",
-  phone = "(847) 212-2142",
-  email = "bradyschwartz25@gmail.com",
-  offer = "Free 15-min teardown of where your money's leaking — no pitch.",
-  logoUrl = "",
-  founderPhotoUrl = "",
-  lite = false,
-}) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const bts = beats && beats.length ? beats : buildDefaultBeats();
-  const b = useBeats(bts, fps, frame);
-
-  // ── Camera per beat (push-ins, holds) ─────────────────────────────────────
-  const smCam =
-    1.0 +
-    interpolate(frame, [b.SM_KPI.sF, b.SM_STUCK.eF], [0.06, -0.04], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    });
-  const roCam =
-    1.0 +
-    interpolate(frame, [b.RO_HEAD.sF, b.RO_CHARTS.eF], [0.07, -0.03], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    });
-
-  const showChip = frame >= b.RO_HEAD.sF && frame < b.CLOSE.sF;
-
-  // active caption
-  const activeKey = bts.find(
-    (x) =>
-      frame >= Math.round(x.start * fps) &&
-      frame < Math.round((x.start + x.dur) * fps),
-  )?.key;
-
-  return (
-    <AbsoluteFill style={{ background: "#000" }}>
-      {/* ───────── 1. HOOK — flash-forward miracle ───────── */}
-      {b.HOOK.visible && <HookScene frame={frame} fps={fps} bi={b.HOOK} />}
-
-      {/* ───────── 2. CHAOS — your Tuesday ───────── */}
-      {b.CHAOS.visible && <ChaosScene frame={frame} fps={fps} bi={b.CHAOS} />}
-
-      {/* ───────── 3. SNAP — lights on (transition) ───────── */}
-      {b.SNAP.visible && <SnapScene frame={frame} fps={fps} bi={b.SNAP} />}
-
-      {/* ───────── 4–6. STOLEN MULE deck ───────── */}
-      {(b.SM_KPI.visible || b.SM_MONEY.visible || b.SM_STUCK.visible) && (
-        <CameraRig scale={smCam}>
-          <StolenMuleDeck frame={frame} fps={fps} b={b} />
-        </CameraRig>
-      )}
-
-      {/* ───────── 7. PIVOT — split snap ───────── */}
-      {b.PIVOT.visible && <PivotScene frame={frame} fps={fps} bi={b.PIVOT} />}
-
-      {/* ───────── 8–11. RESTORATION ONE deck + demo ───────── */}
-      {(b.RO_HEAD.visible ||
-        b.RO_CHARTS.visible ||
-        b.DEMO_TEXT.visible ||
-        b.DEMO_WON.visible) && (
-        <CameraRig scale={roCam}>
-          <RestorationDeck frame={frame} fps={fps} b={b} />
-        </CameraRig>
-      )}
-      {/* phone mockup overlay for the text demo */}
-      {b.DEMO_TEXT.visible && (
-        <PhoneOverlay frame={frame} fps={fps} bi={b.DEMO_TEXT} />
-      )}
-
-      {/* ───────── 12. PROOF — two worlds ───────── */}
-      {b.PROOF.visible && <ProofScene frame={frame} fps={fps} bi={b.PROOF} />}
-
-      {/* ───────── 13. HUMAN — founder ───────── */}
-      {b.HUMAN.visible && (
-        <FounderScene
-          frame={frame}
-          fps={fps}
-          bi={b.HUMAN}
-          photoUrl={founderPhotoUrl}
-          brand={brand}
-        />
-      )}
-
-      {/* ───────── 14. TURN — your business ───────── */}
-      {b.TURN.visible && <TurnScene frame={frame} fps={fps} bi={b.TURN} />}
-
-      {/* ───────── 15–16. CLOSE + CTA ───────── */}
-      {(b.CLOSE.visible || b.CTA.visible) && (
-        <CloseScene
-          frame={frame}
-          fps={fps}
-          b={b}
-          brand={brand}
-          phone={phone}
-          email={email}
-          offer={offer}
-          logoUrl={logoUrl}
-        />
-      )}
-
-      {/* persistent corner chip */}
-      <PersistentChip show={showChip} phone={phone} brand={brand} />
-
-      {/* watermark (subtle, always) */}
-      {frame < b.CLOSE.sF && (
-        <div
-          style={{
-            position: "absolute",
-            top: 64,
-            right: 56,
-            fontFamily: SANS,
-            fontSize: 22,
-            fontWeight: 800,
-            letterSpacing: "0.04em",
-            color: "rgba(255,255,255,0.5)",
-            zIndex: 7600,
-            textShadow: "0 2px 12px rgba(0,0,0,0.8)",
-          }}
-        >
-          {brand}
-        </div>
-      )}
-
-      {/* captions */}
-      {activeKey && CAPTIONS[activeKey] && (
-        <Caption
-          text={CAPTIONS[activeKey]}
-          localF={b[activeKey].localF}
-          durF={b[activeKey].durF}
-          fps={fps}
-          big={activeKey === "HOOK" || activeKey === "TURN"}
-          accent={
-            ["RO_HEAD", "RO_CHARTS", "DEMO_TEXT", "DEMO_WON"].includes(
-              activeKey,
-            )
-              ? RO.copper
-              : SM.indigo
-          }
-        />
-      )}
-
-      {/* global grade */}
-      <Vignette />
-      {!lite && <Grain />}
-    </AbsoluteFill>
-  );
-};
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Individual transition / bookend scenes
-// ════════════════════════════════════════════════════════════════════════════
-
-const HookScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  // Fast, punchy: text mostly typed from frame 0, snaps to the bright card
-  // early, card holds bright + glowing for the back half (the payoff).
-  const typeP = interpolate(bi.localF, [0, bi.durF * 0.22], [0.35, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const snapP = interpolate(
+  bi: BeatInfo;
+}> = ({ frame, fps, bi }) => {
+  const wipe = clampI(
     bi.localF,
-    [bi.durF * 0.26, bi.durF * 0.46],
-    [0, 1],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-      easing: ease,
-    },
+    bi.durF - Math.round(fps * 0.5),
+    bi.durF,
+    0,
+    1,
+    ease,
   );
-  const cardIn = interpolate(snapP, [0.45, 0.75], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const outBlur = interpolate(bi.localF, [bi.durF - 3, bi.durF], [0, 16], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const glowPulse = 0.7 + Math.sin(bi.localF / 5) * 0.3;
-  return (
-    <AbsoluteFill
-      style={{ background: RO.canvas, filter: `blur(${outBlur}px)` }}
-    >
-      <DotGrid color="#F0742A" opacity={0.45} frame={frame} />
-      {/* strong central glow so frame 1 is never a void */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: `radial-gradient(circle at 50% 45%, rgba(240,116,42,${0.32 * glowPulse}) 0%, transparent 52%)`,
-        }}
-      />
-      <HorizonBloom color="rgba(240,116,42,0.5)" />
-      {/* messy text → clean card, centered */}
-      <AbsoluteFill
-        style={{
-          alignItems: "center",
-          justifyContent: "center",
-          marginTop: -60,
-        }}
-      >
-        {snapP < 0.5 ? (
-          <div
-            style={{
-              maxWidth: 800,
-              background: "#2B5278",
-              color: "#fff",
-              borderRadius: 26,
-              padding: "30px 34px",
-              fontFamily: SANS,
-              fontSize: 40,
-              fontWeight: 700,
-              lineHeight: 1.32,
-              transform: `scale(${1 - snapP * 0.2})`,
-              opacity: 1 - snapP * 1.4,
-              boxShadow: "0 24px 70px rgba(0,0,0,0.6)",
-            }}
-          >
-            {"John Smith | 312-555-1234 | water damage, quote by Friday".slice(
-              0,
-              Math.floor(58 * typeP),
-            )}
-            {typeP < 1 && <span style={{ opacity: 0.6 }}>▋</span>}
-          </div>
-        ) : (
-          <div
-            style={{
-              width: 640,
-              background: "#1b2128",
-              border: `3px solid ${RO.copper}`,
-              borderRadius: 26,
-              padding: 36,
-              opacity: cardIn,
-              transform: `scale(${0.86 + cardIn * 0.14})`,
-              boxShadow: `0 0 ${70 * glowPulse}px ${RO.copper}, 0 30px 80px rgba(0,0,0,0.6)`,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: SANS,
-                fontWeight: 800,
-                fontSize: 50,
-                color: "#fff",
-              }}
-            >
-              John Smith
-            </div>
-            <div
-              style={{
-                fontFamily: MONO,
-                fontSize: 30,
-                color: RO.textSoft,
-                marginTop: 8,
-              }}
-            >
-              (312) 555-1234
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 14,
-                marginTop: 20,
-                flexWrap: "wrap",
-              }}
-            >
-              <span
-                style={{
-                  background: `${RO.info}33`,
-                  color: RO.info,
-                  borderRadius: 12,
-                  padding: "8px 18px",
-                  fontFamily: SANS,
-                  fontWeight: 800,
-                  fontSize: 28,
-                }}
-              >
-                💧 Water
-              </span>
-              <span
-                style={{
-                  background: `${RO.amber}33`,
-                  color: RO.amber,
-                  borderRadius: 12,
-                  padding: "8px 18px",
-                  fontFamily: SANS,
-                  fontWeight: 800,
-                  fontSize: 28,
-                }}
-              >
-                by Fri
-              </span>
-              <span
-                style={{
-                  background: RO.emerald,
-                  color: "#04150E",
-                  borderRadius: 999,
-                  padding: "8px 16px",
-                  fontFamily: SANS,
-                  fontWeight: 800,
-                  fontSize: 24,
-                  boxShadow: `0 0 20px ${RO.emerald}`,
-                }}
-              >
-                ● LIVE
-              </span>
-            </div>
-          </div>
-        )}
-      </AbsoluteFill>
-    </AbsoluteFill>
-  );
-};
-
-const ChaosScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  const drift = Math.sin((bi.localF / fps) * 1.4) * 8;
-  const lostCounter = Math.max(0, 9 - Math.floor(bi.localF / 8));
   return (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(ellipse at 50% 40%, #1a140e 0%, #0a0806 100%)",
+          "radial-gradient(ellipse at 50% 35%, #1a1014 0%, #07060a 100%)",
       }}
     >
-      {/* desk macro vibe with DOF: faux blurred clutter */}
+      <DotGrid color="#F43F5E" opacity={0.25} frame={frame} />
       <div
         style={{
           position: "absolute",
           inset: 0,
-          filter: "blur(2px)",
-          opacity: 0.5,
-          background:
-            "radial-gradient(circle at 30% 70%, rgba(120,90,50,0.25), transparent 40%), radial-gradient(circle at 75% 30%, rgba(90,70,40,0.2), transparent 40%)",
+          background: `radial-gradient(circle at 50% 30%, rgba(244,63,94,${0.1 + 0.06 * Math.abs(Math.sin(bi.localF / 6))}) 0%, transparent 55%)`,
         }}
       />
-      {/* sticky note */}
       <div
         style={{
           position: "absolute",
-          top: 560 + drift,
-          left: 180,
-          width: 300,
-          height: 300,
-          background: "#E9D84F",
-          transform: "rotate(-7deg)",
-          boxShadow: "0 30px 60px rgba(0,0,0,0.6)",
-          fontFamily: "'Comic Sans MS', cursive",
-          fontSize: 44,
-          fontWeight: 700,
-          color: "#3a3208",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          padding: 24,
-        }}
-      >
-        CALL BACK!!
-      </div>
-      {/* phone */}
-      <div
-        style={{
-          position: "absolute",
-          top: 900 - drift,
-          right: 150,
-          width: 360,
-          height: 720,
-          borderRadius: 48,
-          background: "#0c0c0e",
-          border: "8px solid #222",
-          transform: "rotate(6deg)",
-          boxShadow: "0 40px 80px rgba(0,0,0,0.7)",
-          padding: 30,
-          display: "flex",
-          flexDirection: "column",
-          gap: 18,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ fontFamily: SANS, fontSize: 30, color: "#888" }}>
-          Missed Call
-        </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 120,
-            fontWeight: 800,
-            color: "#F43F5E",
-          }}
-        >
-          (7)
-        </div>
-        <div
-          style={{
-            background: "#F43F5E",
-            color: "#fff",
-            borderRadius: 999,
-            padding: "6px 18px",
-            fontFamily: SANS,
-            fontSize: 26,
-            fontWeight: 700,
-          }}
-        >
-          23 unread
-        </div>
-      </div>
-      {/* bleeding money number */}
-      <div
-        style={{
-          position: "absolute",
-          top: 360,
+          top: 200,
           left: 0,
           right: 0,
           textAlign: "center",
-          fontFamily: MONO,
-          fontSize: 56,
-          fontWeight: 700,
-          color: "#F43F5E",
-          opacity: 0.8,
         }}
       >
-        leads lost this week: {lostCounter}
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 34,
+            fontWeight: 700,
+            color: SM.textSoft,
+            letterSpacing: "0.02em",
+          }}
+        >
+          Running a business?
+        </div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 58,
+            fontWeight: 800,
+            color: "#fff",
+            marginTop: 10,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.05,
+            padding: "0 60px",
+          }}
+        >
+          The 5 things eating
+          <br />
+          your day:
+        </div>
+      </div>
+      <div style={{ position: "absolute", top: 470, left: 80, right: 80 }}>
+        {PAINS.map((p, i) => {
+          const start = 8 + i * 7;
+          const a = clampI(bi.localF, start, start + 9, 0, 1, ease);
+          return (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 20,
+                background: "rgba(244,63,94,0.08)",
+                border: "1px solid rgba(244,63,94,0.3)",
+                borderRadius: 16,
+                padding: "20px 26px",
+                marginBottom: 16,
+                opacity: a,
+                transform: `translateX(${(1 - a) * -40}px)`,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontWeight: 800,
+                  fontSize: 34,
+                  color: SM.danger,
+                  width: 44,
+                }}
+              >
+                {i + 1}
+              </div>
+              <div style={{ fontSize: 38 }}>{p.icon}</div>
+              <div
+                style={{
+                  flex: 1,
+                  fontFamily: SANS,
+                  fontWeight: 700,
+                  fontSize: 34,
+                  color: "#fff",
+                  position: "relative",
+                }}
+              >
+                {p.t}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: 0,
+                    height: 4,
+                    background: SM.emerald,
+                    width: `${wipe * 100}%`,
+                    borderRadius: 2,
+                    boxShadow: `0 0 12px ${SM.emerald}`,
+                  }}
+                />
+              </div>
+              {wipe > 0.3 && (
+                <div style={{ fontSize: 34, color: SM.emerald, opacity: wipe }}>
+                  ✓
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </AbsoluteFill>
   );
 };
 
-const SnapScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// 2 — BRIDGE
+const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const p = bi.p;
-  const flash = interpolate(bi.localF, [0, 3, 10], [0.9, 0.4, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const gridIn = interpolate(p, [0.1, 1], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const flash = clampI(bi.localF, bi.durF - 5, bi.durF, 0, 0.85);
+  const gather = clampI(bi.localF, 0, bi.durF * 0.7, 0, 1, ease);
   return (
-    <AbsoluteFill style={{ background: SM.canvas }}>
-      <DotGrid color="#6366F1" opacity={gridIn * 0.6} frame={frame} />
-      <HorizonBloom color="rgba(99,102,241,0.6)" intensity={gridIn} />
+    <AbsoluteFill
+      style={{
+        background: SM.canvas,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <DotGrid color="#6366F1" opacity={0.4 * gather} frame={frame} />
+      <HorizonBloom color="rgba(99,102,241,0.5)" intensity={gather} />
+      <div
+        style={{
+          fontFamily: SANS,
+          fontWeight: 800,
+          fontSize: 62,
+          color: "#fff",
+          textAlign: "center",
+          padding: "0 80px",
+          opacity: gather,
+          transform: `scale(${0.9 + gather * 0.1})`,
+          textShadow: `0 0 40px ${SM.indigo}`,
+        }}
+      >
+        Now imagine every one of them…
+        <br />
+        <span style={{ color: SM.indigoLite }}>handled.</span>
+      </div>
       <AbsoluteFill style={{ background: "#fff", opacity: flash }} />
     </AbsoluteFill>
   );
 };
 
+// 3+4 — Stolen Mule full app
+const StolenMuleApp: React.FC<{
+  frame: number;
+  fps: number;
+  b: Record<string, BeatInfo>;
+}> = ({ frame, fps, b }) => {
+  const t = b.SM_TOOLS;
+  const m = b.SM_MONEY;
+  const glowIdx = 10 + Math.floor(clampI(frame, t.sF + 10, t.eF - 6, 0, 3.99));
+  // Populate the dashboard DURING the tools/sidebar beat so the "full product"
+  // shot is complete (sidebar + live data), then SM_MONEY pushes in + scrubs.
+  const kpiA = (i: number) =>
+    clampI(frame, t.sF + 20 + i * 5, t.sF + 20 + i * 5 + 14, 0, 1, ease);
+  const collected = countUp(frame, t.sF + 20, t.durF * 0.5, 284900);
+  const unbilled = countUp(frame, t.sF + 20, t.durF * 0.5, 48200);
+  const unpaid = countUp(frame, t.sF + 22, t.durF * 0.5, 112750);
+  const overdue = countUp(frame, t.sF + 24, t.durF * 0.5, 19400);
+  const chartDraw = clampI(frame, t.sF + 55, t.sF + 130, 0, 1, ease);
+  const scrub = clampI(
+    frame,
+    m.sF + m.durF * 0.5,
+    m.eF,
+    0,
+    1,
+    Easing.inOut(Easing.cubic),
+  );
+
+  return (
+    <AbsoluteFill
+      style={{ background: SM.canvas, display: "flex", flexDirection: "row" }}
+    >
+      <Sidebar
+        brandName="Stolen Mule"
+        brandSub="The REAL Law Group"
+        accent={SM.indigo}
+        bg={SM.sidebar}
+        items={SM_NAV}
+        activeIdx={0}
+        glowIdx={glowIdx}
+        extra="+16 more tools"
+      />
+      <div
+        style={{
+          flex: 1,
+          position: "relative",
+          padding: "30px 36px",
+          overflow: "hidden",
+        }}
+      >
+        <DotGrid color="#6366F1" opacity={0.35} frame={frame} />
+        <HorizonBloom color="rgba(99,102,241,0.4)" />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 22,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 40,
+                fontWeight: 800,
+                color: SM.text,
+              }}
+            >
+              Command Deck
+            </div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 20,
+                color: SM.indigoLite,
+                fontWeight: 600,
+              }}
+            >
+              The REAL Law Group
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: SANS,
+              fontSize: 20,
+              color: SM.indigoLite,
+              fontWeight: 600,
+            }}
+          >
+            <span
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                background: SM.indigo,
+                boxShadow: `0 0 12px ${SM.indigo}`,
+              }}
+            />{" "}
+            Live
+          </div>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 16,
+            marginBottom: 22,
+          }}
+        >
+          <KpiTile
+            label="Unbilled"
+            value={fmtMoney(unbilled)}
+            appear={kpiA(0)}
+            compact
+          />
+          <KpiTile
+            label="Unpaid"
+            value={fmtMoney(unpaid)}
+            appear={kpiA(1)}
+            compact
+          />
+          <KpiTile
+            label="Overdue"
+            value={fmtMoney(overdue)}
+            accent={SM.danger}
+            appear={kpiA(2)}
+            compact
+          />
+          <KpiTile
+            label="Collected / mo"
+            value={fmtMoney(collected)}
+            accent={SM.indigoLite}
+            hero
+            delta="18%"
+            appear={kpiA(3)}
+          />
+        </div>
+        <div
+          style={{
+            background: SM.tile,
+            border: `1px solid ${SM.tileBorder}`,
+            borderRadius: 22,
+            padding: 22,
+            marginBottom: 20,
+            opacity: clampI(frame, t.sF + 45, t.sF + 60, 0.3, 1),
+          }}
+        >
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 20,
+              fontWeight: 800,
+              letterSpacing: "0.1em",
+              color: SM.sky,
+              marginBottom: 12,
+            }}
+          >
+            REVENUE — MONTH BY MONTH
+          </div>
+          <RevenueChart
+            draw={Math.max(0.001, chartDraw)}
+            scrub={scrub}
+            area={SM.sky}
+            glow={SM.indigo}
+            width={640}
+            height={220}
+          />
+        </div>
+        <div
+          style={{
+            background: SM.tile,
+            border: `1px solid ${SM.tileBorder}`,
+            borderRadius: 22,
+            padding: 22,
+            opacity: clampI(frame, t.sF + 90, t.sF + 110, 0, 1),
+          }}
+        >
+          <ARAging
+            appear={clampI(frame, t.sF + 95, t.sF + 125, 0, 1, ease)}
+            label="MONEY OWED TO YOU"
+          />
+        </div>
+        {t.active && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 30,
+              right: 36,
+              fontFamily: SANS,
+              fontSize: 22,
+              fontWeight: 800,
+              color: SM.indigoLite,
+              opacity: clampI(t.localF, 6, 18, 0, 1),
+            }}
+          >
+            30+ tools · 4 AI engines
+          </div>
+        )}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// 5 — PIVOT
+const PivotLabel: React.FC<{ text: string; sub: string; color: string }> = ({
+  text,
+  sub,
+  color,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      top: "42%",
+      left: 0,
+      right: 0,
+      textAlign: "center",
+    }}
+  >
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: 38,
+        fontWeight: 800,
+        letterSpacing: "0.08em",
+        color,
+        textShadow: `0 0 22px ${color}`,
+      }}
+    >
+      {text}
+    </div>
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: 22,
+        fontWeight: 600,
+        color: "rgba(255,255,255,0.6)",
+        marginTop: 8,
+      }}
+    >
+      {sub}
+    </div>
+  </div>
+);
 const PivotScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const split = interpolate(bi.localF, [0, bi.durF * 0.5], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
-  const seam = interpolate(bi.localF, [bi.durF * 0.4, bi.durF * 0.55], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const split = clampI(bi.localF, 0, bi.durF * 0.5, 0, 1, ease);
+  const seam = clampI(bi.localF, bi.durF * 0.4, bi.durF * 0.55, 0, 1);
   return (
     <AbsoluteFill style={{ background: "#000" }}>
-      {/* left indigo */}
       <div
         style={{
           position: "absolute",
@@ -2094,9 +1507,8 @@ const PivotScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
       >
         <DotGrid color="#6366F1" opacity={0.5} frame={frame} />
         <HorizonBloom color="rgba(99,102,241,0.5)" />
-        <Label text="LAW FIRM" color={SM.indigoLite} />
+        <PivotLabel text="LAW FIRM" sub="Stolen Mule" color={SM.indigoLite} />
       </div>
-      {/* right copper */}
       <div
         style={{
           position: "absolute",
@@ -2109,9 +1521,12 @@ const PivotScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
       >
         <DotGrid color="#F0742A" opacity={0.45} frame={frame} />
         <HorizonBloom color="rgba(240,116,42,0.45)" />
-        <Label text="RESTORATION CO." color={RO.copperHi} />
+        <PivotLabel
+          text="RESTORATION"
+          sub="Restoration One"
+          color={RO.copperHi}
+        />
       </div>
-      {/* seam flash */}
       <div
         style={{
           position: "absolute",
@@ -2129,123 +1544,627 @@ const PivotScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   );
 };
 
-const Label: React.FC<{ text: string; color: string }> = ({ text, color }) => (
-  <div
-    style={{
-      position: "absolute",
-      top: "44%",
-      left: 0,
-      right: 0,
-      textAlign: "center",
-      fontFamily: SANS,
-      fontSize: 40,
-      fontWeight: 800,
-      letterSpacing: "0.1em",
-      color,
-      textShadow: `0 0 22px ${color}`,
-    }}
-  >
-    {text}
-  </div>
-);
+// 6+7 — Restoration full app (dashboard → pipeline → contacts swiper)
+const RestorationApp: React.FC<{
+  frame: number;
+  fps: number;
+  b: Record<string, BeatInfo>;
+}> = ({ frame, fps, b }) => {
+  const h = b.RO_HEAD;
+  const crm = b.RO_CRM;
+  const panel = clampI(frame, crm.sF + 6, crm.eF - 10, 0, 2, ease);
+  const stripX = -panel * 744;
 
-const PhoneOverlay: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  const typeP = interpolate(bi.localF, [4, bi.durF * 0.42], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const sendP = interpolate(
-    bi.localF,
-    [bi.durF * 0.45, bi.durF * 0.62],
-    [0, 1],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    },
-  );
-  // phone shrinks to corner as the card materializes on the board
-  const dock = interpolate(bi.localF, [bi.durF * 0.6, bi.durF * 0.78], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
-  const scale = 1 - dock * 0.55;
-  const x = dock * 320;
-  const y = dock * 480;
-  const op = interpolate(
-    bi.localF,
-    [0, 6, bi.durF - 4, bi.durF],
-    [0, 1, 1, 0.4],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    },
-  );
+  const revenue = countUp(frame, h.sF, h.durF * 0.8, 612480);
+  const headGlow = clampI(frame, h.sF, h.sF + 10, 0, 1);
+  const kpiA = (i: number) =>
+    clampI(frame, h.sF + 16 + i * 5, h.sF + 16 + i * 5 + 14, 0, 1, ease);
+  const chartDraw = clampI(frame, h.sF + 20, h.eF, 0, 1, ease);
+  const funnelA = clampI(frame, crm.sF, crm.sF + 20, 0, 1);
+  const kanbanAppear = clampI(frame, crm.sF + 10, crm.sF + 26, 0, 1);
+  const contactsA = clampI(frame, crm.sF + crm.durF * 0.55, crm.eF, 0, 1);
+
   return (
     <AbsoluteFill
-      style={{
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 6000,
-        opacity: op,
-      }}
+      style={{ background: RO.canvas, display: "flex", flexDirection: "row" }}
     >
-      <div style={{ transform: `translate(${x}px, ${y}px)` }}>
-        <PhoneMockup typeP={typeP} sendP={sendP} scale={scale} />
+      <Sidebar
+        brandName="Restoration One"
+        accent={RO.copper}
+        bg={RO.sidebar}
+        items={RO_NAV}
+        activeIdx={Math.round(panel)}
+        glowIdx={Math.round(panel)}
+        extra="Chicago · live"
+      />
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <DotGrid color="#F0742A" opacity={0.3} frame={frame} />
+        <HorizonBloom color="rgba(240,116,42,0.4)" />
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            display: "flex",
+            transform: `translateX(${stripX}px)`,
+            willChange: "transform",
+          }}
+        >
+          {/* panel 0: dashboard */}
+          <div style={{ width: 744, padding: "30px 34px", flexShrink: 0 }}>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 22,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                color: RO.textSoft,
+                textTransform: "uppercase",
+              }}
+            >
+              Revenue Sold · June 2026
+            </div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 100,
+                fontWeight: 800,
+                letterSpacing: "-0.04em",
+                color: RO.copperHi,
+                textShadow: `0 0 ${40 + headGlow * 40}px ${RO.copper}`,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {fmtMoney(revenue)}
+            </div>
+            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+              {["▲ 22% MoM", "▲ 41% YoY"].map((d, i) => (
+                <span
+                  key={i}
+                  style={{
+                    fontFamily: SANS,
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: "#04150E",
+                    background: RO.emerald,
+                    borderRadius: 999,
+                    padding: "5px 14px",
+                    opacity: headGlow,
+                  }}
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 14,
+                marginBottom: 20,
+              }}
+            >
+              {[
+                { l: "Jobs", v: "38" },
+                { l: "Close Rate", v: "31%" },
+                { l: "Avg Job", v: "$16.1k" },
+                { l: "Leads In", v: "52" },
+              ].map((k, i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: RO.card,
+                    border: `1px solid ${RO.border}`,
+                    borderRadius: 16,
+                    padding: "16px 18px",
+                    opacity: kpiA(i),
+                    transform: `translateY(${(1 - kpiA(i)) * 26}px)`,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: SANS,
+                      fontSize: 16,
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      color: RO.textSoft,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {k.l}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: SANS,
+                      fontSize: 44,
+                      fontWeight: 800,
+                      color: RO.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {k.v}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div
+              style={{
+                background: RO.card,
+                border: `1px solid ${RO.border}`,
+                borderRadius: 20,
+                padding: 22,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 18,
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  color: RO.copperHi,
+                  marginBottom: 12,
+                }}
+              >
+                13-MONTH REVENUE
+              </div>
+              <RevenueChart
+                draw={Math.max(0.001, chartDraw)}
+                scrub={0}
+                area={RO.copper}
+                glow={RO.copper}
+                width={650}
+                height={180}
+                data={[28, 31, 30, 38, 44, 41, 52, 49, 58, 66, 72, 80, 92]}
+              />
+            </div>
+          </div>
+          {/* panel 1: pipeline */}
+          <div style={{ width: 744, padding: "30px 30px", flexShrink: 0 }}>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 30,
+                fontWeight: 800,
+                color: RO.text,
+                marginBottom: 4,
+              }}
+            >
+              Pipeline
+            </div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 18,
+                color: RO.textSoft,
+                marginBottom: 18,
+              }}
+            >
+              Week 23 · drag to move · revenue updates live
+            </div>
+            <KanbanBoard cardAppear={kanbanAppear} />
+            <div style={{ marginTop: 22 }}>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 18,
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  color: RO.amber,
+                  marginBottom: 14,
+                }}
+              >
+                WHERE LEADS GO COLD
+              </div>
+              <Funnel appear={funnelA} />
+            </div>
+          </div>
+          {/* panel 2: contacts */}
+          <div style={{ width: 744, padding: "30px 34px", flexShrink: 0 }}>
+            <ContactsList appear={contactsA} />
+          </div>
+        </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-const ProofScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// 8 — Full-screen Telegram demo
+const PhoneFull: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const inP = interpolate(bi.localF, [0, 14], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
-  const rot = interpolate(bi.localF, [0, bi.durF], [-6, 6], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const msg = "John Smith | 312-555-1234 | water damage, quote by Friday";
+  const typeP = clampI(bi.localF, 6, bi.durF * 0.34, 0, 1);
+  const sent = bi.localF > bi.durF * 0.36;
+  const reading = clampI(bi.localF, bi.durF * 0.4, bi.durF * 0.52, 0, 1);
+  const cardIn = clampI(bi.localF, bi.durF * 0.58, bi.durF * 0.74, 0, 1, ease);
+  const shown = msg.slice(0, Math.floor(msg.length * typeP));
   return (
     <AbsoluteFill
       style={{
-        background: "#05060A",
+        background: "#0A0E14",
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <DotGrid color="#6366F1" opacity={0.25} frame={frame} />
+      <DotGrid color="#F0742A" opacity={0.2} frame={frame} />
+      <div
+        style={{
+          width: 860,
+          height: 1640,
+          borderRadius: 76,
+          background: "#0E1621",
+          border: "12px solid #1b2a3a",
+          boxShadow: "0 40px 140px rgba(0,0,0,0.8)",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            height: 132,
+            background: "#17212B",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 40px",
+            gap: 20,
+          }}
+        >
+          <div
+            style={{
+              width: 76,
+              height: 76,
+              borderRadius: "50%",
+              background: RO.copper,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: SANS,
+              fontWeight: 800,
+              color: "#fff",
+              fontSize: 32,
+            }}
+          >
+            R1
+          </div>
+          <div>
+            <div
+              style={{
+                fontFamily: SANS,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 34,
+              }}
+            >
+              Restoration One · Leads
+            </div>
+            <div style={{ fontFamily: SANS, color: "#5b6b7b", fontSize: 24 }}>
+              AI intake bot · online
+            </div>
+          </div>
+        </div>
+        <div
+          style={{
+            padding: 40,
+            display: "flex",
+            flexDirection: "column",
+            gap: 28,
+          }}
+        >
+          <div
+            style={{
+              marginLeft: "auto",
+              maxWidth: "84%",
+              background: "#2B5278",
+              color: "#fff",
+              borderRadius: "26px 26px 6px 26px",
+              padding: "26px 30px",
+              fontFamily: SANS,
+              fontSize: 34,
+              lineHeight: 1.4,
+              opacity: typeP > 0 ? 1 : 0,
+              transform: sent ? "translateY(-4px)" : "none",
+            }}
+          >
+            {shown}
+            {typeP < 1 && <span style={{ opacity: 0.6 }}>▋</span>}
+          </div>
+          {reading > 0 && (
+            <div
+              style={{
+                maxWidth: "60%",
+                background: "#1f2c39",
+                borderRadius: "26px 26px 26px 6px",
+                padding: "22px 28px",
+                fontFamily: SANS,
+                fontSize: 30,
+                color: RO.copperHi,
+                opacity: reading,
+              }}
+            >
+              reading lead… ✨
+            </div>
+          )}
+          {cardIn > 0 && (
+            <div
+              style={{
+                background: "#101722",
+                border: `2px solid ${RO.copper}`,
+                borderRadius: 24,
+                padding: 32,
+                opacity: cardIn,
+                transform: `scale(${0.9 + cardIn * 0.1})`,
+                boxShadow: `0 0 50px ${RO.copper}66`,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 26,
+                  fontWeight: 700,
+                  color: RO.copperHi,
+                  marginBottom: 14,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                ✓ ADDED TO PIPELINE
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontWeight: 800,
+                  fontSize: 46,
+                  color: "#fff",
+                }}
+              >
+                John Smith
+              </div>
+              <div
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 30,
+                  color: "#9BA6B2",
+                  marginTop: 8,
+                }}
+              >
+                (312) 555-1234
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  marginTop: 18,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    background: `${RO.info}33`,
+                    color: RO.info,
+                    borderRadius: 12,
+                    padding: "8px 18px",
+                    fontFamily: SANS,
+                    fontWeight: 800,
+                    fontSize: 28,
+                  }}
+                >
+                  💧 Water
+                </span>
+                <span
+                  style={{
+                    background: `${RO.amber}33`,
+                    color: RO.amber,
+                    borderRadius: 12,
+                    padding: "8px 18px",
+                    fontFamily: SANS,
+                    fontWeight: 800,
+                    fontSize: 28,
+                  }}
+                >
+                  by Fri
+                </span>
+                <span
+                  style={{
+                    background: RO.emerald,
+                    color: "#04150E",
+                    borderRadius: 999,
+                    padding: "8px 16px",
+                    fontFamily: SANS,
+                    fontWeight: 800,
+                    fontSize: 24,
+                    boxShadow: `0 0 20px ${RO.emerald}`,
+                  }}
+                >
+                  ● LIVE
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// 9 — PROOF: Jarvis sliding HUD of real businesses
+const PROOF_CARDS = [
+  {
+    brand: "Stolen Mule",
+    client: "The REAL Law Group",
+    tag: "LAW FIRM",
+    accent: SM.indigo,
+    accentHi: SM.indigoLite,
+    bg: SM.canvas,
+  },
+  {
+    brand: "Restoration One",
+    client: "Restoration crew · Chicago",
+    tag: "RESTORATION",
+    accent: RO.copper,
+    accentHi: RO.copperHi,
+    bg: RO.canvas,
+  },
+];
+
+const JarvisProof: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const inP = clampI(bi.localF, 0, 16, 0, 1, ease);
+  const drift = Math.sin(bi.localF / 24) * 18;
+  return (
+    <AbsoluteFill
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 45%, #0b0d14 0%, #050608 100%)",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <DotGrid color="#6366F1" opacity={0.22} frame={frame} />
+      <Scanlines opacity={0.06} />
+      <div
+        style={{
+          position: "absolute",
+          top: 230,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          opacity: inP,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: MONO,
+            fontSize: 24,
+            letterSpacing: "0.3em",
+            color: SM.indigoLite,
+          }}
+        >
+          // REAL BUSINESSES · REAL PEOPLE
+        </div>
+      </div>
       <div
         style={{
           display: "flex",
           gap: 40,
-          transform: `perspective(1400px) rotateY(${rot}deg) scale(${0.8 + inP * 0.2})`,
+          transform: `translateX(${drift}px)`,
           opacity: inP,
         }}
       >
-        {/* mini indigo deck */}
-        <MiniDeck
-          color={SM.indigo}
-          bg={SM.canvas}
-          label="LAW FIRM"
-          frame={frame}
-        />
-        {/* mini copper deck */}
-        <MiniDeck
-          color={RO.copper}
-          bg={RO.canvas}
-          label="RESTORATION"
-          frame={frame}
-        />
+        {PROOF_CARDS.map((c, i) => {
+          const cardIn = clampI(
+            bi.localF,
+            6 + i * 8,
+            6 + i * 8 + 16,
+            0,
+            1,
+            ease,
+          );
+          return (
+            <div
+              key={i}
+              style={{
+                width: 420,
+                height: 820,
+                background: c.bg,
+                borderRadius: 30,
+                border: `2px solid ${c.accent}88`,
+                boxShadow: `0 0 70px ${c.accent}66`,
+                padding: 30,
+                position: "relative",
+                overflow: "hidden",
+                opacity: cardIn,
+                transform: `translateY(${(1 - cardIn) * 60}px) perspective(1400px) rotateY(${(i === 0 ? 8 : -8) * (1 - cardIn)}deg)`,
+              }}
+            >
+              <HorizonBloom color={`${c.accent}55`} />
+              <Scanlines opacity={0.05} />
+              <div
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 20,
+                  letterSpacing: "0.2em",
+                  color: c.accentHi,
+                }}
+              >
+                {c.tag}
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontWeight: 800,
+                  fontSize: 44,
+                  color: "#fff",
+                  marginTop: 8,
+                }}
+              >
+                {c.brand}
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 24,
+                  color: c.accentHi,
+                  fontWeight: 600,
+                  marginTop: 4,
+                }}
+              >
+                {c.client}
+              </div>
+              {[0, 1, 2, 3].map((k) => (
+                <div
+                  key={k}
+                  style={{
+                    marginTop: k === 0 ? 30 : 16,
+                    height: 70,
+                    borderRadius: 14,
+                    background: `${c.accent}1f`,
+                    border: `1px solid ${c.accent}40`,
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${40 + 50 * Math.abs(Math.sin(bi.localF / 12 + k))}%`,
+                      background: `linear-gradient(90deg, ${c.accent}, ${c.accentHi})`,
+                      opacity: 0.5,
+                    }}
+                  />
+                </div>
+              ))}
+              <div
+                style={{
+                  marginTop: 26,
+                  height: 150,
+                  borderRadius: 16,
+                  background: `linear-gradient(180deg, ${c.accent}40, transparent)`,
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 26,
+                  left: 30,
+                  fontFamily: SANS,
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: c.accentHi,
+                }}
+              >
+                ● LIVE & IN USE
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div
         style={{
@@ -2255,166 +2174,26 @@ const ProofScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
           right: 0,
           textAlign: "center",
           fontFamily: SANS,
-          fontSize: 34,
+          fontSize: 32,
           fontWeight: 700,
           color: "#fff",
           opacity: inP,
         }}
       >
-        Two industries. One developer. Built from scratch — by me.
+        Two industries. One developer. Built from scratch.
       </div>
     </AbsoluteFill>
   );
 };
 
-const MiniDeck: React.FC<{
-  color: string;
-  bg: string;
-  label: string;
-  frame: number;
-}> = ({ color, bg, label, frame }) => {
-  const pulse = 0.9 + Math.sin(frame / 8) * 0.1;
-  return (
-    <div
-      style={{
-        width: 380,
-        height: 760,
-        background: bg,
-        borderRadius: 28,
-        border: `1px solid ${color}66`,
-        boxShadow: `0 0 60px ${color}55`,
-        padding: 26,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <HorizonBloom color={`${color}55`} />
-      <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 24, color }}>
-        {label}
-      </div>
-      {[0, 1, 2, 3].map((i) => (
-        <div
-          key={i}
-          style={{
-            marginTop: 18,
-            height: 90,
-            borderRadius: 16,
-            background: `${color}1a`,
-            border: `1px solid ${color}33`,
-            opacity: pulse,
-          }}
-        />
-      ))}
-      <div
-        style={{
-          marginTop: 18,
-          height: 200,
-          borderRadius: 16,
-          background: `linear-gradient(180deg, ${color}33, transparent)`,
-        }}
-      />
-    </div>
-  );
-};
-
-const FounderScene: React.FC<{
-  frame: number;
-  fps: number;
-  bi: BeatInfo;
-  photoUrl: string;
-  brand: string;
-}> = ({ frame, fps, bi, photoUrl, brand }) => {
-  const inP = interpolate(bi.localF, [0, 14], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
-  const push = 1 + inP * 0.04;
-  return (
-    <AbsoluteFill
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 40%, #11131c 0%, #05060a 100%)",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <DotGrid color="#6366F1" opacity={0.18} frame={frame} />
-      <div
-        style={{
-          transform: `scale(${push})`,
-          textAlign: "center",
-          opacity: inP,
-        }}
-      >
-        {/* photo slot or monogram */}
-        <div
-          style={{
-            width: 300,
-            height: 300,
-            borderRadius: "50%",
-            margin: "0 auto",
-            overflow: "hidden",
-            border: `3px solid ${SM.indigo}`,
-            boxShadow: `0 0 60px ${SM.indigo}88`,
-            background: "linear-gradient(160deg, #6366F1, #F0742A)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {photoUrl ? (
-            <Img
-              src={photoUrl}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          ) : (
-            <span
-              style={{
-                fontFamily: SANS,
-                fontWeight: 800,
-                fontSize: 130,
-                color: "#fff",
-              }}
-            >
-              B
-            </span>
-          )}
-        </div>
-        <div
-          style={{
-            marginTop: 40,
-            fontFamily: SANS,
-            fontSize: 44,
-            fontWeight: 800,
-            color: "#fff",
-          }}
-        >
-          Brady · {brand}
-        </div>
-        <div
-          style={{
-            marginTop: 10,
-            fontFamily: SANS,
-            fontSize: 30,
-            fontWeight: 600,
-            color: SM.indigoLite,
-          }}
-        >
-          I build these myself.
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
+// 10 — TURN (brief)
 const TurnScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const glow = 0.6 + Math.sin(bi.localF / 6) * 0.4;
-  const cursor = Math.floor(frame / 12) % 2 === 0;
+  const inP = clampI(bi.localF, 0, 12, 0, 1, ease);
+  const glow = 0.6 + 0.4 * Math.abs(Math.sin(bi.localF / 7));
   return (
     <AbsoluteFill
       style={{
@@ -2426,33 +2205,35 @@ const TurnScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
       <DotGrid color="#6366F1" opacity={0.2} frame={frame} />
       <div
         style={{
-          width: 620,
+          width: 760,
           height: 360,
-          borderRadius: 24,
+          borderRadius: 26,
           border: "2px dashed rgba(255,255,255,0.25)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: `0 0 ${60 * glow}px rgba(99,102,241,${0.4 * glow})`,
+          boxShadow: `0 0 ${70 * glow}px rgba(99,102,241,${0.4 * glow})`,
+          opacity: inP,
+          transform: `scale(${0.94 + inP * 0.06})`,
         }}
       >
         <span
           style={{
             fontFamily: SANS,
-            fontSize: 44,
+            fontSize: 50,
             fontWeight: 800,
-            letterSpacing: "0.04em",
-            color: "rgba(255,255,255,0.85)",
+            color: "rgba(255,255,255,0.9)",
           }}
         >
-          YOUR BUSINESS{cursor ? " ▋" : ""}
+          YOUR BUSINESS
         </span>
       </div>
     </AbsoluteFill>
   );
 };
 
-const CloseScene: React.FC<{
+// 11+12 — Clean close
+const CleanClose: React.FC<{
   frame: number;
   fps: number;
   b: Record<string, BeatInfo>;
@@ -2462,48 +2243,33 @@ const CloseScene: React.FC<{
   offer: string;
   logoUrl: string;
 }> = ({ frame, fps, b, brand, phone, email, offer, logoUrl }) => {
+  const s = b.CLOSE.sF;
   const logoSpring = spring({
-    frame: frame - b.CLOSE.sF,
+    frame: frame - s,
     fps,
     config: { damping: 16, stiffness: 120, mass: 0.7 },
   });
-  const sweep = interpolate(frame, [b.CLOSE.sF + 6, b.CLOSE.sF + 24], [-1, 2], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const offerIn = interpolate(
-    frame,
-    [b.CLOSE.sF + 16, b.CLOSE.sF + 30],
-    [0, 1],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-      easing: ease,
-    },
-  );
-  const ctaIn = interpolate(frame, [b.CTA.sF, b.CTA.sF + 12], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
+  const sweep = clampI(frame, s + 6, s + 24, -1, 2);
+  const offerIn = clampI(frame, s + 14, s + 28, 0, 1, ease);
+  const phoneIn = clampI(frame, b.CTA.sF - 6, b.CTA.sF + 10, 0, 1, ease);
   const phonePulse = b.CTA.active
-    ? 1 + Math.sin((frame - b.CTA.sF) / 5) * 0.04
+    ? 1 + 0.04 * Math.sin((frame - b.CTA.sF) / 5)
     : 1;
   return (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(ellipse at 50% 40%, #0c0f1a 0%, #050608 100%)",
+          "radial-gradient(ellipse at 50% 42%, #0c0f1a 0%, #050608 100%)",
         alignItems: "center",
         justifyContent: "center",
       }}
     >
       <DotGrid color="#6366F1" opacity={0.25} frame={frame} />
-      <div style={{ textAlign: "center", marginTop: -120 }}>
-        {/* wordmark / logo */}
+      <HorizonBloom color="rgba(99,102,241,0.3)" />
+      <div style={{ textAlign: "center" }}>
         <div
           style={{
-            transform: `scale(${0.6 + logoSpring * 0.4})`,
+            transform: `scale(${0.7 + logoSpring * 0.3})`,
             opacity: logoSpring,
             position: "relative",
             display: "inline-block",
@@ -2515,7 +2281,7 @@ const CloseScene: React.FC<{
             <div
               style={{
                 fontFamily: SANS,
-                fontSize: 96,
+                fontSize: 100,
                 fontWeight: 800,
                 letterSpacing: "-0.03em",
                 color: "#fff",
@@ -2523,7 +2289,6 @@ const CloseScene: React.FC<{
               }}
             >
               Simply Scaled
-              {/* light sweep */}
               <div
                 style={{
                   position: "absolute",
@@ -2536,28 +2301,25 @@ const CloseScene: React.FC<{
               />
             </div>
           )}
-          {/* fusion gradient underline */}
           <div
             style={{
               height: 8,
               borderRadius: 4,
-              marginTop: 14,
+              marginTop: 16,
               background: "linear-gradient(90deg, #6366F1, #F0742A)",
               opacity: logoSpring,
             }}
           />
         </div>
-
-        {/* offer line */}
         <div
           style={{
-            marginTop: 50,
+            marginTop: 44,
             fontFamily: SANS,
-            fontSize: 34,
+            fontSize: 36,
             fontWeight: 600,
             color: "rgba(255,255,255,0.92)",
             opacity: offerIn,
-            maxWidth: 880,
+            maxWidth: 840,
             marginLeft: "auto",
             marginRight: "auto",
             lineHeight: 1.3,
@@ -2565,21 +2327,18 @@ const CloseScene: React.FC<{
         >
           {offer}
         </div>
-
-        {/* phone (the focal CTA) */}
         <div
           style={{
-            marginTop: 48,
-            opacity: Math.max(offerIn, ctaIn),
+            marginTop: 46,
+            opacity: Math.max(offerIn, phoneIn),
             transform: `scale(${phonePulse})`,
           }}
         >
           <div
             style={{
               fontFamily: SANS,
-              fontSize: 92,
+              fontSize: 96,
               fontWeight: 800,
-              letterSpacing: "-0.01em",
               color: "#fff",
               textShadow: b.CTA.active ? `0 0 40px ${SM.indigo}` : "none",
             }}
@@ -2592,7 +2351,7 @@ const CloseScene: React.FC<{
               fontSize: 34,
               fontWeight: 700,
               color: SM.indigoLite,
-              marginTop: 8,
+              marginTop: 6,
             }}
           >
             Call or text
@@ -2600,29 +2359,121 @@ const CloseScene: React.FC<{
           <div
             style={{
               fontFamily: SANS,
-              fontSize: 30,
-              color: "rgba(255,255,255,0.7)",
-              marginTop: 18,
+              fontSize: 32,
+              color: "rgba(255,255,255,0.78)",
+              marginTop: 16,
             }}
           >
             {email}
           </div>
-          {b.CTA.active && (
-            <div
-              style={{
-                marginTop: 22,
-                fontFamily: SANS,
-                fontSize: 26,
-                fontWeight: 600,
-                color: RO.copperHi,
-                opacity: ctaIn,
-              }}
-            >
-              I only take a few builds a month.
-            </div>
-          )}
         </div>
       </div>
+    </AbsoluteFill>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MAIN
+// ════════════════════════════════════════════════════════════════════════════
+export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
+  beats,
+  brand = "Simply Scaled",
+  phone = "(847) 212-2142",
+  email = "bradyschwartz25@gmail.com",
+  offer = "Free 15-min teardown of where your money's leaking — no pitch.",
+  logoUrl = "",
+  founderPhotoUrl = "",
+  lite = false,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const bts = beats && beats.length ? beats : buildDefaultBeats();
+  const b = useBeats(bts, fps, frame);
+
+  const smCam = 1.0 + clampI(frame, b.SM_TOOLS.sF, b.SM_MONEY.eF, 0.04, -0.03);
+  const roCam = 1.0 + clampI(frame, b.RO_HEAD.sF, b.RO_CRM.eF, 0.05, -0.02);
+
+  const showChip = frame >= b.RO_HEAD.sF && frame < b.PROOF.sF;
+  const activeKey = bts.find(
+    (x) =>
+      frame >= Math.round(x.start * fps) &&
+      frame < Math.round((x.start + x.dur) * fps),
+  )?.key;
+  const roAccentKeys = ["RO_HEAD", "RO_CRM", "TG_DEMO"];
+
+  return (
+    <AbsoluteFill style={{ background: "#000" }}>
+      {b.HOOK.visible && <FiveThingsHook frame={frame} fps={fps} bi={b.HOOK} />}
+      {b.BRIDGE.visible && (
+        <BridgeScene frame={frame} fps={fps} bi={b.BRIDGE} />
+      )}
+
+      {(b.SM_TOOLS.visible || b.SM_MONEY.visible) && (
+        <CameraRig scale={smCam}>
+          <StolenMuleApp frame={frame} fps={fps} b={b} />
+        </CameraRig>
+      )}
+
+      {b.PIVOT.visible && <PivotScene frame={frame} fps={fps} bi={b.PIVOT} />}
+
+      {(b.RO_HEAD.visible || b.RO_CRM.visible) && (
+        <CameraRig scale={roCam}>
+          <RestorationApp frame={frame} fps={fps} b={b} />
+        </CameraRig>
+      )}
+
+      {b.TG_DEMO.visible && (
+        <PhoneFull frame={frame} fps={fps} bi={b.TG_DEMO} />
+      )}
+      {b.PROOF.visible && <JarvisProof frame={frame} fps={fps} bi={b.PROOF} />}
+      {b.TURN.visible && <TurnScene frame={frame} fps={fps} bi={b.TURN} />}
+      {(b.CLOSE.visible || b.CTA.visible) && (
+        <CleanClose
+          frame={frame}
+          fps={fps}
+          b={b}
+          brand={brand}
+          phone={phone}
+          email={email}
+          offer={offer}
+          logoUrl={logoUrl}
+        />
+      )}
+
+      <PersistentChip show={showChip} phone={phone} brand={brand} />
+
+      {frame < b.PROOF.sF && (
+        <div
+          style={{
+            position: "absolute",
+            top: 60,
+            right: 54,
+            fontFamily: SANS,
+            fontSize: 22,
+            fontWeight: 800,
+            letterSpacing: "0.04em",
+            color: "rgba(255,255,255,0.5)",
+            zIndex: 7600,
+            textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+          }}
+        >
+          {brand}
+        </div>
+      )}
+
+      {activeKey && CAPTIONS[activeKey] && (
+        <Caption
+          text={CAPTIONS[activeKey]}
+          localF={b[activeKey].localF}
+          durF={b[activeKey].durF}
+          fps={fps}
+          big={activeKey === "HOOK" || activeKey === "TURN"}
+          accent={roAccentKeys.includes(activeKey) ? RO.copper : SM.indigo}
+        />
+      )}
+
+      <Vignette />
+      {!lite && <Grain />}
     </AbsoluteFill>
   );
 };

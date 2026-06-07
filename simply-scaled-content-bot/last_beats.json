@@ -2,81 +2,61 @@
   {
     "key": "HOOK",
     "start": 0.0,
-    "dur": 1.1198
+    "dur": 4.0893
   },
   {
-    "key": "CHAOS",
-    "start": 1.1198,
-    "dur": 4.2943
+    "key": "BRIDGE",
+    "start": 4.0893,
+    "dur": 3.7445
   },
   {
-    "key": "SNAP",
-    "start": 5.4141,
-    "dur": 1.5457
-  },
-  {
-    "key": "SM_KPI",
-    "start": 6.9597,
-    "dur": 5.0743
+    "key": "SM_TOOLS",
+    "start": 7.8338,
+    "dur": 7.3989
   },
   {
     "key": "SM_MONEY",
-    "start": 12.0341,
-    "dur": 2.8828
-  },
-  {
-    "key": "SM_STUCK",
-    "start": 14.9169,
-    "dur": 2.92
+    "start": 15.2327,
+    "dur": 5.951
   },
   {
     "key": "PIVOT",
-    "start": 17.8369,
-    "dur": 3.1429
+    "start": 21.1837,
+    "dur": 3.0895
   },
   {
     "key": "RO_HEAD",
-    "start": 20.9798,
-    "dur": 3.9972
+    "start": 24.2731,
+    "dur": 5.9165
   },
   {
-    "key": "RO_CHARTS",
-    "start": 24.9769,
-    "dur": 3.1057
+    "key": "RO_CRM",
+    "start": 30.1896,
+    "dur": 5.2614
   },
   {
-    "key": "DEMO_TEXT",
-    "start": 28.0826,
-    "dur": 5.4829
-  },
-  {
-    "key": "DEMO_WON",
-    "start": 33.5655,
-    "dur": 4.2943
+    "key": "TG_DEMO",
+    "start": 35.4511,
+    "dur": 5.1925
   },
   {
     "key": "PROOF",
-    "start": 37.8599,
-    "dur": 3.3657
-  },
-  {
-    "key": "HUMAN",
-    "start": 41.2256,
-    "dur": 4.8886
+    "start": 40.6435,
+    "dur": 5.2614
   },
   {
     "key": "TURN",
-    "start": 46.1142,
-    "dur": 2.8457
+    "start": 45.905,
+    "dur": 3.0205
   },
   {
     "key": "CLOSE",
-    "start": 48.9599,
-    "dur": 5.7058
+    "start": 48.9255,
+    "dur": 5.0546
   },
   {
     "key": "CTA",
-    "start": 54.6657,
-    "dur": 5.3343
+    "start": 53.9801,
+    "dur": 6.0199
   }
 ]
