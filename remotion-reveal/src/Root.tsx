@@ -4,6 +4,7 @@ import { HookText } from "./HookText";
 import { LogoClose } from "./LogoClose";
 import { IMessageStory } from "./IMessageStory";
 import { AppDemo } from "./AppDemo";
+import { SimplyScaledReel } from "./SimplyScaledReel";
 
 const VIDEO_WIDTH = 1080;
 const VIDEO_HEIGHT = 1920;
@@ -110,6 +111,25 @@ export const RemotionRoot: React.FC = () => {
           appStoreHint: "on the App Store",
           commentBait: "what's their name? 👇",
           backdropUrl: "",
+        }}
+      />
+
+      {/* ── Simply Scaled — 60s two-dashboard sales reel ───────────────── */}
+      <Composition
+        id="SimplyScaledReel"
+        component={SimplyScaledReel}
+        durationInFrames={Math.round(60 * FPS)}
+        fps={FPS}
+        width={VIDEO_WIDTH}
+        height={VIDEO_HEIGHT}
+        defaultProps={{
+          brand: "Simply Scaled",
+          phone: "(847) 212-2142",
+          email: "bradyschwartz25@gmail.com",
+          offer:
+            "Free 15-min teardown of where your money's leaking — no pitch.",
+          logoUrl: "",
+          founderPhotoUrl: "",
         }}
       />
 

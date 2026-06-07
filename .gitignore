@@ -29,3 +29,6 @@ remotion-reveal/bundle/
 # Analytics DB (don't commit runtime state)
 *.db
 *.db-journal
+
+# Simply Scaled prerendered reel (committed so /makesimply can send it on Railway)
+!simply-scaled-content-bot/reel_prerendered.mp4

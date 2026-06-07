@@ -383,10 +383,144 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/make 4 — Generate 4 videos back-to-back\n"
         "/theme — Generate with a specific vibe\n"
         "/stats — Render analytics\n"
-        "/status — Pipeline health\n\n"
+        "/status — Pipeline health\n"
+        "/makesimply — Build the 60s Simply Scaled sales reel (both dashboards)\n\n"
         "Each video: kinetic hook → iMessage story → real app click-through → logo close\n"
         "Videos stream in as soon as each is ready."
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Simply Scaled — 60s sales reel  (/makesimply, /make_simply)
+# Renders the SimplyScaledReel composition (both dashboards) via the sibling
+# simply-scaled-content-bot pipeline, reusing the same ElevenLabs + Telegram keys.
+# ─────────────────────────────────────────────────────────────────────────────
+
+REEL_BUDGET_SECONDS = 20 * 60
+
+
+def _build_simply_reel() -> dict:
+    """Blocking: import the sibling pipeline and build one reel."""
+    import sys
+
+    ss = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "simply-scaled-content-bot"
+    )
+    if ss not in sys.path:
+        sys.path.insert(0, ss)
+    import reel_pipeline
+
+    return reel_pipeline.build_reel()
+
+
+async def _send_reel(update, result: dict):
+    if result.get("error"):
+        await update.message.reply_text(f"❌ Reel failed: {result['error'][:500]}")
+        return
+    path = result["output_path"]
+    dur = result.get("duration", 60)
+    try:
+        await _reply_video_with_retry(
+            update, path, caption=f"Simply Scaled — {dur:.0f}s sales reel 🎬"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Reel rendered but failed to send: {e}")
+        return
+    await update.message.reply_text(
+        "📞 (847) 212-2142   ·   bradyschwartz25@gmail.com\n"
+        "Simply Scaled — custom dashboards & automation for any business."
+    )
+
+
+def _prerendered_reel() -> str | None:
+    """Path to the committed full-quality reel (sent by default), or None."""
+    import sys
+
+    ss = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "simply-scaled-content-bot"
+    )
+    if ss not in sys.path:
+        sys.path.insert(0, ss)
+    try:
+        import reel_pipeline
+
+        return reel_pipeline.prerendered_path()
+    except Exception:  # noqa: BLE001
+        p = os.path.join(ss, "reel_prerendered.mp4")
+        return p if os.path.exists(p) else None
+
+
+async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /makesimply        → send the ready-made 60s Simply Scaled reel (instant)
+    /makesimply fresh  → re-render it from scratch (slow; Railway-lite mode)
+    """
+    args = [a.lower() for a in (context.args or [])]
+    fresh = any(a in ("fresh", "new", "render", "rebuild") for a in args)
+    prer = _prerendered_reel()
+
+    # Default path: ship the proven, full-quality, pre-rendered reel. No render,
+    # no OOM risk — works anywhere including Railway's 512MB box.
+    if prer and not fresh:
+        await update.message.reply_text("🎬 Sending your Simply Scaled reel...")
+        try:
+            await _reply_video_with_retry(
+                update, prer, caption="Simply Scaled — 60s sales reel 🎬"
+            )
+            await update.message.reply_text(
+                "📞 (847) 212-2142   ·   bradyschwartz25@gmail.com\n"
+                "Simply Scaled — custom dashboards & automation for any business.\n"
+                "(Tip: /makesimply fresh re-renders it from scratch.)"
+            )
+        except Exception as e:  # noqa: BLE001
+            await update.message.reply_text(f"❌ Failed to send reel: {e}")
+        return
+
+    # Fresh render (best-effort; falls back to the pre-rendered file on failure).
+    await update.message.reply_text(
+        "🎬 Re-rendering your Simply Scaled reel from scratch...\n"
+        "ElevenLabs voiceover → render both dashboards → mix audio + SFX.\n"
+        "This is slow (several minutes). I'll send the saved cut if it can't finish here."
+    )
+    start = time.time()
+    loop = asyncio.get_running_loop()
+    fut = loop.run_in_executor(None, _build_simply_reel)
+    result = None
+    try:
+        result = await asyncio.wait_for(fut, timeout=REEL_BUDGET_SECONDS)
+    except asyncio.TimeoutError:
+        result = {"error": f"render exceeded {REEL_BUDGET_SECONDS // 60}min"}
+    except Exception as e:  # noqa: BLE001
+        log.error("makesimply fresh build failed", exc_info=True)
+        result = {"error": str(e)}
+
+    if result and not result.get("error"):
+        await _send_reel(update, result)
+        try:
+            import shutil
+
+            wd = result.get("work_dir")
+            if wd and "ss_reel_" in wd:
+                shutil.rmtree(wd, ignore_errors=True)
+        except OSError:
+            pass
+        await update.message.reply_text(f"✅ Fresh render done in {time.time() - start:.0f}s")
+        return
+
+    # Fresh failed — fall back to the committed reel so the user still gets video.
+    err = (result or {}).get("error", "unknown")
+    if prer:
+        await update.message.reply_text(
+            f"⚠️ Fresh render couldn't finish here ({err[:120]}). Sending the saved cut instead."
+        )
+        try:
+            await _reply_video_with_retry(
+                update, prer, caption="Simply Scaled — 60s sales reel 🎬"
+            )
+        except Exception as e:  # noqa: BLE001
+            await update.message.reply_text(f"❌ Failed to send reel: {e}")
+    else:
+        await update.message.reply_text(f"❌ Reel failed: {err[:400]}")
 
 
 def create_bot(token: str) -> Application:
@@ -418,5 +552,7 @@ def create_bot(token: str) -> Application:
     app.add_handler(CommandHandler("theme", cmd_theme))
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("makesimply", cmd_make_simply))
+    app.add_handler(CommandHandler("make_simply", cmd_make_simply))
 
     return app
