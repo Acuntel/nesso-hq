@@ -44,7 +44,7 @@ import remotion_client  # noqa: E402
 
 log = logging.getLogger("simply_reel")
 
-TARGET_DURATION = 70.0
+TARGET_DURATION = 75.0
 FPS = 30
 
 BRAND = "Simply Scaled"
@@ -76,7 +76,8 @@ BEATS = [
     ("BRIDGE", "Now imagine one system that just… does it all for you.", 4.0),
     ("LAW_FULL", "For a law firm, it keeps every client, every document, and every case in one organized place, so nothing ever gets lost.", 6.5),
     ("LAW_AI", "I even built them custom A.I. that reads a forty-page contract and pulls every date, party, and deadline in seconds.", 6.5),
-    ("LAW_MONEY", "It even shows the money: exactly what you've earned, and what your clients still owe.", 5.0),
+    ("LAW_TRACK", "And it keeps you honest. You tell it what matters, and it nudges you: you said you'd follow up on this, want me to handle it? Nothing slips through the cracks.", 6.5),
+    ("LAW_MONEY", "It even shows the money: exactly what you've earned, and what your clients still owe.", 4.5),
     ("PIVOT", "Same builder, a completely different kind of business.", 3.5),
     ("RESTO_MONEY", "For a fire-and-water repair company, it's a live scoreboard. Six hundred twelve thousand dollars in jobs sold this year.", 6.5),
     ("RESTO_PIPE", "Every customer is tracked from the first call to the paid job, so nobody slips through the cracks.", 6.0),
@@ -113,6 +114,13 @@ SFX_CUES = [
     ("blip.mp3", "LAW_AI", 3.9, 0.45),
     ("blip.mp3", "LAW_AI", 4.55, 0.45),
     ("logo_ding.mp3", "LAW_AI", 5.0, 0.55),
+    # LAW proactive assistant — shimmer in, blip per reminder, click + ding
+    ("shimmer.mp3", "LAW_TRACK", 0.0, 0.5),
+    ("blip.mp3", "LAW_TRACK", 0.6, 0.4),
+    ("blip.mp3", "LAW_TRACK", 1.1, 0.4),
+    ("blip.mp3", "LAW_TRACK", 1.6, 0.4),
+    ("ui_tap.mp3", "LAW_TRACK", 4.3, 0.5),
+    ("logo_ding.mp3", "LAW_TRACK", 4.7, 0.55),
     # LAW money — thoom in, line-draw riser, single dignified cash ding
     ("thoom.mp3", "LAW_MONEY", 0.0, 0.5),
     ("riser_short.mp3", "LAW_MONEY", 0.3, 0.4),

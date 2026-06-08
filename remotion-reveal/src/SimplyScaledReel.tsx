@@ -34,6 +34,7 @@ const DEFAULT_DURS: { key: string; dur: number }[] = [
   { key: "BRIDGE", dur: 4 },
   { key: "LAW_FULL", dur: 6 },
   { key: "LAW_AI", dur: 6 },
+  { key: "LAW_TRACK", dur: 6 },
   { key: "LAW_MONEY", dur: 5 },
   { key: "PIVOT", dur: 4 },
   { key: "RESTO_MONEY", dur: 6 },
@@ -57,6 +58,7 @@ const CAPTIONS: Record<string, string> = {
   BRIDGE: "ONE SYSTEM THAT DOES IT ALL FOR YOU.",
   LAW_FULL: "A LAW FIRM: EVERY CASE, FILE & DOCUMENT IN ONE PLACE.",
   LAW_AI: "CUSTOM AI THAT READS A CONTRACT IN SECONDS.",
+  LAW_TRACK: "IT REMINDS YOU, SO NOTHING SLIPS.",
   LAW_MONEY: "SEE WHAT YOU'VE EARNED, AND WHAT YOU'RE OWED.",
   PIVOT: "SAME BUILDER. A COMPLETELY DIFFERENT BUSINESS.",
   RESTO_MONEY: "A FIRE & WATER REPAIR CO: $612,480 IN JOBS SOLD.",
@@ -561,113 +563,141 @@ const HookScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   );
 };
 
-// 2 — BRIDGE (problems funnel into one device, green checks)
+// 2 — BRIDGE (Jarvis): the dropped balls get caught, then the core locks
+const BRIDGE_SLIPS = [
+  { t: "Missed call" },
+  { t: "Blown deadline" },
+  { t: "Forgotten follow-up" },
+  { t: "Dropped handoff" },
+];
+const BRIDGE_TAGS = ["NOTHING MISSED", "EVERYTHING TRACKED", "FEWER EMAILS"];
+const hexPts = (r: number) =>
+  Array.from({ length: 6 }, (_, k) => {
+    const a = ((k * 60 - 90) * Math.PI) / 180;
+    return `${240 + Math.cos(a) * r},${240 + Math.sin(a) * r}`;
+  }).join(" ");
+
 const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
   const cx = 540;
-  const coreY = 700;
-  // a Jarvis scan beam sweeps the stacked pain rows, flipping each to green
-  const scanY = ipl(bi.localF, 6, bi.durF * 0.44, 420, 1010, easeInOut);
-  const scanOn = bi.localF > 4 && bi.localF < bi.durF * 0.52;
-  const coreP = ipl(bi.localF, bi.durF * 0.36, bi.durF * 0.72, 0, 1, ease);
-  const textP = ipl(bi.localF, bi.durF * 0.66, bi.durF * 0.82, 0, 1, ease);
+  const coreY = 820;
+  const scanY = ipl(bi.localF, 8, bi.durF * 0.46, 280, 740, easeInOut);
+  const scanOn = bi.localF > 6 && bi.localF < bi.durF * 0.52;
+  const coreP = ipl(bi.localF, bi.durF * 0.34, bi.durF * 0.66, 0, 1, ease);
+  const tagsP = ipl(bi.localF, bi.durF * 0.66, bi.durF * 0.84, 0, 1, ease);
+  const headP = ipl(bi.localF, bi.durF * 0.72, bi.durF * 0.88, 0, 1, ease);
   const bloom = coreP;
-  const rot = frame * 1.3;
+  const rot = frame * 1.1;
   return (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(ellipse at 50% 42%, #0c1226 0%, #04050a 100%)",
+          "radial-gradient(ellipse at 50% 52%, #0b1228 0%, #04050a 100%)",
         overflow: "hidden",
       }}
     >
-      <DotGrid color={LAW.indigo} opacity={0.26} frame={frame} />
-      <Bloom color={`rgba(99,102,241,${0.55 * bloom})`} at="50% 56%" />
-      {/* pain rows: scanned green, then fed smoothly into the core */}
-      {PAINS.map((p, i) => {
-        const rowY = 440 + i * 110;
-        const checked = scanY > rowY + 8;
+      <DotGrid color={LAW.indigo} opacity={0.24} frame={frame} />
+      <Bloom color={`rgba(99,102,241,${0.5 * bloom})`} at="50% 60%" />
+      {/* dropped-ball alerts (sell the problem) → caught by the scan */}
+      {BRIDGE_SLIPS.map((p, i) => {
+        const rowY = 320 + i * 112;
+        const appear = ipl(bi.localF, 4 + i * 5, 4 + i * 5 + 10, 0, 1, ease);
+        const caught = scanY > rowY + 6;
         const fp = ipl(
           bi.localF,
-          bi.durF * 0.42 + i * 3,
-          bi.durF * 0.42 + i * 3 + 20,
+          bi.durF * 0.48 + i * 3,
+          bi.durF * 0.48 + i * 3 + 18,
           0,
           1,
           ease,
         );
         const y = rowY + (coreY - rowY) * fp;
-        const sc = 1 - fp * 0.82;
+        const sc = appear * (1 - fp * 0.82);
         return (
           <div
             key={i}
             style={{
               position: "absolute",
-              left: 120,
-              right: 120,
-              top: y - 42,
+              left: 190,
+              right: 190,
+              top: y - 40,
               transform: `scale(${sc})`,
               transformOrigin: "50% 50%",
-              opacity: 1 - fp * 0.92,
+              opacity: appear * (1 - fp * 0.95),
             }}
           >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 18,
-                background: checked
+                gap: 16,
+                background: caught
                   ? "rgba(52,211,153,0.12)"
-                  : "rgba(244,71,95,0.10)",
-                border: `1.5px solid ${checked ? FIRE.emerald : "rgba(244,71,95,0.5)"}`,
+                  : "rgba(244,71,95,0.12)",
+                border: `1.5px solid ${caught ? FIRE.emerald : "rgba(244,71,95,0.6)"}`,
                 borderRadius: 16,
-                padding: "18px 26px",
-                boxShadow: checked ? `0 0 26px ${FIRE.emerald}55` : "none",
+                padding: "16px 24px",
+                boxShadow: caught
+                  ? `0 0 26px ${FIRE.emerald}55`
+                  : `0 0 18px rgba(244,71,95,0.25)`,
               }}
             >
-              <div style={{ fontSize: 34, width: 46 }}>
-                {checked ? "✅" : p.icon}
+              <div style={{ fontSize: 30, width: 42 }}>
+                {caught ? "✅" : "⚠️"}
               </div>
               <div
                 style={{
                   fontFamily: SANS,
                   fontWeight: 700,
-                  fontSize: 34,
+                  fontSize: 32,
                   color: "#fff",
                   flex: 1,
                 }}
               >
                 {p.t}
               </div>
+              {caught && (
+                <div
+                  style={{
+                    fontFamily: SANS,
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: FIRE.emerald,
+                  }}
+                >
+                  CAUGHT
+                </div>
+              )}
             </div>
           </div>
         );
       })}
-      {/* Jarvis scan beam */}
+      {/* scan beam */}
       {scanOn && (
         <div
           style={{
             position: "absolute",
-            left: 90,
-            right: 90,
+            left: 150,
+            right: 150,
             top: scanY,
             height: 5,
-            background: `linear-gradient(90deg, transparent, ${LAW.indigoHi}, ${LAW.sky}, ${LAW.indigoHi}, transparent)`,
+            background: `linear-gradient(90deg, transparent, ${LAW.sky}, ${LAW.indigoHi}, ${LAW.sky}, transparent)`,
             boxShadow: `0 0 30px ${LAW.indigo}`,
             borderRadius: 3,
           }}
         />
       )}
-      {/* arc-reactor core (counter-rotating rings + orbiting nodes) */}
+      {/* arc-reactor core with hex HUD frame */}
       {coreP > 0 && (
         <div
           style={{
             position: "absolute",
             left: cx,
             top: coreY,
-            transform: `translate(-50%,-50%) scale(${0.45 + coreP * 0.55})`,
+            transform: `translate(-50%,-50%) scale(${0.5 + coreP * 0.5})`,
             opacity: coreP,
           }}
         >
@@ -678,45 +708,51 @@ const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
             style={{ overflow: "visible" }}
           >
             <defs>
-              <radialGradient id="coreg" cx="50%" cy="50%" r="50%">
+              <radialGradient id="bcoreg" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#fff" />
-                <stop offset="42%" stopColor={LAW.indigoHi} />
+                <stop offset="38%" stopColor={LAW.indigoHi} />
                 <stop offset="100%" stopColor={LAW.indigo} stopOpacity="0" />
               </radialGradient>
             </defs>
+            <g transform={`rotate(${rot * 0.4} 240 240)`}>
+              <polygon
+                points={hexPts(205)}
+                fill="none"
+                stroke={LAW.indigo}
+                strokeWidth="2.5"
+                opacity="0.5"
+              />
+            </g>
+            <g transform={`rotate(${-rot * 0.4} 240 240)`}>
+              <polygon
+                points={hexPts(168)}
+                fill="none"
+                stroke={LAW.indigoHi}
+                strokeWidth="2"
+                opacity="0.4"
+              />
+            </g>
             <g transform={`rotate(${rot} 240 240)`}>
               <circle
                 cx="240"
                 cy="240"
-                r="210"
+                r="148"
                 fill="none"
                 stroke={LAW.indigo}
                 strokeWidth="3"
-                strokeDasharray="42 24"
+                strokeDasharray="38 26"
                 opacity="0.7"
               />
             </g>
-            <g transform={`rotate(${-rot * 1.6} 240 240)`}>
+            <g transform={`rotate(${-rot * 1.7} 240 240)`}>
               <circle
                 cx="240"
                 cy="240"
-                r="158"
-                fill="none"
-                stroke={LAW.indigoHi}
-                strokeWidth="4"
-                strokeDasharray="8 28"
-                opacity="0.85"
-              />
-            </g>
-            <g transform={`rotate(${rot * 2.2} 240 240)`}>
-              <circle
-                cx="240"
-                cy="240"
-                r="112"
+                r="110"
                 fill="none"
                 stroke={LAW.sky}
-                strokeWidth="6"
-                strokeDasharray="64 20"
+                strokeWidth="5"
+                strokeDasharray="58 22"
                 opacity="0.95"
                 style={{ filter: `drop-shadow(0 0 10px ${LAW.sky})` }}
               />
@@ -724,10 +760,10 @@ const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
             <circle
               cx="240"
               cy="240"
-              r={68 + Math.sin(frame / 6) * 7}
-              fill="url(#coreg)"
+              r={62 + Math.sin(frame / 6) * 6}
+              fill="url(#bcoreg)"
               style={{
-                filter: `drop-shadow(0 0 ${44 * bloom}px ${LAW.indigo})`,
+                filter: `drop-shadow(0 0 ${46 * bloom}px ${LAW.indigo})`,
               }}
             />
             {[0, 1, 2, 3, 4, 5].map((k) => {
@@ -735,37 +771,78 @@ const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
               return (
                 <circle
                   key={k}
-                  cx={240 + Math.cos(a) * 185}
-                  cy={240 + Math.sin(a) * 185}
-                  r="6"
+                  cx={240 + Math.cos(a) * 178}
+                  cy={240 + Math.sin(a) * 178}
+                  r="5"
                   fill="#fff"
-                  opacity="0.9"
+                  opacity="0.85"
                 />
               );
             })}
           </svg>
         </div>
       )}
-      {/* headline loads in */}
+      {/* headline */}
       <div
         style={{
           position: "absolute",
-          top: 1150,
+          top: 1180,
           left: 0,
           right: 0,
           textAlign: "center",
           fontFamily: SANS,
-          fontSize: 56,
+          fontSize: 50,
           fontWeight: 800,
           color: "#fff",
-          opacity: textP,
+          opacity: headP,
           padding: "0 80px",
           textShadow: `0 0 30px ${LAW.indigo}`,
-          transform: `translateY(${(1 - textP) * 20}px)`,
+          transform: `translateY(${(1 - headP) * 18}px)`,
         }}
       >
-        One system that does it <span style={{ color: LAW.indigoHi }}>all</span>{" "}
-        for you.
+        It catches what you'd{" "}
+        <span style={{ color: LAW.indigoHi }}>forget.</span>
+      </div>
+      {/* payoff tags */}
+      <div
+        style={{
+          position: "absolute",
+          top: 1300,
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        {BRIDGE_TAGS.map((t, i) => (
+          <div
+            key={i}
+            style={{
+              fontFamily: SANS,
+              fontWeight: 800,
+              fontSize: 24,
+              letterSpacing: "0.04em",
+              color: "#fff",
+              background: "rgba(99,102,241,0.18)",
+              border: `1.5px solid ${LAW.indigo}`,
+              borderRadius: 999,
+              padding: "12px 22px",
+              opacity: ipl(
+                bi.localF,
+                bi.durF * 0.68 + i * 4,
+                bi.durF * 0.68 + i * 4 + 10,
+                0,
+                1,
+                ease,
+              ),
+              boxShadow: `0 0 20px ${LAW.indigo}55`,
+            }}
+          >
+            ✓ {t}
+          </div>
+        ))}
       </div>
     </AbsoluteFill>
   );
@@ -1211,6 +1288,221 @@ const LawAi: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
       >
         Summarized & filed in seconds.
       </div>
+    </AbsoluteFill>
+  );
+};
+
+// 3c — LAW proactive assistant: you tell it what matters, it reminds you
+const LAW_REMINDERS = [
+  {
+    icon: "⏰",
+    t: "Follow up: Mercer closing",
+    s: "due Friday",
+    c: LAW.indigoHi,
+  },
+  { icon: "⚠️", t: "Deadline: Diaz response", s: "3 days left", c: "#F5B945" },
+  { icon: "🤝", t: "Handoff: file to title company", s: "today", c: LAW.sky },
+];
+const LawTrack: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const enter = ipl(bi.localF, 0, 12, 0, 1, ease);
+  const cursorP = ipl(bi.localF, bi.durF * 0.5, bi.durF * 0.66, 0, 1, ease);
+  const click = ipl(bi.localF, bi.durF * 0.64, bi.durF * 0.74, 1, 0);
+  const done = ipl(bi.localF, bi.durF * 0.7, bi.durF * 0.84, 0, 1, ease);
+  const cx = 760 - (1 - cursorP) * 240;
+  const cy = 1230 - (1 - cursorP) * 200;
+  return (
+    <AbsoluteFill
+      style={{ background: `linear-gradient(180deg, ${LAW.bg2}, ${LAW.bg})` }}
+    >
+      <DotGrid color={LAW.indigo} opacity={0.24} frame={frame} />
+      <Bloom color="rgba(99,102,241,0.3)" />
+      <div
+        style={{
+          position: "absolute",
+          top: 130,
+          left: 60,
+          right: 60,
+          opacity: enter,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: MONO,
+            fontSize: 24,
+            letterSpacing: "0.22em",
+            color: LAW.indigoHi,
+          }}
+        >
+          YOUR AI ASSISTANT
+        </div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 56,
+            fontWeight: 800,
+            color: LAW.text,
+            marginTop: 8,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.05,
+          }}
+        >
+          Nothing slips
+          <br />
+          through.
+        </div>
+      </div>
+      <div style={{ position: "absolute", top: 400, left: 60, right: 60 }}>
+        {LAW_REMINDERS.map((r, i) => {
+          const a = ipl(bi.localF, 14 + i * 8, 14 + i * 8 + 12, 0, 1, ease);
+          return (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 20,
+                background: LAW.card,
+                border: `1px solid ${LAW.border}`,
+                borderLeft: `5px solid ${r.c}`,
+                borderRadius: 16,
+                padding: "22px 28px",
+                marginBottom: 18,
+                opacity: a,
+                transform: `translateY(${(1 - a) * 24}px)`,
+              }}
+            >
+              <div style={{ fontSize: 38, width: 50 }}>{r.icon}</div>
+              <div
+                style={{
+                  flex: 1,
+                  fontFamily: SANS,
+                  fontWeight: 700,
+                  fontSize: 34,
+                  color: LAW.text,
+                }}
+              >
+                {r.t}
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 26,
+                  fontWeight: 700,
+                  color: r.c,
+                }}
+              >
+                {r.s}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          top: 880,
+          left: 60,
+          right: 60,
+          background: "rgba(99,102,241,0.10)",
+          border: `2px solid ${done > 0 ? FIRE.emerald : LAW.indigo}`,
+          borderRadius: 24,
+          padding: 30,
+          opacity: enter,
+          boxShadow: `0 0 40px ${LAW.indigo}33`,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 50,
+              height: 50,
+              borderRadius: "50%",
+              background: `radial-gradient(circle, #fff, ${LAW.indigo})`,
+              boxShadow: `0 0 18px ${LAW.indigo}`,
+            }}
+          />
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 24,
+              fontWeight: 800,
+              color: LAW.indigoHi,
+            }}
+          >
+            Assistant
+          </div>
+        </div>
+        {done > 0 ? (
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 38,
+              fontWeight: 700,
+              color: "#fff",
+              opacity: done,
+            }}
+          >
+            ✓ Done. Drafted &amp; scheduled. Nothing slipped.
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 38,
+                fontWeight: 600,
+                color: "#fff",
+                lineHeight: 1.35,
+              }}
+            >
+              You told me to follow up on the Mercer closing. Want me to draft
+              it now?
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 24 }}>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 30,
+                  fontWeight: 800,
+                  color: "#fff",
+                  background: LAW.indigo,
+                  borderRadius: 14,
+                  padding: "16px 36px",
+                  transform: `scale(${click > 0 ? 0.95 : 1})`,
+                  boxShadow: `0 0 24px ${LAW.indigo}88`,
+                }}
+              >
+                Yes, do it
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 30,
+                  fontWeight: 700,
+                  color: LAW.soft,
+                  border: `1px solid ${LAW.border}`,
+                  borderRadius: 14,
+                  padding: "16px 32px",
+                }}
+              >
+                Snooze
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <Cursor x={cx} y={cy} click={click} />
     </AbsoluteFill>
   );
 };
@@ -2295,6 +2587,11 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
       {b.LAW_AI.visible && (
         <Trans bi={b.LAW_AI}>
           <LawAi frame={frame} fps={fps} bi={b.LAW_AI} />
+        </Trans>
+      )}
+      {b.LAW_TRACK.visible && (
+        <Trans bi={b.LAW_TRACK}>
+          <LawTrack frame={frame} fps={fps} bi={b.LAW_TRACK} />
         </Trans>
       )}
       {b.LAW_MONEY.visible && (

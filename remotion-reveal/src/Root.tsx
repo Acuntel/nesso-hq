@@ -118,7 +118,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="SimplyScaledReel"
         component={SimplyScaledReel}
-        durationInFrames={Math.round(74 * FPS)}
+        durationInFrames={Math.round(80 * FPS)}
         fps={FPS}
         width={VIDEO_WIDTH}
         height={VIDEO_HEIGHT}
