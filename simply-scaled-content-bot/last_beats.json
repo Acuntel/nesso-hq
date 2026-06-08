@@ -1,62 +1,67 @@
 [
   {
-    "key": "HOOK",
+    "key": "PROOF_FLASH",
     "start": 0.0,
-    "dur": 6.0039
+    "dur": 2.0987
+  },
+  {
+    "key": "HOOK",
+    "start": 2.0987,
+    "dur": 4.6172
   },
   {
     "key": "BRIDGE",
-    "start": 6.0039,
-    "dur": 3.4308
+    "start": 6.716,
+    "dur": 2.9479
   },
   {
-    "key": "LAW_FULL",
-    "start": 9.4347,
-    "dur": 6.8356
+    "key": "LAW_TOUR",
+    "start": 9.6639,
+    "dur": 9.1077
   },
   {
-    "key": "LAW_AI",
-    "start": 16.2703,
-    "dur": 6.3178
+    "key": "LAW_PDF",
+    "start": 18.7716,
+    "dur": 8.8738
   },
   {
-    "key": "LAW_TRACK",
-    "start": 22.5881,
-    "dur": 8.0704
+    "key": "LAW_HOME",
+    "start": 27.6454,
+    "dur": 6.2227
   },
   {
-    "key": "LAW_MONEY",
-    "start": 30.6584,
-    "dur": 4.5652
+    "key": "LAW_EMAIL",
+    "start": 33.8681,
+    "dur": 4.1975
   },
   {
     "key": "PIVOT",
-    "start": 35.2236,
-    "dur": 3.2109
+    "start": 38.0656,
+    "dur": 2.9382
   },
   {
     "key": "RESTO_MONEY",
-    "start": 38.4346,
-    "dur": 6.4373
+    "start": 41.0039,
+    "dur": 5.9108
   },
   {
     "key": "RESTO_PIPE",
-    "start": 44.8719,
-    "dur": 5.1462
+    "start": 46.9147,
+    "dur": 5.037
   },
   {
     "key": "AI_TEXT",
-    "start": 50.018,
-    "dur": 7.2339
+    "start": 51.9517,
+    "dur": 7.3143
   },
   {
     "key": "PROOF_TURN",
-    "start": 57.252,
-    "dur": 5.575
+    "start": 59.266,
+    "dur": 4.6243
   },
   {
     "key": "CLOSE_CTA",
-    "start": 62.827,
-    "dur": 12.173
+    "start": 63.8903,
+    "dur": 12.1097
   }
 ]

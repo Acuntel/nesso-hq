@@ -44,7 +44,7 @@ import remotion_client  # noqa: E402
 
 log = logging.getLogger("simply_reel")
 
-TARGET_DURATION = 75.0
+TARGET_DURATION = 76.0
 FPS = 30
 
 BRAND = "Simply Scaled"
@@ -72,90 +72,107 @@ def prerendered_path() -> str | None:
 # Generic names only (no client/product names), differentiated law vs restoration,
 # slower hook + close, no email. Keys MUST match SimplyScaledReel.tsx. Scales to ~63s.
 BEATS = [
-    ("HOOK", "If you run a business, five simple things quietly eat up your whole day… every single day.", 7.0),
-    ("BRIDGE", "Now imagine one system that just… does it all for you.", 4.0),
-    ("LAW_FULL", "For a law firm, it keeps every client, every document, and every case in one organized place, so nothing ever gets lost.", 6.5),
-    ("LAW_AI", "I even built them custom A.I. that reads a forty-page contract and pulls every date, party, and deadline in seconds.", 6.5),
-    ("LAW_TRACK", "And it keeps you honest. You tell it what matters, and it nudges you: you said you'd follow up on this, want me to handle it? Nothing slips through the cracks.", 6.5),
-    ("LAW_MONEY", "It even shows the money: exactly what you've earned, and what your clients still owe.", 4.5),
-    ("PIVOT", "Same builder, a completely different kind of business.", 3.5),
-    ("RESTO_MONEY", "For a fire-and-water repair company, it's a live scoreboard. Six hundred twelve thousand dollars in jobs sold this year.", 6.5),
+    ("PROOF_FLASH", "Watch this.", 2.5),
+    ("HOOK", "If you run a business, five simple things quietly eat up your whole day.", 5.5),
+    ("BRIDGE", "But what if one system just caught every one of them?", 3.5),
+    ("LAW_TOUR", "So I built one. For a law firm, it runs the whole practice in one place: matters, contacts, billing, time, tasks, calendar, intake, even trust accounting.", 9.0),
+    ("LAW_PDF", "Then I engineered custom A.I. into it. This one reads a real estate contract and pulls every key date, name, and signature, and flags what's missing, in about thirty seconds.", 6.5),
+    ("LAW_HOME", "This one looks up full property records across three county systems, straight from public data, at zero cost.", 5.5),
+    ("LAW_EMAIL", "And this one turns a whole day of email into clean, ready-to-save contacts.", 5.0),
+    ("PIVOT", "Same builder. A completely different business.", 3.5),
+    ("RESTO_MONEY", "For a fire-and-water repair company, it's a live scoreboard. Six hundred twelve thousand dollars in jobs sold this year.", 6.0),
     ("RESTO_PIPE", "Every customer is tracked from the first call to the paid job, so nobody slips through the cracks.", 6.0),
     ("AI_TEXT", "And a customer texts in plain English. The software reads the mess, pulls out the details, and files the job all by itself.", 8.0),
-    ("PROOF_TURN", "Two real businesses, one person built both. Now imagine this, built for yours.", 6.5),
+    ("PROOF_TURN", "Two real businesses. One person built both. Now imagine this, built for yours.", 5.5),
     ("CLOSE_CTA", "This is Simply Scaled. Call or text eight four seven, two one two, two one four two for a free fifteen minute call. Tell me your business, and I'll tell you exactly what to automate first.", 10.0),
 ]
 
-# ── SFX cues: (file, beat_key, offset_in_beat_s, volume) ─────────────────────
+# ── SFX cues: (file, beat_key, offset_in_beat_s, volume) — ElevenLabs palette ─
 SFX_CUES = [
-    # HOOK — one crisp tap per pain row (staggered, slow)
-    ("pop2.mp3", "HOOK", 0.5, 0.5),
-    ("pop2.mp3", "HOOK", 1.05, 0.5),
-    ("pop2.mp3", "HOOK", 1.6, 0.5),
-    ("pop2.mp3", "HOOK", 2.15, 0.5),
-    ("pop2.mp3", "HOOK", 2.7, 0.55),
-    # BRIDGE — Jarvis: scan checks each row (blips), core forms (power_up), locks
-    ("power_up.mp3", "BRIDGE", 0.2, 0.5),
-    ("blip.mp3", "BRIDGE", 0.7, 0.4),
-    ("blip.mp3", "BRIDGE", 1.05, 0.4),
-    ("blip.mp3", "BRIDGE", 1.4, 0.4),
-    ("blip.mp3", "BRIDGE", 1.75, 0.4),
-    ("blip.mp3", "BRIDGE", 2.1, 0.4),
-    ("shimmer.mp3", "BRIDGE", 2.3, 0.5),
-    ("impact_hit.mp3", "BRIDGE", 2.6, 0.55),
-    # LAW vault — calm; swish in, soft click + flip
-    ("swish.mp3", "LAW_FULL", 0.0, 0.5),
-    ("ui_tap.mp3", "LAW_FULL", 2.6, 0.45),
-    ("pop2.mp3", "LAW_FULL", 3.0, 0.4),
-    # LAW custom AI — shimmer in, a blip per extracted term, ding when filed
-    ("shimmer.mp3", "LAW_AI", 0.0, 0.55),
-    ("blip.mp3", "LAW_AI", 2.6, 0.45),
-    ("blip.mp3", "LAW_AI", 3.25, 0.45),
-    ("blip.mp3", "LAW_AI", 3.9, 0.45),
-    ("blip.mp3", "LAW_AI", 4.55, 0.45),
-    ("logo_ding.mp3", "LAW_AI", 5.0, 0.55),
-    # LAW proactive assistant — shimmer in, blip per reminder, click + ding
-    ("shimmer.mp3", "LAW_TRACK", 0.0, 0.5),
-    ("blip.mp3", "LAW_TRACK", 0.6, 0.4),
-    ("blip.mp3", "LAW_TRACK", 1.1, 0.4),
-    ("blip.mp3", "LAW_TRACK", 1.6, 0.4),
-    ("ui_tap.mp3", "LAW_TRACK", 4.3, 0.5),
-    ("logo_ding.mp3", "LAW_TRACK", 4.7, 0.55),
-    # LAW money — thoom in, line-draw riser, single dignified cash ding
-    ("thoom.mp3", "LAW_MONEY", 0.0, 0.5),
-    ("riser_short.mp3", "LAW_MONEY", 0.3, 0.4),
-    ("cash_ding.mp3", "LAW_MONEY", 3.0, 0.45),
-    # PIVOT — seam wipe to the opposite world
-    ("whoosh_short.mp3", "PIVOT", 0.2, 0.6),
-    ("impact_hit.mp3", "PIVOT", 1.75, 0.6),
-    # RESTO money — power-up in, big prominent cash on the number
-    ("power_up.mp3", "RESTO_MONEY", 0.0, 0.5),
-    ("riser_short.mp3", "RESTO_MONEY", 0.1, 0.45),
-    ("cash_ding.mp3", "RESTO_MONEY", 3.6, 0.75),
-    ("cash_ding.mp3", "RESTO_MONEY", 4.7, 0.45),
-    # RESTO pipe — swish per column cross + dollar stamp
-    ("swish.mp3", "RESTO_PIPE", 0.0, 0.45),
-    ("swish.mp3", "RESTO_PIPE", 2.7, 0.45),
-    ("swish.mp3", "RESTO_PIPE", 3.6, 0.45),
-    ("swish.mp3", "RESTO_PIPE", 4.5, 0.45),
-    ("cash_ding.mp3", "RESTO_PIPE", 4.75, 0.7),
-    # AI beat — richest design: thoom in, typing, shimmer scan, token blips, ding
-    ("thoom.mp3", "AI_TEXT", 0.0, 0.45),
-    ("typing_tick.mp3", "AI_TEXT", 0.9, 0.35),
-    ("notification_ding.mp3", "AI_TEXT", 2.3, 0.5),
-    ("shimmer.mp3", "AI_TEXT", 3.0, 0.55),
-    ("blip.mp3", "AI_TEXT", 4.0, 0.4),
-    ("blip.mp3", "AI_TEXT", 4.5, 0.4),
-    ("blip.mp3", "AI_TEXT", 5.0, 0.4),
-    ("logo_ding.mp3", "AI_TEXT", 6.4, 0.6),
-    # PROOF → yours
-    ("power_up.mp3", "PROOF_TURN", 0.0, 0.45),
-    ("logo_ding.mp3", "PROOF_TURN", 2.6, 0.45),
-    ("shimmer.mp3", "PROOF_TURN", 3.8, 0.45),
-    # CLOSE — thoom settle, held wordmark + final ding
-    ("thoom.mp3", "CLOSE_CTA", 0.0, 0.45),
-    ("logo_ding.mp3", "CLOSE_CTA", 0.5, 0.55),
-    ("logo_ding.mp3", "CLOSE_CTA", 8.8, 0.45),
+    # offsets are FRACTIONS (0..1) of each beat → locked to the composition timing.
+    # PROOF FLASH — scan, a tick per result row, success
+    ("ss_scan.mp3", "PROOF_FLASH", 0.0, 0.55),
+    ("ss_pop.mp3", "PROOF_FLASH", 0.25, 0.45),
+    ("ss_pop.mp3", "PROOF_FLASH", 0.40, 0.45),
+    ("ss_pop.mp3", "PROOF_FLASH", 0.55, 0.45),
+    ("ss_success.mp3", "PROOF_FLASH", 0.72, 0.55),
+    # HOOK — a pop per pain row as it lands
+    ("ss_pop.mp3", "HOOK", 0.11, 0.5),
+    ("ss_pop.mp3", "HOOK", 0.22, 0.5),
+    ("ss_pop.mp3", "HOOK", 0.33, 0.5),
+    ("ss_pop.mp3", "HOOK", 0.44, 0.5),
+    ("ss_pop.mp3", "HOOK", 0.55, 0.55),
+    # BRIDGE — scan, a 'caught' success per row, core power-up + lock
+    ("ss_scan.mp3", "BRIDGE", 0.08, 0.5),
+    ("ss_success.mp3", "BRIDGE", 0.24, 0.4),
+    ("ss_success.mp3", "BRIDGE", 0.34, 0.4),
+    ("ss_success.mp3", "BRIDGE", 0.44, 0.4),
+    ("ss_success.mp3", "BRIDGE", 0.52, 0.4),
+    ("ss_power.mp3", "BRIDGE", 0.42, 0.55),
+    ("ss_lock.mp3", "BRIDGE", 0.70, 0.5),
+    # LAW_TOUR — click + panel-open per sidebar item; clicks at 0.14+0.102k
+    ("ss_whoosh.mp3", "LAW_TOUR", 0.0, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.140, 0.5), ("ss_open.mp3", "LAW_TOUR", 0.150, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.242, 0.5), ("ss_load.mp3", "LAW_TOUR", 0.252, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.344, 0.5), ("ss_pop.mp3", "LAW_TOUR", 0.354, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.446, 0.5), ("ss_open.mp3", "LAW_TOUR", 0.456, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.548, 0.5), ("ss_whoosh.mp3", "LAW_TOUR", 0.558, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.650, 0.5), ("ss_load.mp3", "LAW_TOUR", 0.660, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.752, 0.5), ("ss_open.mp3", "LAW_TOUR", 0.762, 0.4),
+    ("ss_click.mp3", "LAW_TOUR", 0.854, 0.5), ("ss_pop.mp3", "LAW_TOUR", 0.864, 0.4),
+    # LAW_PDF — open, click Scan (~0.37), scan, a success per row, lock
+    ("ss_open.mp3", "LAW_PDF", 0.0, 0.4),
+    ("ss_click.mp3", "LAW_PDF", 0.37, 0.55),
+    ("ss_scan.mp3", "LAW_PDF", 0.41, 0.55),
+    ("ss_success.mp3", "LAW_PDF", 0.50, 0.45),
+    ("ss_success.mp3", "LAW_PDF", 0.55, 0.45),
+    ("ss_success.mp3", "LAW_PDF", 0.60, 0.45),
+    ("ss_lock.mp3", "LAW_PDF", 0.68, 0.5),
+    # LAW_HOME — whoosh in, click Look up (~0.35), load, results success
+    ("ss_whoosh.mp3", "LAW_HOME", 0.0, 0.4),
+    ("ss_click.mp3", "LAW_HOME", 0.35, 0.55),
+    ("ss_load.mp3", "LAW_HOME", 0.40, 0.5),
+    ("ss_success.mp3", "LAW_HOME", 0.52, 0.5),
+    ("ss_lock.mp3", "LAW_HOME", 0.62, 0.45),
+    # LAW_EMAIL — open, typing, a pop per found contact, click Create (~0.62), success
+    ("ss_open.mp3", "LAW_EMAIL", 0.0, 0.4),
+    ("ss_type.mp3", "LAW_EMAIL", 0.08, 0.4),
+    ("ss_pop.mp3", "LAW_EMAIL", 0.12, 0.4),
+    ("ss_pop.mp3", "LAW_EMAIL", 0.20, 0.4),
+    ("ss_pop.mp3", "LAW_EMAIL", 0.28, 0.4),
+    ("ss_pop.mp3", "LAW_EMAIL", 0.36, 0.4),
+    ("ss_click.mp3", "LAW_EMAIL", 0.63, 0.55),
+    ("ss_success.mp3", "LAW_EMAIL", 0.70, 0.55),
+    # PIVOT — wipe to the opposite world
+    ("ss_whoosh.mp3", "PIVOT", 0.06, 0.6),
+    ("ss_power.mp3", "PIVOT", 0.50, 0.5),
+    # RESTO money — power-up in, big cash on the number
+    ("ss_power.mp3", "RESTO_MONEY", 0.0, 0.5),
+    ("ss_riser.mp3", "RESTO_MONEY", 0.03, 0.45),
+    ("ss_cash.mp3", "RESTO_MONEY", 0.60, 0.75),
+    ("ss_cash.mp3", "RESTO_MONEY", 0.80, 0.45),
+    # RESTO pipe — whoosh per column cross + cash stamp
+    ("ss_whoosh.mp3", "RESTO_PIPE", 0.30, 0.45),
+    ("ss_whoosh.mp3", "RESTO_PIPE", 0.46, 0.45),
+    ("ss_whoosh.mp3", "RESTO_PIPE", 0.62, 0.45),
+    ("ss_whoosh.mp3", "RESTO_PIPE", 0.78, 0.45),
+    ("ss_cash.mp3", "RESTO_PIPE", 0.82, 0.7),
+    # AI text — typing, send, scan, a pop per token, success
+    ("ss_type.mp3", "AI_TEXT", 0.12, 0.4),
+    ("ss_whoosh.mp3", "AI_TEXT", 0.37, 0.45),
+    ("ss_scan.mp3", "AI_TEXT", 0.45, 0.55),
+    ("ss_pop.mp3", "AI_TEXT", 0.52, 0.45),
+    ("ss_pop.mp3", "AI_TEXT", 0.58, 0.45),
+    ("ss_pop.mp3", "AI_TEXT", 0.64, 0.45),
+    ("ss_success.mp3", "AI_TEXT", 0.80, 0.6),
+    # PROOF -> yours
+    ("ss_power.mp3", "PROOF_TURN", 0.0, 0.45),
+    ("ss_success.mp3", "PROOF_TURN", 0.45, 0.45),
+    ("ss_riser.mp3", "PROOF_TURN", 0.62, 0.45),
+    # CLOSE — settle, held wordmark + final lock
+    ("ss_power.mp3", "CLOSE_CTA", 0.0, 0.45),
+    ("ss_success.mp3", "CLOSE_CTA", 0.05, 0.5),
+    ("ss_lock.mp3", "CLOSE_CTA", 0.80, 0.5),
 ]
 
 
@@ -284,24 +301,59 @@ def generate_voiceover(work: str) -> tuple[list[dict], float, str | None]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Music bed (subtle, dark, driving — synthesized so it's always available)
+#  Music bed — REAL track via ElevenLabs Music (falls back to ffmpeg synth)
 # ─────────────────────────────────────────────────────────────────────────────
 
+MUSIC_PROMPT = (
+    "Clean, modern, optimistic tech product-demo background music. Light driving "
+    "electronic with a soft four-on-the-floor pulse, warm synth bass, gentle "
+    "arpeggio and airy pads. Premium Apple/Stripe keynote energy — confident and "
+    "forward-moving but never busy, sits under a voiceover. Builds subtly to a "
+    "satisfying lift near the end. Around 110 BPM. Instrumental, no vocals."
+)
+
+
 def build_music(work: str, dur: float) -> str | None:
-    out = os.path.join(work, "music.wav")
-    # Low pad (root + fifth + octave) with slow tremolo + lowpass + reverb tail.
+    out = os.path.join(work, "music.mp3")
+    # Cache: reuse if already generated for this dir.
+    if os.path.exists(out) and os.path.getsize(out) > 2048:
+        return out
+    # 1) Real music via ElevenLabs (Brady wants actual MUSIC, not a pad).
+    if ELEVEN_KEY:
+        try:
+            from elevenlabs.client import ElevenLabs
+
+            client = ElevenLabs(api_key=ELEVEN_KEY)
+            ms = max(10000, min(300000, int(round(dur)) * 1000))
+            audio = client.music.compose(prompt=MUSIC_PROMPT, music_length_ms=ms)
+            with open(out, "wb") as f:
+                for chunk in audio:
+                    if chunk:
+                        f.write(chunk)
+            if os.path.getsize(out) > 2048 and _ffprobe_dur(out) > 5:
+                # pad/trim to exactly dur with a tail fade
+                fixed = os.path.join(work, "music_fit.mp3")
+                _run(["ffmpeg", "-y", "-i", out, "-af",
+                      f"apad,atrim=0:{dur:.3f},afade=t=out:st={max(0, dur - 2.5):.2f}:d=2.5",
+                      fixed])
+                if os.path.exists(fixed):
+                    os.replace(fixed, out)
+                return out
+        except Exception as e:  # noqa: BLE001
+            log.warning("ElevenLabs music failed (%s) — ffmpeg synth fallback", e)
+    # 2) Fallback: ffmpeg-synth pad (always available).
+    wav = os.path.join(work, "music.wav")
     fc = (
         "sine=frequency=55:sample_rate=44100[b];"
         "sine=frequency=110:sample_rate=44100[c];"
         "sine=frequency=164.81:sample_rate=44100[d];"
         "[b][c][d]amix=inputs=3:normalize=0,"
-        "tremolo=f=4:d=0.25,lowpass=f=420,aecho=0.8:0.7:60:0.3,"
-        "volume=0.5[m]"
+        "tremolo=f=4:d=0.25,lowpass=f=420,aecho=0.8:0.7:60:0.3,volume=0.5[m]"
     )
     r = _run(["ffmpeg", "-y", "-f", "lavfi", "-t", f"{dur:.3f}",
               "-i", "anullsrc=r=44100:cl=stereo",
-              "-filter_complex", fc, "-map", "[m]", "-t", f"{dur:.3f}", out])
-    return out if r.returncode == 0 and os.path.exists(out) else None
+              "-filter_complex", fc, "-map", "[m]", "-t", f"{dur:.3f}", wav])
+    return wav if r.returncode == 0 and os.path.exists(wav) else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -372,22 +424,41 @@ def mux_audio(
     mix_labels: list[str] = []
     idx = 1
 
+    vo_idx = mus_idx = None
     if vo:
         inputs += ["-i", vo]
-        fc.append(f"[{idx}:a]volume=0.95[vo]")
-        mix_labels.append("[vo]")
+        vo_idx = idx
         idx += 1
     if music:
         inputs += ["-i", music]
-        fc.append(f"[{idx}:a]volume=0.10,afade=t=in:st=0:d=1.2,afade=t=out:st={TARGET_DURATION - 2:.1f}:d=2[mus]")
-        mix_labels.append("[mus]")
+        mus_idx = idx
         idx += 1
+    fade_out = max(0.0, TARGET_DURATION - 2.5)
+    if vo_idx is not None and mus_idx is not None:
+        # Music plays full in the gaps and DUCKS under the voiceover (sidechain).
+        fc.append(f"[{vo_idx}:a]volume=0.95,asplit=2[vo][vosc]")
+        fc.append(
+            f"[{mus_idx}:a]volume=0.55,afade=t=in:st=0:d=1.5,"
+            f"afade=t=out:st={fade_out:.1f}:d=2.5[musraw]"
+        )
+        fc.append(
+            "[musraw][vosc]sidechaincompress=threshold=0.04:ratio=7:attack=15:release=380[mus]"
+        )
+        mix_labels += ["[vo]", "[mus]"]
+    elif vo_idx is not None:
+        fc.append(f"[{vo_idx}:a]volume=0.95[vo]")
+        mix_labels.append("[vo]")
+    elif mus_idx is not None:
+        fc.append(f"[{mus_idx}:a]volume=0.4,afade=t=in:st=0:d=1.5[mus]")
+        mix_labels.append("[mus]")
 
-    for fname, key, off, vol in SFX_CUES:
+    for fname, key, frac, vol in SFX_CUES:
         path = os.path.join(SFX_DIR, fname)
         if key not in bmap or not os.path.exists(path):
             continue
-        at = bmap[key]["start"] + off
+        # `frac` is a fraction (0..1) of the beat — stays locked to the
+        # composition's fraction-based animation timing even when beats scale.
+        at = bmap[key]["start"] + frac * bmap[key]["dur"]
         delay_ms = int(at * 1000)
         inputs += ["-i", path]
         fc.append(

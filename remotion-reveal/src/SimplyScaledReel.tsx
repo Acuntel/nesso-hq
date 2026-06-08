@@ -30,17 +30,18 @@ export type SimplyScaledReelProps = {
 };
 
 const DEFAULT_DURS: { key: string; dur: number }[] = [
-  { key: "HOOK", dur: 7 },
-  { key: "BRIDGE", dur: 4 },
-  { key: "LAW_FULL", dur: 6 },
-  { key: "LAW_AI", dur: 6 },
-  { key: "LAW_TRACK", dur: 6 },
-  { key: "LAW_MONEY", dur: 5 },
-  { key: "PIVOT", dur: 4 },
+  { key: "PROOF_FLASH", dur: 2 },
+  { key: "HOOK", dur: 5.5 },
+  { key: "BRIDGE", dur: 3.5 },
+  { key: "LAW_TOUR", dur: 9 },
+  { key: "LAW_PDF", dur: 6 },
+  { key: "LAW_HOME", dur: 5.5 },
+  { key: "LAW_EMAIL", dur: 5.5 },
+  { key: "PIVOT", dur: 3.5 },
   { key: "RESTO_MONEY", dur: 6 },
   { key: "RESTO_PIPE", dur: 6 },
   { key: "AI_TEXT", dur: 8 },
-  { key: "PROOF_TURN", dur: 6 },
+  { key: "PROOF_TURN", dur: 5.5 },
   { key: "CLOSE_CTA", dur: 11 },
 ];
 
@@ -56,10 +57,11 @@ function buildDefaultBeats(): ReelBeat[] {
 const CAPTIONS: Record<string, string> = {
   HOOK: "RUNNING A BUSINESS? THESE 5 THINGS EAT YOUR DAY.",
   BRIDGE: "ONE SYSTEM THAT DOES IT ALL FOR YOU.",
-  LAW_FULL: "A LAW FIRM: EVERY CASE, FILE & DOCUMENT IN ONE PLACE.",
-  LAW_AI: "CUSTOM AI THAT READS A CONTRACT IN SECONDS.",
-  LAW_TRACK: "IT REMINDS YOU, SO NOTHING SLIPS.",
-  LAW_MONEY: "SEE WHAT YOU'VE EARNED, AND WHAT YOU'RE OWED.",
+  PROOF_FLASH: "",
+  LAW_TOUR: "ONE SYSTEM RUNS THE WHOLE FIRM.",
+  LAW_PDF: "AI READS A CONTRACT IN ABOUT 30 SECONDS.",
+  LAW_HOME: "FULL PROPERTY RECORDS. ZERO COST.",
+  LAW_EMAIL: "A DAY OF EMAIL, INTO READY-TO-SAVE CONTACTS.",
   PIVOT: "SAME BUILDER. A COMPLETELY DIFFERENT BUSINESS.",
   RESTO_MONEY: "A FIRE & WATER REPAIR CO: $612,480 IN JOBS SOLD.",
   RESTO_PIPE: "EVERY CUSTOMER, FROM FIRST CALL TO PAID JOB.",
@@ -848,765 +850,1519 @@ const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   );
 };
 
-// 3 — LAW vault: cases + client file + document flip (full screen)
-const LawFull: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  const enter = ipl(bi.localF, 0, 14, 0, 1, ease);
-  const tilt = ipl(bi.localF, 0, bi.durF * 0.55, -13, 0, easeInOut); // settle to flat
-  const push = 1 + ipl(bi.localF, bi.durF * 0.45, bi.durF, 0, 0.16); // Z push into doc
-  const flip = ipl(bi.localF, bi.durF * 0.42, bi.durF * 0.72, 0, 1, ease);
-  const cursorP = ipl(bi.localF, bi.durF * 0.25, bi.durF * 0.42, 0, 1, ease);
-  const click = ipl(bi.localF, bi.durF * 0.4, bi.durF * 0.5, 1, 0);
-  const cx = 540 + (1 - cursorP) * 260;
-  const cy = 1180 + (1 - cursorP) * 160;
-  const cases = [
-    { n: "Johnson · 14 Oak St.", t: "Home Purchase" },
-    { n: "Mercer Estate", t: "Estate Plan" },
-    { n: "Diaz v. Whitfield", t: "Litigation" },
-  ];
-  return (
-    <AbsoluteFill
-      style={{ background: `linear-gradient(180deg, ${LAW.bg2}, ${LAW.bg})` }}
+// ════════════════════════════════════════════════════════════════════════════
+//  STOLEN MULE — accurate recreation (v6). Cursor + elements share the SAME rect
+//  so every click lands exactly. Real sidebar, real screens, real 3 AI tools.
+// ════════════════════════════════════════════════════════════════════════════
+const MULE = {
+  canvas: "#0a0e17",
+  surface: "#111725",
+  sunken: "#070a11",
+  indigo: "#6366f1",
+  indigoHi: "#818cf8",
+  text: "#e6eaf2",
+  mid: "#9aa6bf",
+  ok: "#4ade80",
+  okFill: "rgba(22,163,74,0.18)",
+  warn: "#fbbf24",
+  warnFill: "rgba(217,119,6,0.18)",
+  danger: "#f87171",
+  dangerFill: "rgba(220,38,38,0.18)",
+  border: "rgba(255,255,255,0.10)",
+};
+
+type NavItem = { label: string; icon: string; ai?: boolean };
+const NAV: NavItem[] = [
+  { label: "Dashboard", icon: "▦" },
+  { label: "Matters", icon: "⚖" },
+  { label: "Contacts", icon: "👥" },
+  { label: "Invoices", icon: "🧾" },
+  { label: "Time & Fees", icon: "⏱" },
+  { label: "Tasks", icon: "✓" },
+  { label: "Calendar", icon: "📅" },
+  { label: "Intake", icon: "📥" },
+  { label: "Trust Accounting", icon: "🏦" },
+  { label: "PDF Scrape", icon: "📄", ai: true },
+  { label: "Home Scrape", icon: "🏠", ai: true },
+  { label: "Email Scrape", icon: "✉", ai: true },
+];
+const SIDE_W = 300;
+const NAV_TOP = 168;
+const ROW_H = 58;
+const AI_GAP = 44;
+const AI_START = 9;
+const navRowY = (i: number) =>
+  NAV_TOP + i * ROW_H + (i >= AI_START ? AI_GAP : 0);
+const navCenter = (i: number) => ({ x: 150, y: navRowY(i) + ROW_H / 2 });
+
+// ── sidebar (renders rows at navRowY; active pill at activeIdx) ──────────────
+const MuleSidebar: React.FC<{ activeIdx: number }> = ({ activeIdx }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: SIDE_W,
+      background: MULE.sunken,
+      borderRight: `1px solid ${MULE.border}`,
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "44px 22px 0",
+      }}
     >
-      <DotGrid color={LAW.indigo} opacity={0.28} frame={frame} />
-      <Bloom color="rgba(99,102,241,0.32)" />
-      <Stage tilt={tilt} scale={push} shadow="rgba(0,0,0,0.5)">
+      <div
+        style={{
+          width: 42,
+          height: 42,
+          borderRadius: 11,
+          background: MULE.indigo,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontFamily: SANS,
+          fontWeight: 800,
+          fontSize: 22,
+          boxShadow: `0 0 18px ${MULE.indigo}88`,
+        }}
+      >
+        S
+      </div>
+      <div
+        style={{
+          fontFamily: SANS,
+          fontWeight: 800,
+          fontSize: 26,
+          color: "#fff",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        Stolen Mule
+      </div>
+    </div>
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        top: NAV_TOP + AI_START * ROW_H + 8,
+        width: SIDE_W,
+        fontFamily: SANS,
+        fontSize: 15,
+        fontWeight: 800,
+        letterSpacing: "0.18em",
+        color: MULE.mid,
+        paddingLeft: 24,
+      }}
+    >
+      AI INTEGRATIONS
+    </div>
+    {NAV.map((n, i) => {
+      const y = navRowY(i);
+      const active = i === activeIdx;
+      return (
         <div
-          style={{ position: "absolute", inset: "120px 60px", opacity: enter }}
+          key={i}
+          style={{
+            position: "absolute",
+            left: 12,
+            top: y,
+            width: SIDE_W - 24,
+            height: ROW_H - 8,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            padding: "0 16px",
+            borderRadius: 12,
+            background: active ? `${MULE.indigo}26` : "transparent",
+            boxShadow: active ? `inset 0 0 0 1px ${MULE.indigo}66` : "none",
+            fontFamily: SANS,
+            fontSize: 22,
+            fontWeight: active ? 700 : 500,
+            color: active ? "#fff" : MULE.mid,
+          }}
         >
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 30,
-              fontWeight: 800,
-              letterSpacing: "0.16em",
-              color: LAW.indigoHi,
-            }}
-          >
-            CLIENTS · DOCUMENTS · CASES
+          <span style={{ fontSize: 22, width: 26, textAlign: "center" }}>
+            {n.icon}
+          </span>
+          <span style={{ flex: 1 }}>{n.label}</span>
+          {n.ai && (
+            <span
+              style={{
+                fontFamily: SANS,
+                fontSize: 12,
+                fontWeight: 800,
+                color: "#04150E",
+                background: MULE.indigoHi,
+                borderRadius: 5,
+                padding: "2px 6px",
+              }}
+            >
+              AI
+            </span>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
+
+const MAINX = SIDE_W + 44; // content left
+const MAINW = W - MAINX - 44;
+
+const MuleChrome: React.FC<{
+  activeIdx: number;
+  frame: number;
+  title: string;
+  children: React.ReactNode;
+}> = ({ activeIdx, frame, title, children }) => (
+  <AbsoluteFill style={{ background: MULE.canvas }}>
+    <DotGrid color={MULE.indigo} opacity={0.18} frame={frame} />
+    <MuleSidebar activeIdx={activeIdx} />
+    {/* top bar */}
+    <div
+      style={{
+        position: "absolute",
+        left: SIDE_W,
+        right: 0,
+        top: 0,
+        height: 110,
+        borderBottom: `1px solid ${MULE.border}`,
+        display: "flex",
+        alignItems: "center",
+        padding: "0 44px",
+        justifyContent: "space-between",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: SANS,
+          fontSize: 40,
+          fontWeight: 800,
+          color: MULE.text,
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontFamily: SANS,
+          fontSize: 20,
+          color: MULE.indigoHi,
+          fontWeight: 600,
+        }}
+      >
+        <span
+          style={{
+            width: 11,
+            height: 11,
+            borderRadius: "50%",
+            background: MULE.indigo,
+            boxShadow: `0 0 12px ${MULE.indigo}`,
+          }}
+        />{" "}
+        Live
+      </div>
+    </div>
+    <div
+      style={{
+        position: "absolute",
+        left: MAINX,
+        top: 150,
+        right: 44,
+        bottom: 40,
+      }}
+    >
+      {children}
+    </div>
+  </AbsoluteFill>
+);
+
+// ── shared pane bits ─────────────────────────────────────────────────────────
+const badge = (txt: string, c: string, bg: string) => (
+  <span
+    style={{
+      fontFamily: SANS,
+      fontSize: 18,
+      fontWeight: 700,
+      color: c,
+      background: bg,
+      borderRadius: 8,
+      padding: "4px 12px",
+    }}
+  >
+    {txt}
+  </span>
+);
+const Row: React.FC<{
+  cells: React.ReactNode[];
+  widths: string[];
+  appear?: number;
+}> = ({ cells, widths, appear = 1 }) => (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 16,
+      padding: "20px 22px",
+      borderBottom: `1px solid ${MULE.border}`,
+      opacity: appear,
+    }}
+  >
+    {cells.map((c, i) => (
+      <div
+        key={i}
+        style={{
+          width: widths[i],
+          fontFamily: SANS,
+          fontSize: 24,
+          color: MULE.text,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {c}
+      </div>
+    ))}
+  </div>
+);
+const Card: React.FC<{ children: React.ReactNode; style?: any }> = ({
+  children,
+  style,
+}) => (
+  <div
+    style={{
+      background: MULE.surface,
+      border: `1px solid ${MULE.border}`,
+      borderRadius: 18,
+      ...style,
+    }}
+  >
+    {children}
+  </div>
+);
+const kpi = (label: string, val: string, accent = MULE.text) => (
+  <Card style={{ flex: 1, padding: "20px 22px" }}>
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: 18,
+        fontWeight: 700,
+        letterSpacing: "0.1em",
+        color: MULE.mid,
+        textTransform: "uppercase",
+      }}
+    >
+      {label}
+    </div>
+    <div
+      style={{
+        fontFamily: SANS,
+        fontSize: 46,
+        fontWeight: 800,
+        color: accent,
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {val}
+    </div>
+  </Card>
+);
+
+// ── module main panes (compact, recognizable, accurate-ish) ──────────────────
+const ModulePane: React.FC<{ module: number; frame: number }> = ({
+  module,
+  frame,
+}) => {
+  switch (module) {
+    case 1: // Matters
+      return (
+        <Card style={{ overflow: "hidden" }}>
+          <Row
+            widths={["20%", "16%", "34%", "30%"]}
+            cells={[
+              <b style={{ color: MULE.mid, fontSize: 18 }}>MATTER</b>,
+              <b style={{ color: MULE.mid, fontSize: 18 }}>STATUS</b>,
+              <b style={{ color: MULE.mid, fontSize: 18 }}>PROPERTY</b>,
+              <b style={{ color: MULE.mid, fontSize: 18 }}>ATTORNEY</b>,
+            ]}
+          />
+          {[
+            ["M-2041", "Open", "14 Oak St., Wheaton", "A. Cole"],
+            ["M-2039", "Pending", "88 Maple Ave.", "R. Diaz"],
+            ["M-2036", "Closed", "5 Birch Ct.", "A. Cole"],
+            ["M-2030", "Open", "210 Elm Blvd.", "J. Park"],
+          ].map((r, i) => (
+            <Row
+              key={i}
+              widths={["20%", "16%", "34%", "30%"]}
+              cells={[
+                <span style={{ fontFamily: MONO }}>{r[0]}</span>,
+                badge(
+                  r[1],
+                  r[1] === "Open"
+                    ? MULE.ok
+                    : r[1] === "Pending"
+                      ? MULE.warn
+                      : MULE.mid,
+                  r[1] === "Open"
+                    ? MULE.okFill
+                    : r[1] === "Pending"
+                      ? MULE.warnFill
+                      : "rgba(255,255,255,0.06)",
+                ),
+                r[2],
+                r[3],
+              ]}
+            />
+          ))}
+        </Card>
+      );
+    case 2: // Contacts
+      return (
+        <Card style={{ overflow: "hidden" }}>
+          {[
+            ["👤", "Robert Mercer", "Mercer Holdings", "rm@…"],
+            ["🏢", "Wheaton Title Co.", "Title company", "ops@…"],
+            ["👤", "Sarah Diaz", "Buyer", "sdiaz@…"],
+            ["🏦", "First Trust Bank", "Lender", "loans@…"],
+          ].map((r, i) => (
+            <Row
+              key={i}
+              widths={["8%", "34%", "30%", "28%"]}
+              cells={[
+                <span style={{ fontSize: 28 }}>{r[0]}</span>,
+                <b>{r[1]}</b>,
+                <span style={{ color: MULE.mid }}>{r[2]}</span>,
+                <span style={{ color: MULE.mid }}>{r[3]}</span>,
+              ]}
+            />
+          ))}
+        </Card>
+      );
+    case 3: // Invoices
+      return (
+        <>
+          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+            {kpi("Unpaid", "$112,750", MULE.warn)}
+            {kpi("Overdue", "$19,400", MULE.danger)}
+            {kpi("Collected", "$284,900", MULE.ok)}
           </div>
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 56,
-              fontWeight: 800,
-              color: LAW.text,
-              marginTop: 8,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.05,
-            }}
-          >
-            Every case & file,
-            <br />
-            in one place.
-          </div>
-          {/* cases list */}
-          <div
-            style={{
-              marginTop: 40,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
-            {cases.map((c, i) => (
-              <div
+          <Card style={{ overflow: "hidden" }}>
+            {[
+              ["INV-2026-0042", "Paid", "Mercer Holdings", "$8,400"],
+              ["INV-2026-0041", "Sent", "S. Diaz", "$3,250"],
+              ["INV-2026-0039", "Overdue", "210 Elm LLC", "$6,100"],
+            ].map((r, i) => (
+              <Row
                 key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 20,
-                  background: LAW.card,
-                  border: `1px solid ${LAW.border}`,
-                  borderRadius: 18,
-                  padding: "24px 28px",
-                  opacity: ipl(
-                    bi.localF,
-                    8 + i * 5,
-                    8 + i * 5 + 12,
-                    0,
-                    1,
-                    ease,
+                widths={["32%", "16%", "30%", "22%"]}
+                cells={[
+                  <span style={{ fontFamily: MONO, fontSize: 20 }}>
+                    {r[0]}
+                  </span>,
+                  badge(
+                    r[1],
+                    r[1] === "Paid"
+                      ? MULE.ok
+                      : r[1] === "Sent"
+                        ? MULE.indigoHi
+                        : MULE.danger,
+                    r[1] === "Paid"
+                      ? MULE.okFill
+                      : r[1] === "Sent"
+                        ? `${MULE.indigo}22`
+                        : MULE.dangerFill,
                   ),
-                }}
-              >
+                  r[2],
+                  <b>{r[3]}</b>,
+                ]}
+              />
+            ))}
+          </Card>
+        </>
+      );
+    case 4: // Time & Fees
+      return (
+        <Card style={{ overflow: "hidden" }}>
+          <Row
+            widths={["28%", "40%", "16%", "16%"]}
+            cells={[
+              <b style={{ color: MULE.mid, fontSize: 18 }}>MATTER</b>,
+              <b style={{ color: MULE.mid, fontSize: 18 }}>ACTIVITY</b>,
+              <b style={{ color: MULE.mid, fontSize: 18 }}>HRS</b>,
+              <b style={{ color: MULE.mid, fontSize: 18 }}>AMOUNT</b>,
+            ]}
+          />
+          {[
+            ["M-2041", "Draft purchase agreement", "1.5", "$525"],
+            ["M-2039", "Title review call", "0.8", "$280"],
+            ["M-2036", "Closing prep", "2.2", "$770"],
+          ].map((r, i) => (
+            <Row
+              key={i}
+              widths={["28%", "40%", "16%", "16%"]}
+              cells={[
+                <span style={{ fontFamily: MONO }}>{r[0]}</span>,
+                r[1],
+                r[2],
+                <b style={{ color: MULE.ok }}>{r[3]}</b>,
+              ]}
+            />
+          ))}
+        </Card>
+      );
+    case 5: // Tasks
+      return (
+        <>
+          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+            {[
+              ["Overdue", "2", MULE.danger],
+              ["Due Today", "3", MULE.warn],
+              ["This Week", "6", MULE.indigoHi],
+            ].map((b, i) => (
+              <Card key={i} style={{ flex: 1, padding: "16px 20px" }}>
                 <div
-                  style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: 12,
-                    background: `${LAW.indigo}33`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 30,
-                  }}
+                  style={{ fontFamily: SANS, fontSize: 18, color: MULE.mid }}
                 >
-                  📁
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      fontFamily: SANS,
-                      fontWeight: 700,
-                      fontSize: 34,
-                      color: LAW.text,
-                    }}
-                  >
-                    {c.n}
-                  </div>
-                  <div
-                    style={{ fontFamily: SANS, fontSize: 24, color: LAW.soft }}
-                  >
-                    {c.t}
-                  </div>
+                  {b[0]}
                 </div>
                 <div
                   style={{
                     fontFamily: SANS,
-                    fontSize: 22,
-                    fontWeight: 700,
-                    color: LAW.indigoHi,
-                    background: `${LAW.indigo}22`,
-                    borderRadius: 999,
-                    padding: "6px 16px",
+                    fontSize: 40,
+                    fontWeight: 800,
+                    color: b[2] as string,
                   }}
                 >
-                  Open
+                  {b[1]}
                 </div>
+              </Card>
+            ))}
+          </div>
+          <Card style={{ overflow: "hidden" }}>
+            {[
+              ["Send disclosures — 14 Oak St.", "Today"],
+              ["Confirm closing time — Mercer", "Tomorrow"],
+              ["File deed — Birch Ct.", "Fri"],
+            ].map((r, i) => (
+              <Row
+                key={i}
+                widths={["12%", "62%", "26%"]}
+                cells={[
+                  <span style={{ color: MULE.ok }}>☐</span>,
+                  r[0],
+                  <span style={{ color: MULE.mid }}>{r[1]}</span>,
+                ]}
+              />
+            ))}
+          </Card>
+        </>
+      );
+    case 6: // Calendar
+      return (
+        <Card style={{ padding: 22, height: "100%" }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            {["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) => (
+              <div
+                key={d}
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontFamily: SANS,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: MULE.mid,
+                }}
+              >
+                {d}
               </div>
             ))}
           </div>
-          {/* document that flips open */}
-          <div
-            style={{
-              marginTop: 40,
-              position: "relative",
-              height: 520,
-              perspective: 1400,
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "#F4F1EA",
-                borderRadius: 16,
-                transformOrigin: "left center",
-                transform: `rotateY(${-(1 - flip) * 78}deg)`,
-                boxShadow: "0 30px 60px rgba(0,0,0,0.5)",
-                overflow: "hidden",
-                padding: "44px 50px",
-              }}
-            >
+          <div style={{ display: "flex", gap: 10, height: 360 }}>
+            {[0, 1, 2, 3, 4].map((c) => (
               <div
-                style={{
-                  fontFamily: SANS,
-                  fontWeight: 800,
-                  fontSize: 30,
-                  color: "#1a1a1a",
-                }}
-              >
-                PURCHASE AGREEMENT
-              </div>
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 20,
-                  color: "#555",
-                  marginTop: 6,
-                }}
-              >
-                Johnson · 14 Oak St.
-              </div>
-              {[0, 1, 2, 3, 4].map((k) => (
-                <div
-                  key={k}
-                  style={{
-                    height: 12,
-                    borderRadius: 3,
-                    background: "#d8d4ca",
-                    marginTop: 20,
-                    width: `${92 - k * 9}%`,
-                  }}
-                />
-              ))}
-              <div
-                style={{
-                  marginTop: 46,
-                  fontFamily: "'Brush Script MT', cursive",
-                  fontSize: 44,
-                  color: "#1f3a8a",
-                  borderBottom: "2px solid #999",
-                  display: "inline-block",
-                  paddingBottom: 4,
-                  opacity: flip,
-                }}
-              >
-                signed
-              </div>
-              {flip > 0.6 && (
-                <LightSweep
-                  p={ipl(bi.localF, bi.durF * 0.72, bi.durF * 0.9, 0, 1)}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </Stage>
-      <Cursor x={cx} y={cy} click={click} />
-    </AbsoluteFill>
-  );
-};
-
-// 3b — LAW custom AI: reads a contract, auto-files the key terms
-const LAW_TERMS = [
-  { label: "Parties", val: "Johnson / Mercer", t: 0.4 },
-  { label: "Closing date", val: "June 30, 2026", t: 0.5 },
-  { label: "Purchase price", val: "$740,000", t: 0.6 },
-  { label: "Deadline", val: "Added to calendar", t: 0.7 },
-];
-const LawAi: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  const enter = ipl(bi.localF, 0, 12, 0, 1, ease);
-  const scanY = ipl(
-    bi.localF,
-    bi.durF * 0.18,
-    bi.durF * 0.6,
-    300,
-    1040,
-    easeInOut,
-  );
-  const scanOn = bi.localF > bi.durF * 0.16 && bi.localF < bi.durF * 0.66;
-  const panelIn = ipl(bi.localF, bi.durF * 0.3, bi.durF * 0.44, 0, 1, ease);
-  const done = ipl(bi.localF, bi.durF * 0.78, bi.durF * 0.9, 0, 1, ease);
-  // key lines on the document (y positions inside the doc) that light up as the scan passes
-  const keyLines = [360, 470, 580];
-  return (
-    <AbsoluteFill
-      style={{ background: `linear-gradient(180deg, ${LAW.bg2}, ${LAW.bg})` }}
-    >
-      <DotGrid color={LAW.indigo} opacity={0.24} frame={frame} />
-      <Bloom color="rgba(99,102,241,0.32)" />
-      <div
-        style={{
-          position: "absolute",
-          top: 120,
-          left: 60,
-          right: 60,
-          opacity: enter,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: MONO,
-            fontSize: 24,
-            letterSpacing: "0.22em",
-            color: LAW.indigoHi,
-          }}
-        >
-          CUSTOM AI · BUILT FOR THIS FIRM
-        </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 52,
-            fontWeight: 800,
-            color: LAW.text,
-            marginTop: 8,
-            letterSpacing: "-0.02em",
-            lineHeight: 1.05,
-          }}
-        >
-          It reads the contract
-          <br />
-          for you.
-        </div>
-      </div>
-      {/* the contract document */}
-      <div
-        style={{
-          position: "absolute",
-          top: 300,
-          left: 60,
-          width: 560,
-          bottom: 360,
-          background: "#F4F1EA",
-          borderRadius: 14,
-          padding: "40px 44px",
-          boxShadow: "0 30px 70px rgba(0,0,0,0.5)",
-          overflow: "hidden",
-          opacity: enter,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontWeight: 800,
-            fontSize: 26,
-            color: "#1a1a1a",
-          }}
-        >
-          PURCHASE AGREEMENT
-        </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 18,
-            color: "#666",
-            marginTop: 4,
-          }}
-        >
-          Johnson · 14 Oak St.
-        </div>
-        {Array.from({ length: 14 }).map((_, k) => {
-          const ly = 360 + k * 42; // absolute-ish y to compare with scanY
-          const lit = scanY > ly && keyLines.some((g) => Math.abs(g - ly) < 24);
-          const isKey = keyLines.some((g) => Math.abs(g - ly) < 24);
-          return (
-            <div
-              key={k}
-              style={{
-                height: 14,
-                borderRadius: 3,
-                marginTop: 18,
-                width: `${88 - (k % 4) * 9}%`,
-                background: lit ? LAW.indigo : isKey ? "#c9c4b8" : "#d8d4ca",
-                boxShadow: lit ? `0 0 14px ${LAW.indigo}` : "none",
-              }}
-            />
-          );
-        })}
-      </div>
-      {/* scan beam over the document */}
-      {scanOn && (
-        <div
-          style={{
-            position: "absolute",
-            left: 60,
-            width: 560,
-            top: scanY,
-            height: 5,
-            background: `linear-gradient(90deg, transparent, ${LAW.sky}, ${LAW.indigoHi}, transparent)`,
-            boxShadow: `0 0 24px ${LAW.indigo}`,
-            borderRadius: 3,
-            zIndex: 20,
-          }}
-        />
-      )}
-      {/* auto-filed summary panel */}
-      <div
-        style={{
-          position: "absolute",
-          top: 320,
-          right: 60,
-          width: 380,
-          background: "rgba(99,102,241,0.08)",
-          border: `2px solid ${done > 0 ? FIRE.emerald : LAW.indigo}`,
-          borderRadius: 22,
-          padding: 30,
-          opacity: panelIn,
-          boxShadow: `0 0 40px ${LAW.indigo}44`,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 24,
-            fontWeight: 800,
-            color: done > 0 ? FIRE.emerald : LAW.indigoHi,
-            letterSpacing: "0.04em",
-            marginBottom: 20,
-          }}
-        >
-          {done > 0 ? "✓ FILED TO THE CASE" : "EXTRACTING…"}
-        </div>
-        {LAW_TERMS.map((tk, i) => {
-          const a = ipl(
-            bi.localF,
-            bi.durF * tk.t,
-            bi.durF * tk.t + 9,
-            0,
-            1,
-            ease,
-          );
-          return (
-            <div
-              key={i}
-              style={{
-                marginBottom: 20,
-                opacity: a,
-                transform: `translateX(${(1 - a) * 28}px)`,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: LAW.soft,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {tk.label}
-              </div>
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 30,
-                  fontWeight: 700,
-                  color: "#fff",
-                  textShadow: `0 0 12px ${LAW.indigo}88`,
-                }}
-              >
-                {tk.val}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          bottom: 250,
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          fontFamily: SANS,
-          fontSize: 30,
-          fontWeight: 700,
-          color: LAW.indigoHi,
-          opacity: done,
-        }}
-      >
-        Summarized & filed in seconds.
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// 3c — LAW proactive assistant: you tell it what matters, it reminds you
-const LAW_REMINDERS = [
-  {
-    icon: "⏰",
-    t: "Follow up: Mercer closing",
-    s: "due Friday",
-    c: LAW.indigoHi,
-  },
-  { icon: "⚠️", t: "Deadline: Diaz response", s: "3 days left", c: "#F5B945" },
-  { icon: "🤝", t: "Handoff: file to title company", s: "today", c: LAW.sky },
-];
-const LawTrack: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  const enter = ipl(bi.localF, 0, 12, 0, 1, ease);
-  const cursorP = ipl(bi.localF, bi.durF * 0.5, bi.durF * 0.66, 0, 1, ease);
-  const click = ipl(bi.localF, bi.durF * 0.64, bi.durF * 0.74, 1, 0);
-  const done = ipl(bi.localF, bi.durF * 0.7, bi.durF * 0.84, 0, 1, ease);
-  const cx = 760 - (1 - cursorP) * 240;
-  const cy = 1230 - (1 - cursorP) * 200;
-  return (
-    <AbsoluteFill
-      style={{ background: `linear-gradient(180deg, ${LAW.bg2}, ${LAW.bg})` }}
-    >
-      <DotGrid color={LAW.indigo} opacity={0.24} frame={frame} />
-      <Bloom color="rgba(99,102,241,0.3)" />
-      <div
-        style={{
-          position: "absolute",
-          top: 130,
-          left: 60,
-          right: 60,
-          opacity: enter,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: MONO,
-            fontSize: 24,
-            letterSpacing: "0.22em",
-            color: LAW.indigoHi,
-          }}
-        >
-          YOUR AI ASSISTANT
-        </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 56,
-            fontWeight: 800,
-            color: LAW.text,
-            marginTop: 8,
-            letterSpacing: "-0.02em",
-            lineHeight: 1.05,
-          }}
-        >
-          Nothing slips
-          <br />
-          through.
-        </div>
-      </div>
-      <div style={{ position: "absolute", top: 400, left: 60, right: 60 }}>
-        {LAW_REMINDERS.map((r, i) => {
-          const a = ipl(bi.localF, 14 + i * 8, 14 + i * 8 + 12, 0, 1, ease);
-          return (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 20,
-                background: LAW.card,
-                border: `1px solid ${LAW.border}`,
-                borderLeft: `5px solid ${r.c}`,
-                borderRadius: 16,
-                padding: "22px 28px",
-                marginBottom: 18,
-                opacity: a,
-                transform: `translateY(${(1 - a) * 24}px)`,
-              }}
-            >
-              <div style={{ fontSize: 38, width: 50 }}>{r.icon}</div>
-              <div
+                key={c}
                 style={{
                   flex: 1,
-                  fontFamily: SANS,
-                  fontWeight: 700,
-                  fontSize: 34,
-                  color: LAW.text,
+                  position: "relative",
+                  background: MULE.sunken,
+                  borderRadius: 12,
+                  border: `1px solid ${MULE.border}`,
                 }}
               >
-                {r.t}
+                {c === 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 30,
+                      left: 8,
+                      right: 8,
+                      height: 60,
+                      background: MULE.indigo,
+                      borderRadius: 8,
+                      padding: 8,
+                      fontFamily: SANS,
+                      fontSize: 16,
+                      color: "#fff",
+                    }}
+                  >
+                    Closing 10a
+                  </div>
+                )}
+                {c === 2 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 120,
+                      left: 8,
+                      right: 8,
+                      height: 50,
+                      background: MULE.warnFill,
+                      border: `1px solid ${MULE.warn}`,
+                      borderRadius: 8,
+                      padding: 8,
+                      fontFamily: SANS,
+                      fontSize: 16,
+                      color: MULE.warn,
+                    }}
+                  >
+                    Deadline
+                  </div>
+                )}
+                {c === 4 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 60,
+                      left: 8,
+                      right: 8,
+                      height: 56,
+                      background: `${MULE.ok}22`,
+                      border: `1px solid ${MULE.ok}`,
+                      borderRadius: 8,
+                      padding: 8,
+                      fontFamily: SANS,
+                      fontSize: 16,
+                      color: MULE.ok,
+                    }}
+                  >
+                    Signing
+                  </div>
+                )}
               </div>
+            ))}
+          </div>
+        </Card>
+      );
+    case 7: // Intake
+      return (
+        <>
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            {[
+              ["New", MULE.indigoHi],
+              ["Reviewed", MULE.warn],
+              ["Converted", MULE.ok],
+              ["Archived", MULE.mid],
+            ].map((t, i) => (
+              <div
+                key={i}
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 22,
+                  fontWeight: 700,
+                  color: t[1] as string,
+                  padding: "10px 18px",
+                  borderBottom: i === 0 ? `3px solid ${t[1]}` : "none",
+                }}
+              >
+                {t[0]}
+              </div>
+            ))}
+          </div>
+          {[
+            ["New buyer lead — 312 Pine St.", "2m ago"],
+            ["Refinance inquiry — Park Ave.", "1h ago"],
+            ["Seller intake — Birch Ct.", "3h ago"],
+          ].map((r, i) => (
+            <Card
+              key={i}
+              style={{
+                padding: "20px 24px",
+                marginBottom: 14,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <span
+                style={{ fontFamily: SANS, fontSize: 24, color: MULE.text }}
+              >
+                {r[0]}
+              </span>
+              <span style={{ fontFamily: SANS, fontSize: 20, color: MULE.mid }}>
+                {r[1]}
+              </span>
+            </Card>
+          ))}
+        </>
+      );
+    case 8: // Trust Accounting
+      return (
+        <>
+          <Card
+            style={{
+              padding: "20px 24px",
+              marginBottom: 18,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div>
               <div
                 style={{
                   fontFamily: SANS,
                   fontSize: 26,
                   fontWeight: 700,
-                  color: r.c,
+                  color: MULE.text,
                 }}
               >
-                {r.s}
+                IOLTA Trust ····4182
+              </div>
+              <div style={{ fontFamily: SANS, fontSize: 20, color: MULE.mid }}>
+                First Trust Bank
               </div>
             </div>
-          );
-        })}
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          top: 880,
-          left: 60,
-          right: 60,
-          background: "rgba(99,102,241,0.10)",
-          border: `2px solid ${done > 0 ? FIRE.emerald : LAW.indigo}`,
-          borderRadius: 24,
-          padding: 30,
-          opacity: enter,
-          boxShadow: `0 0 40px ${LAW.indigo}33`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            marginBottom: 16,
-          }}
-        >
-          <div
-            style={{
-              width: 50,
-              height: 50,
-              borderRadius: "50%",
-              background: `radial-gradient(circle, #fff, ${LAW.indigo})`,
-              boxShadow: `0 0 18px ${LAW.indigo}`,
-            }}
-          />
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 24,
-              fontWeight: 800,
-              color: LAW.indigoHi,
-            }}
-          >
-            Assistant
-          </div>
-        </div>
-        {done > 0 ? (
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 38,
-              fontWeight: 700,
-              color: "#fff",
-              opacity: done,
-            }}
-          >
-            ✓ Done. Drafted &amp; scheduled. Nothing slipped.
-          </div>
-        ) : (
-          <>
             <div
               style={{
                 fontFamily: SANS,
-                fontSize: 38,
-                fontWeight: 600,
-                color: "#fff",
-                lineHeight: 1.35,
+                fontSize: 40,
+                fontWeight: 800,
+                color: MULE.ok,
               }}
             >
-              You told me to follow up on the Mercer closing. Want me to draft
-              it now?
+              $486,200
             </div>
-            <div style={{ display: "flex", gap: 16, marginTop: 24 }}>
+          </Card>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            {[
+              "Transactions",
+              "Reconciliation",
+              "Reporting",
+              "Deposit Slips",
+            ].map((t, i) => (
               <div
+                key={i}
                 style={{
                   fontFamily: SANS,
-                  fontSize: 30,
-                  fontWeight: 800,
-                  color: "#fff",
-                  background: LAW.indigo,
-                  borderRadius: 14,
-                  padding: "16px 36px",
-                  transform: `scale(${click > 0 ? 0.95 : 1})`,
-                  boxShadow: `0 0 24px ${LAW.indigo}88`,
-                }}
-              >
-                Yes, do it
-              </div>
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 30,
+                  fontSize: 20,
                   fontWeight: 700,
-                  color: LAW.soft,
-                  border: `1px solid ${LAW.border}`,
-                  borderRadius: 14,
-                  padding: "16px 32px",
+                  color: i === 0 ? MULE.indigoHi : MULE.mid,
+                  padding: "8px 14px",
                 }}
               >
-                Snooze
+                {t}
               </div>
+            ))}
+          </div>
+          <Card style={{ overflow: "hidden" }}>
+            {[
+              ["Deposit — Mercer earnest", "+$25,000"],
+              ["Disbursement — title", "−$1,800"],
+              ["Deposit — Diaz retainer", "+$5,000"],
+            ].map((r, i) => (
+              <Row
+                key={i}
+                widths={["70%", "30%"]}
+                cells={[
+                  r[0],
+                  <b
+                    style={{
+                      color: r[1].startsWith("+") ? MULE.ok : MULE.danger,
+                    }}
+                  >
+                    {r[1]}
+                  </b>,
+                ]}
+              />
+            ))}
+          </Card>
+        </>
+      );
+    default: // 0 Dashboard
+      return (
+        <>
+          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+            {kpi("Unbilled", "$48,200")}
+            {kpi("Unpaid", "$112,750", MULE.warn)}
+            {kpi("Overdue", "$19,400", MULE.danger)}
+            {kpi("Collected", "$284,900", MULE.indigoHi)}
+          </div>
+          <Card style={{ padding: 22, marginBottom: 18 }}>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 20,
+                fontWeight: 800,
+                color: MULE.mid,
+                letterSpacing: "0.08em",
+                marginBottom: 12,
+              }}
+            >
+              REVENUE — LAST 12 MONTHS
             </div>
-          </>
-        )}
-      </div>
-      <Cursor x={cx} y={cy} click={click} />
-    </AbsoluteFill>
-  );
+            <svg
+              width={MAINW - 44}
+              height={160}
+              style={{ overflow: "visible" }}
+            >
+              <polyline
+                points={[20, 26, 24, 32, 40, 38, 47, 54, 60, 68, 76, 90]
+                  .map(
+                    (v, i, a) =>
+                      `${(i / (a.length - 1)) * (MAINW - 44)},${150 - (v / 100) * 130}`,
+                  )
+                  .join(" ")}
+                fill="none"
+                stroke={MULE.indigoHi}
+                strokeWidth="5"
+                style={{ filter: `drop-shadow(0 0 10px ${MULE.indigo})` }}
+              />
+            </svg>
+          </Card>
+          <div style={{ display: "flex", gap: 16 }}>
+            <Card style={{ flex: 1, padding: 20 }}>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: MULE.mid,
+                }}
+              >
+                Alerts (3)
+              </div>
+              {[0, 1].map((k) => (
+                <div
+                  key={k}
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    marginTop: 12,
+                    fontFamily: SANS,
+                    fontSize: 20,
+                    color: MULE.text,
+                  }}
+                >
+                  <span style={{ color: MULE.danger }}>●</span> Invoice 8 days
+                  overdue
+                </div>
+              ))}
+            </Card>
+            <Card style={{ flex: 1, padding: 20 }}>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: MULE.mid,
+                }}
+              >
+                My Tasks (6)
+              </div>
+              {[0, 1].map((k) => (
+                <div
+                  key={k}
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    marginTop: 12,
+                    fontFamily: SANS,
+                    fontSize: 20,
+                    color: MULE.text,
+                  }}
+                >
+                  <span style={{ color: MULE.ok }}>☐</span> Send disclosures
+                </div>
+              ))}
+            </Card>
+          </div>
+        </>
+      );
+  }
 };
 
-// 4 — LAW money (single clean line + count-up)
-const LawMoney: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// ── cursor helper: place arrow TIP exactly on (tx, ty) ───────────────────────
+const TipCursor: React.FC<{ tx: number; ty: number; click?: number }> = ({
+  tx,
+  ty,
+  click = 0,
+}) => <Cursor x={tx - 4} y={ty - 2} click={click} />;
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SCENES
+// ════════════════════════════════════════════════════════════════════════════
+
+// 0 — PROOF FLASH cold open: the real contract-AI result, honest + eye-catching
+const ProofFlash: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const draw = ipl(bi.localF, 6, bi.durF * 0.7, 0, 1, ease);
-  const num = countUp(frame, bi.sF + bi.durF * 0.45, bi.durF * 0.45, 284900);
-  const owed = countUp(frame, bi.sF + bi.durF * 0.55, bi.durF * 0.4, 112750);
-  const numIn = ipl(bi.localF, bi.durF * 0.45, bi.durF * 0.6, 0, 1, ease);
+  const rows = [
+    { tag: "OK", t: "3 parties matched", c: MULE.ok, bg: MULE.okFill },
+    { tag: "OK", t: "Signatures 6 of 6", c: MULE.ok, bg: MULE.okFill },
+    {
+      tag: "VERIFY",
+      t: "Closing date: confirm",
+      c: MULE.warn,
+      bg: MULE.warnFill,
+    },
+    {
+      tag: "ACTION",
+      t: "Earnest money: missing",
+      c: MULE.danger,
+      bg: MULE.dangerFill,
+    },
+  ];
+  const outBlur = ipl(bi.localF, bi.durF - 4, bi.durF, 0, 14);
   return (
     <AbsoluteFill
       style={{
-        background: `linear-gradient(180deg, ${LAW.bg2}, ${LAW.bg})`,
+        background: MULE.canvas,
         alignItems: "center",
         justifyContent: "center",
+        filter: `blur(${outBlur}px)`,
       }}
     >
-      <DotGrid color={LAW.indigo} opacity={0.22} frame={frame} />
-      <Bloom color="rgba(99,102,241,0.3)" />
-      <div style={{ width: 920, textAlign: "center" }}>
+      <DotGrid color={MULE.indigo} opacity={0.3} frame={frame} />
+      <Bloom color="rgba(99,102,241,0.4)" />
+      <div style={{ width: 760, opacity: ipl(bi.localF, 0, 5, 0, 1) }}>
         <div
           style={{
             fontFamily: SANS,
-            fontSize: 32,
+            fontSize: 30,
             fontWeight: 800,
-            letterSpacing: "0.1em",
-            color: LAW.indigoHi,
-            marginBottom: 24,
+            color: MULE.indigoHi,
+            marginBottom: 14,
           }}
         >
-          FEES COLLECTED, MONTH BY MONTH
+          📄 Contract analyzed
         </div>
-        <LineChart
-          draw={Math.max(0.001, draw)}
-          color={LAW.sky}
-          glow={LAW.indigo}
-          width={920}
-          height={360}
-          data={[20, 26, 24, 32, 38, 36, 46, 54, 60, 68, 76, 90]}
-        />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 80,
-            marginTop: 36,
-            opacity: numIn,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 26,
-                fontWeight: 700,
-                color: LAW.soft,
-              }}
-            >
-              Earned this month
-            </div>
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 84,
-                fontWeight: 800,
-                color: "#fff",
-                textShadow: `0 0 36px ${LAW.indigo}`,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {fmtMoney(num)}
-            </div>
+        <Card style={{ padding: 30 }}>
+          {rows.map((r, i) => {
+            const a = ipl(bi.localF, 4 + i * 4, 4 + i * 4 + 6, 0, 1, ease);
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  marginBottom: 16,
+                  opacity: a,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 20,
+                    fontWeight: 800,
+                    color: r.c,
+                    background: r.bg,
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    width: 110,
+                    textAlign: "center",
+                  }}
+                >
+                  {r.tag}
+                </span>
+                <span style={{ fontFamily: SANS, fontSize: 34, color: "#fff" }}>
+                  {r.t}
+                </span>
+              </div>
+            );
+          })}
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 20,
+              color: MULE.mid,
+              marginTop: 8,
+            }}
+          >
+            $0.04 · AWS Bedrock · 28s
           </div>
-          <div>
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 26,
-                fontWeight: 700,
-                color: LAW.soft,
-              }}
-            >
-              Still owed to you
-            </div>
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 84,
-                fontWeight: 800,
-                color: LAW.indigoHi,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {fmtMoney(owed)}
-            </div>
-          </div>
-        </div>
+        </Card>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          bottom: 360,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontFamily: SANS,
+          fontSize: 52,
+          fontWeight: 800,
+          color: "#fff",
+          padding: "0 70px",
+          opacity: ipl(bi.localF, 6, 12, 0, 1),
+          textShadow: `0 0 30px ${MULE.indigo}`,
+        }}
+      >
+        AI read this whole contract in{" "}
+        <span style={{ color: MULE.indigoHi }}>30 seconds.</span>
       </div>
     </AbsoluteFill>
+  );
+};
+
+// 4 — LAW_TOUR: open on dashboard, cursor clicks down the real sidebar
+const TOUR = [1, 2, 3, 4, 5, 6, 7, 8]; // Matters … Trust (Dashboard = initial)
+const LawTour: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const n = TOUR.length;
+  const clickL = TOUR.map((_, k) => bi.durF * (0.14 + 0.102 * k));
+  let nextK = 0;
+  while (nextK < n && bi.localF >= clickL[nextK]) nextK++;
+  let activeIdx = 0;
+  for (let k = 0; k < n; k++) if (bi.localF >= clickL[k]) activeIdx = TOUR[k];
+  const fromIdx = nextK === 0 ? 0 : TOUR[nextK - 1];
+  const toIdx = nextK < n ? TOUR[nextK] : TOUR[n - 1];
+  const segStart = nextK === 0 ? 0 : clickL[nextK - 1];
+  const segEnd = nextK < n ? clickL[nextK] : bi.durF;
+  const moveP = ipl(
+    bi.localF,
+    segStart,
+    Math.max(segStart + 1, segEnd - 2),
+    0,
+    1,
+    easeInOut,
+  );
+  const from = navCenter(fromIdx);
+  const to = navCenter(toIdx);
+  const cxx = from.x + (to.x - from.x) * moveP;
+  const cyy = from.y + (to.y - from.y) * moveP;
+  // click ring: pulse right after the most recent click
+  let clickAmt = 0;
+  for (let k = 0; k < n; k++) {
+    const d = bi.localF - clickL[k];
+    if (d >= 0 && d < 9) clickAmt = Math.max(clickAmt, 1 - d / 9);
+  }
+  const titles = [
+    "Dashboard",
+    "Matters",
+    "Contacts",
+    "Invoices",
+    "Time & Fees",
+    "Tasks",
+    "Calendar",
+    "Intake",
+    "Trust Accounting",
+  ];
+  return (
+    <>
+      <MuleChrome activeIdx={activeIdx} frame={frame} title={titles[activeIdx]}>
+        <ModulePane module={activeIdx} frame={frame} />
+      </MuleChrome>
+      <TipCursor tx={cxx} ty={cyy} click={clickAmt} />
+    </>
+  );
+};
+
+// helper for an AI scene: chrome + main + a click on one action button
+const ACTION_BTN = { x: MAINX + 150, y: 980, w: 300, h: 84 }; // shared rect
+
+// 5 — LAW_PDF: contract analyzer (click Scan → checklist)
+const LawPdf: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const enter = ipl(bi.localF, 0, 10, 0, 1, ease);
+  const cursorP = ipl(
+    bi.localF,
+    bi.durF * 0.18,
+    bi.durF * 0.34,
+    0,
+    1,
+    easeInOut,
+  );
+  const click = ipl(bi.localF, bi.durF * 0.32, bi.durF * 0.42, 1, 0);
+  const scanned = bi.localF > bi.durF * 0.4;
+  const btnCx = ACTION_BTN.x + ACTION_BTN.w / 2;
+  const btnCy = ACTION_BTN.y + ACTION_BTN.h / 2;
+  const fromX = MAINX + 500,
+    fromY = 1300;
+  const cxx = fromX + (btnCx - fromX) * cursorP;
+  const cyy = fromY + (btnCy - fromY) * cursorP;
+  const rows = [
+    {
+      tag: "OK",
+      t: "Form: Multi-Board 8.0 detected",
+      c: MULE.ok,
+      bg: MULE.okFill,
+    },
+    { tag: "OK", t: "Parties: 3 matched", c: MULE.ok, bg: MULE.okFill },
+    {
+      tag: "OK",
+      t: "Signatures & initials: 6 of 6",
+      c: MULE.ok,
+      bg: MULE.okFill,
+    },
+    {
+      tag: "VERIFY",
+      t: "Financing: Conventional — confirm date",
+      c: MULE.warn,
+      bg: MULE.warnFill,
+    },
+    {
+      tag: "ACTION",
+      t: "Earnest money receipt: missing",
+      c: MULE.danger,
+      bg: MULE.dangerFill,
+    },
+  ];
+  return (
+    <>
+      <MuleChrome activeIdx={9} frame={frame} title="Contract Analyzer">
+        {!scanned ? (
+          <div style={{ opacity: enter }}>
+            <div
+              style={{
+                height: 560,
+                border: `3px dashed ${MULE.border}`,
+                borderRadius: 20,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 18,
+                background: MULE.sunken,
+              }}
+            >
+              <div style={{ fontSize: 80 }}>📄</div>
+              <div style={{ fontFamily: SANS, fontSize: 30, color: MULE.mid }}>
+                purchase_agreement.pdf
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Card
+            style={{
+              padding: 30,
+              opacity: ipl(bi.localF, bi.durF * 0.4, bi.durF * 0.5, 0, 1),
+            }}
+          >
+            <div style={{ display: "flex", gap: 14, marginBottom: 20 }}>
+              {badge("3 OK", MULE.ok, MULE.okFill)}
+              {badge("1 VERIFY", MULE.warn, MULE.warnFill)}
+              {badge("1 ACTION", MULE.danger, MULE.dangerFill)}
+            </div>
+            {rows.map((r, i) => {
+              const a = ipl(
+                bi.localF,
+                bi.durF * 0.46 + i * 4,
+                bi.durF * 0.46 + i * 4 + 6,
+                0,
+                1,
+                ease,
+              );
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 16,
+                    marginBottom: 14,
+                    opacity: a,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: r.c,
+                      background: r.bg,
+                      borderRadius: 8,
+                      padding: "5px 10px",
+                      width: 110,
+                      textAlign: "center",
+                    }}
+                  >
+                    {r.tag}
+                  </span>
+                  <span
+                    style={{ fontFamily: SANS, fontSize: 28, color: "#fff" }}
+                  >
+                    {r.t}
+                  </span>
+                </div>
+              );
+            })}
+            <div
+              style={{
+                fontFamily: MONO,
+                fontSize: 20,
+                color: MULE.mid,
+                marginTop: 10,
+              }}
+            >
+              $0.04 · AWS Bedrock · 28s
+            </div>
+          </Card>
+        )}
+        {/* the Scan button (rect-aligned with the cursor) */}
+        {!scanned && (
+          <div
+            style={{
+              position: "absolute",
+              left: ACTION_BTN.x - MAINX,
+              top: ACTION_BTN.y - 150,
+              width: ACTION_BTN.w,
+              height: ACTION_BTN.h,
+              background: MULE.indigo,
+              borderRadius: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: SANS,
+              fontSize: 30,
+              fontWeight: 800,
+              color: "#fff",
+              transform: `scale(${click > 0 ? 0.96 : 1})`,
+              boxShadow: `0 0 28px ${MULE.indigo}88`,
+            }}
+          >
+            Scan Contract
+          </div>
+        )}
+      </MuleChrome>
+      {!scanned && <TipCursor tx={cxx} ty={cyy} click={click} />}
+    </>
+  );
+};
+
+// 6 — LAW_HOME: property records lookup (public records, $0)
+const LawHome: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const enter = ipl(bi.localF, 0, 10, 0, 1, ease);
+  const cursorP = ipl(
+    bi.localF,
+    bi.durF * 0.16,
+    bi.durF * 0.32,
+    0,
+    1,
+    easeInOut,
+  );
+  const click = ipl(bi.localF, bi.durF * 0.3, bi.durF * 0.4, 1, 0);
+  const got = bi.localF > bi.durF * 0.38;
+  const BTN = { rx: MAINW - 192, ry: 0, w: 184, h: 70 }; // children-relative rect
+  const btnCx = MAINX + BTN.rx + BTN.w / 2,
+    btnCy = 150 + BTN.ry + BTN.h / 2;
+  const fromX = MAINX + 300,
+    fromY = 1100;
+  const cxx = fromX + (btnCx - fromX) * cursorP,
+    cyy = fromY + (btnCy - fromY) * cursorP;
+  const fields = [
+    ["Owner", "Robert & Lisa Mercer"],
+    ["PIN", "05-21-407-018-0000"],
+    ["Assessed value", "$612,400"],
+    ["Annual tax", "$11,240"],
+    ["Built", "1998 · 4 bd / 3 ba"],
+    ["Last sale", "2019 · $540,000"],
+  ];
+  return (
+    <>
+      <MuleChrome activeIdx={10} frame={frame} title="Property Records">
+        <div
+          style={{
+            position: "relative",
+            height: 70,
+            marginBottom: 22,
+            opacity: enter,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: MAINW - 208,
+              height: 70,
+              background: MULE.sunken,
+              border: `1px solid ${MULE.border}`,
+              borderRadius: 14,
+              display: "flex",
+              alignItems: "center",
+              padding: "0 22px",
+              fontFamily: SANS,
+              fontSize: 26,
+              color: MULE.text,
+              boxSizing: "border-box",
+            }}
+          >
+            🔍 14 Oak St, Wheaton, DuPage
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: BTN.rx,
+              top: BTN.ry,
+              width: BTN.w,
+              height: BTN.h,
+              background: MULE.indigo,
+              borderRadius: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: SANS,
+              fontSize: 26,
+              fontWeight: 800,
+              color: "#fff",
+              transform: `scale(${click > 0 ? 0.96 : 1})`,
+              boxShadow: `0 0 24px ${MULE.indigo}88`,
+            }}
+          >
+            Look up
+          </div>
+        </div>
+        {got && (
+          <Card
+            style={{
+              padding: 30,
+              opacity: ipl(bi.localF, bi.durF * 0.38, bi.durF * 0.5, 0, 1),
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                marginBottom: 22,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 32,
+                  fontWeight: 800,
+                  color: "#fff",
+                }}
+              >
+                14 Oak St., Wheaton
+              </div>
+              {badge("✓ Public records", MULE.ok, MULE.okFill)}
+              {badge("$0.00", MULE.ok, MULE.okFill)}
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "20px 40px",
+              }}
+            >
+              {fields.map((f, i) => (
+                <div
+                  key={i}
+                  style={{
+                    opacity: ipl(
+                      bi.localF,
+                      bi.durF * 0.46 + i * 3,
+                      bi.durF * 0.46 + i * 3 + 6,
+                      0,
+                      1,
+                      ease,
+                    ),
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: SANS,
+                      fontSize: 18,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      color: MULE.mid,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {f[0]}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: SANS,
+                      fontSize: 30,
+                      fontWeight: 700,
+                      color: "#fff",
+                    }}
+                  >
+                    {f[1]}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </MuleChrome>
+      {!got && <TipCursor tx={cxx} ty={cyy} click={click} />}
+    </>
+  );
+};
+
+// 7 — LAW_EMAIL: email → contacts (human approves with a click)
+const LawEmail: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const enter = ipl(bi.localF, 0, 10, 0, 1, ease);
+  const cursorP = ipl(
+    bi.localF,
+    bi.durF * 0.45,
+    bi.durF * 0.62,
+    0,
+    1,
+    easeInOut,
+  );
+  const click = ipl(bi.localF, bi.durF * 0.6, bi.durF * 0.7, 1, 0);
+  const done = bi.localF > bi.durF * 0.66;
+  const btn = { x: MAINX + 150, y: 1010, w: 360, h: 84 };
+  const btnCx = btn.x + btn.w / 2,
+    btnCy = btn.y + btn.h / 2;
+  const fromX = MAINX + 600,
+    fromY = 600;
+  const cxx = fromX + (btnCx - fromX) * cursorP,
+    cyy = fromY + (btnCy - fromY) * cursorP;
+  const people = [
+    ["Sarah Diaz", "buyer", "sdiaz@gmail.com"],
+    ["Tom Reilly", "buyer's agent", "tom@kw.com"],
+    ["Wheaton Title", "title co.", "ops@wht.com"],
+    ["First Trust", "lender", "loans@ftb.com"],
+  ];
+  return (
+    <>
+      <MuleChrome activeIdx={11} frame={frame} title="Email → Contacts">
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 26,
+            color: MULE.mid,
+            marginBottom: 18,
+            opacity: enter,
+          }}
+        >
+          Scanned today's inbox · {done ? "4 added" : "4 new people found"}
+        </div>
+        <Card style={{ overflow: "hidden", opacity: enter }}>
+          {people.map((p, i) => {
+            const a = ipl(bi.localF, 8 + i * 5, 8 + i * 5 + 8, 0, 1, ease);
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  padding: "20px 24px",
+                  borderBottom: `1px solid ${MULE.border}`,
+                  opacity: a,
+                }}
+              >
+                <span
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    background: `${MULE.indigo}33`,
+                    color: MULE.indigoHi,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: SANS,
+                    fontWeight: 800,
+                    fontSize: 20,
+                  }}
+                >
+                  {p[0][0]}
+                </span>
+                <span
+                  style={{
+                    width: "30%",
+                    fontFamily: SANS,
+                    fontSize: 26,
+                    fontWeight: 700,
+                    color: "#fff",
+                  }}
+                >
+                  {p[0]}
+                </span>
+                <span style={{ width: "26%" }}>
+                  {badge(p[1], MULE.indigoHi, `${MULE.indigo}22`)}
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    fontFamily: MONO,
+                    fontSize: 22,
+                    color: MULE.mid,
+                  }}
+                >
+                  {p[2]}
+                </span>
+                <span
+                  style={{ fontSize: 28, color: done ? MULE.ok : MULE.mid }}
+                >
+                  {done ? "✓" : "☑"}
+                </span>
+              </div>
+            );
+          })}
+        </Card>
+        <div
+          style={{
+            position: "absolute",
+            left: btn.x - MAINX,
+            top: btn.y - 150,
+            width: btn.w,
+            height: btn.h,
+            background: done ? MULE.okFill : MULE.indigo,
+            border: done ? `2px solid ${MULE.ok}` : "none",
+            borderRadius: 14,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: SANS,
+            fontSize: 30,
+            fontWeight: 800,
+            color: done ? MULE.ok : "#fff",
+            transform: `scale(${click > 0 ? 0.96 : 1})`,
+            boxShadow: done ? "none" : `0 0 28px ${MULE.indigo}88`,
+          }}
+        >
+          {done ? "✓ 4 contacts added" : "Create 4 contacts"}
+        </div>
+      </MuleChrome>
+      {!done && <TipCursor tx={cxx} ty={cyy} click={click} />}
+    </>
   );
 };
 
@@ -2569,6 +3325,11 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
 
   return (
     <AbsoluteFill style={{ background: "#000" }}>
+      {b.PROOF_FLASH.visible && (
+        <Trans bi={b.PROOF_FLASH}>
+          <ProofFlash frame={frame} fps={fps} bi={b.PROOF_FLASH} />
+        </Trans>
+      )}
       {b.HOOK.visible && (
         <Trans bi={b.HOOK}>
           <HookScene frame={frame} fps={fps} bi={b.HOOK} />
@@ -2579,24 +3340,24 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
           <BridgeScene frame={frame} fps={fps} bi={b.BRIDGE} />
         </Trans>
       )}
-      {b.LAW_FULL.visible && (
-        <Trans bi={b.LAW_FULL}>
-          <LawFull frame={frame} fps={fps} bi={b.LAW_FULL} />
+      {b.LAW_TOUR.visible && (
+        <Trans bi={b.LAW_TOUR}>
+          <LawTour frame={frame} fps={fps} bi={b.LAW_TOUR} />
         </Trans>
       )}
-      {b.LAW_AI.visible && (
-        <Trans bi={b.LAW_AI}>
-          <LawAi frame={frame} fps={fps} bi={b.LAW_AI} />
+      {b.LAW_PDF.visible && (
+        <Trans bi={b.LAW_PDF}>
+          <LawPdf frame={frame} fps={fps} bi={b.LAW_PDF} />
         </Trans>
       )}
-      {b.LAW_TRACK.visible && (
-        <Trans bi={b.LAW_TRACK}>
-          <LawTrack frame={frame} fps={fps} bi={b.LAW_TRACK} />
+      {b.LAW_HOME.visible && (
+        <Trans bi={b.LAW_HOME}>
+          <LawHome frame={frame} fps={fps} bi={b.LAW_HOME} />
         </Trans>
       )}
-      {b.LAW_MONEY.visible && (
-        <Trans bi={b.LAW_MONEY}>
-          <LawMoney frame={frame} fps={fps} bi={b.LAW_MONEY} />
+      {b.LAW_EMAIL.visible && (
+        <Trans bi={b.LAW_EMAIL}>
+          <LawEmail frame={frame} fps={fps} bi={b.LAW_EMAIL} />
         </Trans>
       )}
       {b.PIVOT.visible && (
