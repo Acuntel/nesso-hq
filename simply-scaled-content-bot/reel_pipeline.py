@@ -44,8 +44,9 @@ import remotion_client  # noqa: E402
 
 log = logging.getLogger("simply_reel")
 
-TARGET_DURATION = 76.0
+TARGET_DURATION = 82.0
 FPS = 30
+SFX_GAIN = 0.45  # global SFX level (Brady: too loud) — scales every cue's volume
 
 BRAND = "Simply Scaled"
 PHONE = "(847) 212-2142"
@@ -72,107 +73,89 @@ def prerendered_path() -> str | None:
 # Generic names only (no client/product names), differentiated law vs restoration,
 # slower hook + close, no email. Keys MUST match SimplyScaledReel.tsx. Scales to ~63s.
 BEATS = [
-    ("PROOF_FLASH", "Watch this.", 2.5),
-    ("HOOK", "If you run a business, five simple things quietly eat up your whole day.", 5.5),
-    ("BRIDGE", "But what if one system just caught every one of them?", 3.5),
-    ("LAW_TOUR", "So I built one. For a law firm, it runs the whole practice in one place: matters, contacts, billing, time, tasks, calendar, intake, even trust accounting.", 9.0),
-    ("LAW_PDF", "Then I engineered custom A.I. into it. This one reads a real estate contract and pulls every key date, name, and signature, and flags what's missing, in about thirty seconds.", 6.5),
-    ("LAW_HOME", "This one looks up full property records across three county systems, straight from public data, at zero cost.", 5.5),
-    ("LAW_EMAIL", "And this one turns a whole day of email into clean, ready-to-save contacts.", 5.0),
-    ("PIVOT", "Same builder. A completely different business.", 3.5),
-    ("RESTO_MONEY", "For a fire-and-water repair company, it's a live scoreboard. Six hundred twelve thousand dollars in jobs sold this year.", 6.0),
-    ("RESTO_PIPE", "Every customer is tracked from the first call to the paid job, so nobody slips through the cracks.", 6.0),
-    ("AI_TEXT", "And a customer texts in plain English. The software reads the mess, pulls out the details, and files the job all by itself.", 8.0),
-    ("PROOF_TURN", "Two real businesses. One person built both. Now imagine this, built for yours.", 5.5),
-    ("CLOSE_CTA", "This is Simply Scaled. Call or text eight four seven, two one two, two one four two for a free fifteen minute call. Tell me your business, and I'll tell you exactly what to automate first.", 10.0),
+    # v7 tight VO: sparse on the pains (captions carry them), punchy elsewhere → natural pace.
+    ("PAIN_OPEN_DESK", "This is what running a business really looks like.", 1.8),
+    ("PAIN_CONTRACT", "", 2.2),
+    ("PAIN_COUNTY", "", 2.0),
+    ("PAIN_INBOX", "Everything, by hand.", 1.9),
+    ("PAIN_STICKY", "", 2.4),
+    ("PAIN_PEAK", "You don't need more hours.", 1.6),
+    ("TURN_TO_PROOF", "You need the right tools. So I built them.", 2.4),
+    ("LAW_TOUR", "For a law firm, one system runs it all: matters, billing, calendar, intake, even trust accounting.", 8.0),
+    ("LAW_PDF", "Custom A.I. that reads a contract and flags every missing date, name, and signature, in about thirty seconds.", 6.5),
+    ("LAW_HOME", "Full property records from three counties. Public data, zero cost.", 5.0),
+    ("LAW_EMAIL", "And a whole day of email becomes ready-to-save contacts.", 4.5),
+    ("MORPH", "Same software, re-skinned for a totally different business.", 2.5),
+    ("RESTO_TEXT", "Every job starts with a panicked text, in plain English.", 3.2),
+    ("RESTO_NUMBER", "The software grabs the number first. That's the thread.", 3.0),
+    ("RESTO_LEAD", "And the mess becomes one clean lead.", 2.6),
+    ("RESTO_PIPE", "And it's the same record everywhere: the pipeline, your contacts, your numbers. Nothing slips.", 5.5),
+    ("RESTO_MONEY", "Do it all year, and every dollar traces back to one text.", 3.5),
+    ("PROOF_TURN", "Two businesses. One builder. Now imagine yours.", 4.0),
+    ("CLOSE_CTA", "This is Simply Scaled. Call or text eight four seven, two one two, twenty one forty two.", 7.5),
 ]
 
 # ── SFX cues: (file, beat_key, offset_in_beat_s, volume) — ElevenLabs palette ─
 SFX_CUES = [
-    # offsets are FRACTIONS (0..1) of each beat → locked to the composition timing.
-    # PROOF FLASH — scan, a tick per result row, success
-    ("ss_scan.mp3", "PROOF_FLASH", 0.0, 0.55),
-    ("ss_pop.mp3", "PROOF_FLASH", 0.25, 0.45),
-    ("ss_pop.mp3", "PROOF_FLASH", 0.40, 0.45),
-    ("ss_pop.mp3", "PROOF_FLASH", 0.55, 0.45),
-    ("ss_success.mp3", "PROOF_FLASH", 0.72, 0.55),
-    # HOOK — a pop per pain row as it lands
-    ("ss_pop.mp3", "HOOK", 0.11, 0.5),
-    ("ss_pop.mp3", "HOOK", 0.22, 0.5),
-    ("ss_pop.mp3", "HOOK", 0.33, 0.5),
-    ("ss_pop.mp3", "HOOK", 0.44, 0.5),
-    ("ss_pop.mp3", "HOOK", 0.55, 0.55),
-    # BRIDGE — scan, a 'caught' success per row, core power-up + lock
-    ("ss_scan.mp3", "BRIDGE", 0.08, 0.5),
-    ("ss_success.mp3", "BRIDGE", 0.24, 0.4),
-    ("ss_success.mp3", "BRIDGE", 0.34, 0.4),
-    ("ss_success.mp3", "BRIDGE", 0.44, 0.4),
-    ("ss_success.mp3", "BRIDGE", 0.52, 0.4),
-    ("ss_power.mp3", "BRIDGE", 0.42, 0.55),
-    ("ss_lock.mp3", "BRIDGE", 0.70, 0.5),
-    # LAW_TOUR — click + panel-open per sidebar item; clicks at 0.14+0.102k
-    ("ss_whoosh.mp3", "LAW_TOUR", 0.0, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.140, 0.5), ("ss_open.mp3", "LAW_TOUR", 0.150, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.242, 0.5), ("ss_load.mp3", "LAW_TOUR", 0.252, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.344, 0.5), ("ss_pop.mp3", "LAW_TOUR", 0.354, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.446, 0.5), ("ss_open.mp3", "LAW_TOUR", 0.456, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.548, 0.5), ("ss_whoosh.mp3", "LAW_TOUR", 0.558, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.650, 0.5), ("ss_load.mp3", "LAW_TOUR", 0.660, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.752, 0.5), ("ss_open.mp3", "LAW_TOUR", 0.762, 0.4),
-    ("ss_click.mp3", "LAW_TOUR", 0.854, 0.5), ("ss_pop.mp3", "LAW_TOUR", 0.864, 0.4),
-    # LAW_PDF — open, click Scan (~0.37), scan, a success per row, lock
-    ("ss_open.mp3", "LAW_PDF", 0.0, 0.4),
-    ("ss_click.mp3", "LAW_PDF", 0.37, 0.55),
-    ("ss_scan.mp3", "LAW_PDF", 0.41, 0.55),
-    ("ss_success.mp3", "LAW_PDF", 0.50, 0.45),
-    ("ss_success.mp3", "LAW_PDF", 0.55, 0.45),
-    ("ss_success.mp3", "LAW_PDF", 0.60, 0.45),
-    ("ss_lock.mp3", "LAW_PDF", 0.68, 0.5),
-    # LAW_HOME — whoosh in, click Look up (~0.35), load, results success
-    ("ss_whoosh.mp3", "LAW_HOME", 0.0, 0.4),
-    ("ss_click.mp3", "LAW_HOME", 0.35, 0.55),
-    ("ss_load.mp3", "LAW_HOME", 0.40, 0.5),
-    ("ss_success.mp3", "LAW_HOME", 0.52, 0.5),
-    ("ss_lock.mp3", "LAW_HOME", 0.62, 0.45),
-    # LAW_EMAIL — open, typing, a pop per found contact, click Create (~0.62), success
-    ("ss_open.mp3", "LAW_EMAIL", 0.0, 0.4),
-    ("ss_type.mp3", "LAW_EMAIL", 0.08, 0.4),
-    ("ss_pop.mp3", "LAW_EMAIL", 0.12, 0.4),
-    ("ss_pop.mp3", "LAW_EMAIL", 0.20, 0.4),
-    ("ss_pop.mp3", "LAW_EMAIL", 0.28, 0.4),
-    ("ss_pop.mp3", "LAW_EMAIL", 0.36, 0.4),
-    ("ss_click.mp3", "LAW_EMAIL", 0.63, 0.55),
-    ("ss_success.mp3", "LAW_EMAIL", 0.70, 0.55),
-    # PIVOT — wipe to the opposite world
-    ("ss_whoosh.mp3", "PIVOT", 0.06, 0.6),
-    ("ss_power.mp3", "PIVOT", 0.50, 0.5),
-    # RESTO money — power-up in, big cash on the number
-    ("ss_power.mp3", "RESTO_MONEY", 0.0, 0.5),
-    ("ss_riser.mp3", "RESTO_MONEY", 0.03, 0.45),
-    ("ss_cash.mp3", "RESTO_MONEY", 0.60, 0.75),
-    ("ss_cash.mp3", "RESTO_MONEY", 0.80, 0.45),
-    # RESTO pipe — whoosh per column cross + cash stamp
-    ("ss_whoosh.mp3", "RESTO_PIPE", 0.30, 0.45),
-    ("ss_whoosh.mp3", "RESTO_PIPE", 0.46, 0.45),
-    ("ss_whoosh.mp3", "RESTO_PIPE", 0.62, 0.45),
-    ("ss_whoosh.mp3", "RESTO_PIPE", 0.78, 0.45),
-    ("ss_cash.mp3", "RESTO_PIPE", 0.82, 0.7),
-    # AI text — typing, send, scan, a pop per token, success
-    ("ss_type.mp3", "AI_TEXT", 0.12, 0.4),
-    ("ss_whoosh.mp3", "AI_TEXT", 0.37, 0.45),
-    ("ss_scan.mp3", "AI_TEXT", 0.45, 0.55),
-    ("ss_pop.mp3", "AI_TEXT", 0.52, 0.45),
-    ("ss_pop.mp3", "AI_TEXT", 0.58, 0.45),
-    ("ss_pop.mp3", "AI_TEXT", 0.64, 0.45),
-    ("ss_success.mp3", "AI_TEXT", 0.80, 0.6),
+    # FRACTIONS of each beat. De-repeated: one hero sound per beat, cash used only twice.
+    # PAIN opening — textural, low; riser builds into the peak, then near-silence + turn
+    ("ss_swoosh2.mp3", "PAIN_OPEN_DESK", 0.0, 0.32),
+    ("ss_type.mp3", "PAIN_CONTRACT", 0.2, 0.3), ("ss_tick.mp3", "PAIN_CONTRACT", 0.62, 0.3),
+    ("ss_tick.mp3", "PAIN_COUNTY", 0.2, 0.3), ("ss_load.mp3", "PAIN_COUNTY", 0.55, 0.3),
+    ("ss_type.mp3", "PAIN_INBOX", 0.3, 0.32),
+    ("ss_pop.mp3", "PAIN_STICKY", 0.1, 0.3), ("ss_riser.mp3", "PAIN_STICKY", 0.45, 0.4), ("ss_thunk.mp3", "PAIN_STICKY", 0.85, 0.42),
+    ("ss_lock.mp3", "PAIN_PEAK", 0.25, 0.3),
+    ("ss_power.mp3", "TURN_TO_PROOF", 0.3, 0.5), ("ss_open.mp3", "TURN_TO_PROOF", 0.55, 0.34),
+    # LAW_TOUR — a click per nav (hero=click), open-sound rotates so nothing repeats
+    ("ss_swoosh2.mp3", "LAW_TOUR", 0.0, 0.34),
+    ("ss_click.mp3", "LAW_TOUR", 0.140, 0.46), ("ss_open.mp3", "LAW_TOUR", 0.150, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.242, 0.46), ("ss_load.mp3", "LAW_TOUR", 0.252, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.344, 0.46), ("ss_chime.mp3", "LAW_TOUR", 0.354, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.446, 0.46), ("ss_pop.mp3", "LAW_TOUR", 0.456, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.548, 0.46), ("ss_sparkle.mp3", "LAW_TOUR", 0.558, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.650, 0.46), ("ss_open.mp3", "LAW_TOUR", 0.660, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.752, 0.46), ("ss_load.mp3", "LAW_TOUR", 0.762, 0.3),
+    ("ss_click.mp3", "LAW_TOUR", 0.854, 0.46), ("ss_chime.mp3", "LAW_TOUR", 0.864, 0.3),
+    # LAW_PDF — open, click, scan (hero), ONE soft success, lock
+    ("ss_open.mp3", "LAW_PDF", 0.0, 0.34),
+    ("ss_click.mp3", "LAW_PDF", 0.37, 0.46),
+    ("ss_scan.mp3", "LAW_PDF", 0.41, 0.5),
+    ("ss_success.mp3", "LAW_PDF", 0.58, 0.42),
+    ("ss_lock.mp3", "LAW_PDF", 0.70, 0.38),
+    # LAW_HOME — click, load (hero), chime result, lock
+    ("ss_open.mp3", "LAW_HOME", 0.0, 0.32),
+    ("ss_click.mp3", "LAW_HOME", 0.35, 0.46),
+    ("ss_load.mp3", "LAW_HOME", 0.40, 0.46),
+    ("ss_chime.mp3", "LAW_HOME", 0.54, 0.44),
+    # LAW_EMAIL — type, a couple ticks, click (hero), success
+    ("ss_type.mp3", "LAW_EMAIL", 0.08, 0.34),
+    ("ss_tick.mp3", "LAW_EMAIL", 0.18, 0.3),
+    ("ss_tick.mp3", "LAW_EMAIL", 0.30, 0.3),
+    ("ss_click.mp3", "LAW_EMAIL", 0.63, 0.46),
+    ("ss_success.mp3", "LAW_EMAIL", 0.70, 0.44),
+    # MORPH — one power swell + a settle lock (no whoosh)
+    ("ss_power.mp3", "MORPH", 0.0, 0.42),
+    ("ss_lock.mp3", "MORPH", 0.72, 0.32),
+    # RESTO text/number/lead — typing, scan, sparkle, ding
+    ("ss_type.mp3", "RESTO_TEXT", 0.15, 0.32), ("ss_ding2.mp3", "RESTO_TEXT", 0.82, 0.4),
+    ("ss_scan.mp3", "RESTO_NUMBER", 0.1, 0.46), ("ss_pop.mp3", "RESTO_NUMBER", 0.5, 0.4),
+    ("ss_sparkle.mp3", "RESTO_LEAD", 0.1, 0.4), ("ss_lock.mp3", "RESTO_LEAD", 0.5, 0.36), ("ss_ding2.mp3", "RESTO_LEAD", 0.62, 0.42),
+    # RESTO_PIPE — soft swish per column move + the ONE cash on 'won' (hero)
+    ("swish.mp3", "RESTO_PIPE", 0.22, 0.34),
+    ("swish.mp3", "RESTO_PIPE", 0.44, 0.34),
+    ("swish.mp3", "RESTO_PIPE", 0.66, 0.34),
+    ("ss_cash.mp3", "RESTO_PIPE", 0.82, 0.55),
+    # RESTO_MONEY — riser into the count, final cash (2nd & last cash) as payoff
+    ("ss_riser.mp3", "RESTO_MONEY", 0.05, 0.4),
+    ("ss_cash.mp3", "RESTO_MONEY", 0.6, 0.5),
     # PROOF -> yours
-    ("ss_power.mp3", "PROOF_TURN", 0.0, 0.45),
-    ("ss_success.mp3", "PROOF_TURN", 0.45, 0.45),
-    ("ss_riser.mp3", "PROOF_TURN", 0.62, 0.45),
-    # CLOSE — settle, held wordmark + final lock
-    ("ss_power.mp3", "CLOSE_CTA", 0.0, 0.45),
-    ("ss_success.mp3", "CLOSE_CTA", 0.05, 0.5),
-    ("ss_lock.mp3", "CLOSE_CTA", 0.80, 0.5),
+    ("ss_power.mp3", "PROOF_TURN", 0.0, 0.4),
+    ("ss_chime.mp3", "PROOF_TURN", 0.45, 0.42),
+    ("ss_riser.mp3", "PROOF_TURN", 0.62, 0.38),
+    # CLOSE — settle, soft ding, final lock
+    ("ss_power.mp3", "CLOSE_CTA", 0.0, 0.4),
+    ("ss_ding2.mp3", "CLOSE_CTA", 0.05, 0.42),
+    ("ss_lock.mp3", "CLOSE_CTA", 0.80, 0.4),
 ]
 
 
@@ -438,11 +421,11 @@ def mux_audio(
         # Music plays full in the gaps and DUCKS under the voiceover (sidechain).
         fc.append(f"[{vo_idx}:a]volume=0.95,asplit=2[vo][vosc]")
         fc.append(
-            f"[{mus_idx}:a]volume=0.55,afade=t=in:st=0:d=1.5,"
+            f"[{mus_idx}:a]volume=0.2,afade=t=in:st=0:d=1.5,"
             f"afade=t=out:st={fade_out:.1f}:d=2.5[musraw]"
         )
         fc.append(
-            "[musraw][vosc]sidechaincompress=threshold=0.04:ratio=7:attack=15:release=380[mus]"
+            "[musraw][vosc]sidechaincompress=threshold=0.05:ratio=9:attack=12:release=320[mus]"
         )
         mix_labels += ["[vo]", "[mus]"]
     elif vo_idx is not None:
@@ -462,7 +445,7 @@ def mux_audio(
         delay_ms = int(at * 1000)
         inputs += ["-i", path]
         fc.append(
-            f"[{idx}:a]aresample=44100,volume={vol},adelay={delay_ms}|{delay_ms}[s{idx}]"
+            f"[{idx}:a]aresample=44100,volume={round(vol * SFX_GAIN, 3)},adelay={delay_ms}|{delay_ms}[s{idx}]"
         )
         mix_labels.append(f"[s{idx}]")
         idx += 1

@@ -30,18 +30,24 @@ export type SimplyScaledReelProps = {
 };
 
 const DEFAULT_DURS: { key: string; dur: number }[] = [
-  { key: "PROOF_FLASH", dur: 2 },
-  { key: "HOOK", dur: 5.5 },
-  { key: "BRIDGE", dur: 3.5 },
+  { key: "PAIN_OPEN_DESK", dur: 1.8 },
+  { key: "PAIN_CONTRACT", dur: 2.2 },
+  { key: "PAIN_COUNTY", dur: 2 },
+  { key: "PAIN_INBOX", dur: 1.9 },
+  { key: "PAIN_STICKY", dur: 1.6 },
+  { key: "PAIN_PEAK", dur: 1.2 },
+  { key: "TURN_TO_PROOF", dur: 1.6 },
   { key: "LAW_TOUR", dur: 9 },
   { key: "LAW_PDF", dur: 6 },
   { key: "LAW_HOME", dur: 5.5 },
-  { key: "LAW_EMAIL", dur: 5.5 },
-  { key: "PIVOT", dur: 3.5 },
-  { key: "RESTO_MONEY", dur: 6 },
-  { key: "RESTO_PIPE", dur: 6 },
-  { key: "AI_TEXT", dur: 8 },
-  { key: "PROOF_TURN", dur: 5.5 },
+  { key: "LAW_EMAIL", dur: 5 },
+  { key: "MORPH", dur: 2 },
+  { key: "RESTO_TEXT", dur: 3 },
+  { key: "RESTO_NUMBER", dur: 2.5 },
+  { key: "RESTO_LEAD", dur: 3 },
+  { key: "RESTO_PIPE", dur: 5 },
+  { key: "RESTO_MONEY", dur: 3.5 },
+  { key: "PROOF_TURN", dur: 4.6 },
   { key: "CLOSE_CTA", dur: 11 },
 ];
 
@@ -55,17 +61,24 @@ function buildDefaultBeats(): ReelBeat[] {
 }
 
 const CAPTIONS: Record<string, string> = {
-  HOOK: "RUNNING A BUSINESS? THESE 5 THINGS EAT YOUR DAY.",
-  BRIDGE: "ONE SYSTEM THAT DOES IT ALL FOR YOU.",
-  PROOF_FLASH: "",
+  // pain + morph + turn scenes carry their own in-scene text → no global caption
+  PAIN_OPEN_DESK: "",
+  PAIN_CONTRACT: "",
+  PAIN_COUNTY: "",
+  PAIN_INBOX: "",
+  PAIN_STICKY: "",
+  PAIN_PEAK: "",
+  TURN_TO_PROOF: "",
   LAW_TOUR: "ONE SYSTEM RUNS THE WHOLE FIRM.",
   LAW_PDF: "AI READS A CONTRACT IN ABOUT 30 SECONDS.",
   LAW_HOME: "FULL PROPERTY RECORDS. ZERO COST.",
   LAW_EMAIL: "A DAY OF EMAIL, INTO READY-TO-SAVE CONTACTS.",
-  PIVOT: "SAME BUILDER. A COMPLETELY DIFFERENT BUSINESS.",
-  RESTO_MONEY: "A FIRE & WATER REPAIR CO: $612,480 IN JOBS SOLD.",
-  RESTO_PIPE: "EVERY CUSTOMER, FROM FIRST CALL TO PAID JOB.",
-  AI_TEXT: "A CUSTOMER TEXTS. THE SOFTWARE FILES THE JOB ITSELF.",
+  MORPH: "",
+  RESTO_TEXT: "A REAL CUSTOMER TEXTS IN.",
+  RESTO_NUMBER: "THE NUMBER IS THE THREAD.",
+  RESTO_LEAD: "ONE CLEAN LEAD.",
+  RESTO_PIPE: "ONE LEAD. PIPELINE, CONTACTS, MONEY, ALL CONNECTED.",
+  RESTO_MONEY: "",
   PROOF_TURN: "TWO REAL BUSINESSES. ONE PERSON BUILT BOTH.",
   CLOSE_CTA: "",
 };
@@ -451,408 +464,785 @@ const PAINS = [
 ];
 
 // 1 — HOOK (slowed, staggered)
-const HookScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// ════════════════════════════════════════════════════════════════════════════
+//  PAIN-FIRST OPENING (v7): the manual grind, foreshadowing each built tool.
+//  Dim, desaturated "analog" world → silence → turn into the product.
+// ════════════════════════════════════════════════════════════════════════════
+const PAPER = "#ece7db";
+const PAINBG = "radial-gradient(ellipse at 50% 40%, #14110d 0%, #070605 100%)";
+
+const PainVignette: React.FC = () => (
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      boxShadow: "inset 0 0 340px 90px rgba(0,0,0,0.78)",
+      pointerEvents: "none",
+      zIndex: 50,
+    }}
+  />
+);
+const PainCaption: React.FC<{
+  text: string;
+  localF: number;
+  durF: number;
+  fps: number;
+}> = ({ text, localF, durF, fps }) => {
+  if (!text) return null;
+  const op = Math.min(
+    ipl(localF, 0, fps * 0.3, 0, 1, ease),
+    ipl(localF, durF - fps * 0.25, durF, 1, 0),
+  );
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 250,
+        left: 60,
+        right: 60,
+        textAlign: "center",
+        opacity: op,
+        zIndex: 60,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: SANS,
+          fontWeight: 700,
+          fontSize: 46,
+          letterSpacing: "0.02em",
+          color: "rgba(255,255,255,0.92)",
+          textShadow: "0 4px 24px rgba(0,0,0,0.9)",
+        }}
+      >
+        {text}
+      </span>
+    </div>
+  );
+};
+
+// 1 — desk establish
+const PainOpenDesk: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const push = 1 + ipl(bi.localF, 0, bi.durF, 0, 0.02);
+  const push = 1 + ipl(bi.localF, 0, bi.durF, 0, 0.05);
+  const buzz = Math.sin(bi.localF * 1.1) * (bi.localF % 20 < 6 ? 2 : 0);
   return (
-    <AbsoluteFill
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 32%, #170f12 0%, #060508 100%)",
-      }}
-    >
-      <DotGrid color={RED} opacity={0.22} frame={frame} speed={0.08} />
-      <Bloom color="rgba(244,71,95,0.32)" at="50% 22%" />
+    <AbsoluteFill style={{ background: PAINBG }}>
       <div
         style={{
           position: "absolute",
           inset: 0,
           transform: `scale(${push})`,
-          transformOrigin: "50% 40%",
+          transformOrigin: "50% 45%",
+          filter: "saturate(0.5) brightness(0.85)",
         }}
       >
+        {/* paper contract */}
         <div
           style={{
             position: "absolute",
-            top: 215,
-            left: 0,
-            right: 0,
-            textAlign: "center",
+            top: 360,
+            left: 120,
+            width: 420,
+            height: 540,
+            background: PAPER,
+            borderRadius: 6,
+            transform: "rotate(-5deg)",
+            boxShadow: "0 30px 60px rgba(0,0,0,0.6)",
+            padding: 30,
           }}
         >
           <div
             style={{
               fontFamily: SANS,
-              fontSize: 36,
-              fontWeight: 700,
-              color: LAW.soft,
+              fontWeight: 800,
+              fontSize: 24,
+              color: "#2a2a2a",
             }}
           >
-            Running a business?
+            AGREEMENT
           </div>
+          {Array.from({ length: 9 }).map((_, k) => (
+            <div
+              key={k}
+              style={{
+                height: 9,
+                background: "#c8c2b4",
+                borderRadius: 2,
+                marginTop: 16,
+                width: `${90 - (k % 3) * 12}%`,
+              }}
+            />
+          ))}
+        </div>
+        {/* sticky notes */}
+        <div
+          style={{
+            position: "absolute",
+            top: 300,
+            left: 470,
+            width: 180,
+            height: 180,
+            background: "#d9c84a",
+            transform: "rotate(8deg)",
+            boxShadow: "0 14px 30px rgba(0,0,0,0.5)",
+            fontFamily: "'Comic Sans MS',cursive",
+            fontSize: 30,
+            fontWeight: 700,
+            color: "#4a4208",
+            padding: 18,
+          }}
+        >
+          call back!!
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            top: 980,
+            left: 150,
+            width: 150,
+            height: 150,
+            background: "#cbb a3a",
+            transform: "rotate(-12deg)",
+            boxShadow: "0 14px 30px rgba(0,0,0,0.5)",
+          }}
+        />
+        {/* laptop with tabs */}
+        <div
+          style={{
+            position: "absolute",
+            top: 560,
+            right: 110,
+            width: 520,
+            height: 360,
+            background: "#0c0f15",
+            borderRadius: 12,
+            border: "8px solid #1a1a1a",
+            boxShadow: "0 30px 70px rgba(0,0,0,0.6)",
+            overflow: "hidden",
+          }}
+        >
           <div
             style={{
-              fontFamily: SANS,
-              fontSize: 62,
-              fontWeight: 800,
-              color: "#fff",
-              marginTop: 10,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.05,
+              display: "flex",
+              gap: 4,
+              padding: 8,
+              background: "#15181f",
             }}
           >
-            These 5 things
-            <br />
-            eat your day.
-          </div>
-        </div>
-        <div style={{ position: "absolute", top: 500, left: 90, right: 90 }}>
-          {PAINS.map((p, i) => {
-            const s = 14 + i * 16; // ~0.53s apart — slow
-            const a = ipl(bi.localF, s, s + 12, 0, 1, ease);
-            const pulse = 0.7 + 0.3 * Math.abs(Math.sin((bi.localF - s) / 8));
-            return (
+            {[0, 1, 2, 3, 4].map((t) => (
               <div
-                key={i}
+                key={t}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 22,
-                  background: "rgba(244,71,95,0.09)",
-                  border: `1.5px solid rgba(244,71,95,${0.3 * a})`,
-                  borderRadius: 18,
-                  padding: "24px 30px",
-                  marginBottom: 18,
-                  opacity: a,
-                  transform: `translateY(${(1 - a) * 30}px)`,
-                  boxShadow:
-                    a > 0.9
-                      ? `0 0 ${26 * pulse}px rgba(244,71,95,0.28)`
-                      : "none",
+                  flex: 1,
+                  height: 26,
+                  background: t === 0 ? "#272b34" : "#1b1e25",
+                  borderRadius: 6,
                 }}
-              >
-                <div
-                  style={{
-                    fontFamily: SANS,
-                    fontWeight: 800,
-                    fontSize: 38,
-                    color: RED,
-                    width: 46,
-                  }}
-                >
-                  {i + 1}
-                </div>
-                <div style={{ fontSize: 42 }}>{p.icon}</div>
-                <div
-                  style={{
-                    fontFamily: SANS,
-                    fontWeight: 700,
-                    fontSize: 40,
-                    color: "#fff",
-                  }}
-                >
-                  {p.t}
-                </div>
-              </div>
-            );
-          })}
+              />
+            ))}
+          </div>
+          {Array.from({ length: 6 }).map((_, k) => (
+            <div
+              key={k}
+              style={{
+                height: 10,
+                background: "#262a33",
+                borderRadius: 2,
+                margin: "16px 20px",
+              }}
+            />
+          ))}
         </div>
+        {/* phone buzzing */}
+        <div
+          style={{
+            position: "absolute",
+            top: 1020,
+            right: 200,
+            width: 220,
+            height: 440,
+            background: "#0a0a0c",
+            borderRadius: 34,
+            border: "6px solid #222",
+            transform: `rotate(6deg) translate(${buzz}px,0)`,
+            boxShadow: "0 24px 50px rgba(0,0,0,0.6)",
+          }}
+        >
+          <div
+            style={{
+              margin: "60px auto 0",
+              width: 130,
+              height: 60,
+              background: "rgba(52,211,153,0.18)",
+              border: "1px solid rgba(52,211,153,0.5)",
+              borderRadius: 10,
+            }}
+          />
+        </div>
+      </div>
+      <PainVignette />
+      <PainCaption
+        text="this is the actual job."
+        localF={bi.localF}
+        durF={bi.durF}
+        fps={fps}
+      />
+    </AbsoluteFill>
+  );
+};
+
+// 2 — contract (manual review) → foreshadows the contract analyzer
+const PainContract: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const hl = ipl(bi.localF, 8, bi.durF * 0.6, 0, 1);
+  const pageNo = 12 + Math.floor(ipl(bi.localF, 0, bi.durF, 0, 19));
+  return (
+    <AbsoluteFill style={{ background: PAINBG }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: "120px 120px 260px",
+          background: PAPER,
+          borderRadius: 8,
+          boxShadow: "0 40px 80px rgba(0,0,0,0.6)",
+          padding: 56,
+          filter: "saturate(0.6)",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: SANS,
+            fontWeight: 800,
+            fontSize: 34,
+            color: "#222",
+          }}
+        >
+          PURCHASE AGREEMENT
+        </div>
+        {Array.from({ length: 12 }).map((_, k) => (
+          <div
+            key={k}
+            style={{
+              position: "relative",
+              height: 12,
+              marginTop: 22,
+              width: `${92 - (k % 4) * 8}%`,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "#cdc6b6",
+                borderRadius: 2,
+              }}
+            />
+            {k === 5 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  left: 0,
+                  height: 24,
+                  width: `${hl * 80}%`,
+                  background: "rgba(240,210,60,0.6)",
+                  borderRadius: 3,
+                }}
+              />
+            )}
+          </div>
+        ))}
+        <div
+          style={{
+            position: "absolute",
+            right: 40,
+            top: 220,
+            fontFamily: "'Comic Sans MS',cursive",
+            fontSize: 40,
+            fontWeight: 800,
+            color: "#b23",
+            transform: "rotate(-8deg)",
+            opacity: ipl(bi.localF, bi.durF * 0.5, bi.durF * 0.65, 0, 1),
+          }}
+        >
+          ?
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            bottom: 30,
+            right: 40,
+            fontFamily: SANS,
+            fontSize: 22,
+            color: "#888",
+          }}
+        >
+          p. {pageNo} / 40
+        </div>
+      </div>
+      <PainVignette />
+      <PainCaption
+        text="40 pages. by hand."
+        localF={bi.localF}
+        durF={bi.durF}
+        fps={fps}
+      />
+    </AbsoluteFill>
+  );
+};
+
+// 3 — county sites (manual lookup) → foreshadows property records
+const PainCounty: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const err = bi.localF > bi.durF * 0.5;
+  return (
+    <AbsoluteFill style={{ background: PAINBG }}>
+      <div style={{ position: "absolute", inset: "150px 110px 260px" }}>
+        {[2, 1, 0].map((z) => (
+          <div
+            key={z}
+            style={{
+              position: "absolute",
+              inset: 0,
+              transform: `translate(${z * 26}px, ${z * 26}px)`,
+              background: "#e8eef2",
+              borderRadius: 10,
+              boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+              overflow: "hidden",
+              filter: "saturate(0.7)",
+            }}
+          >
+            <div
+              style={{
+                height: 56,
+                background: "#2b4a6b",
+                display: "flex",
+                alignItems: "center",
+                paddingLeft: 20,
+                fontFamily: "Georgia,serif",
+                fontSize: 22,
+                color: "#fff",
+              }}
+            >
+              County Assessor — Records Search
+            </div>
+            {z === 0 && (
+              <div style={{ padding: 30 }}>
+                <div
+                  style={{
+                    height: 48,
+                    width: "70%",
+                    background: "#fff",
+                    border: "2px solid #99a",
+                    borderRadius: 4,
+                    marginBottom: 16,
+                  }}
+                />
+                <div
+                  style={{
+                    height: 44,
+                    width: 160,
+                    background: "#9aa",
+                    borderRadius: 4,
+                  }}
+                />
+                {err && (
+                  <div
+                    style={{
+                      marginTop: 26,
+                      padding: "16px 20px",
+                      background: "#fde2e2",
+                      border: "2px solid #c33",
+                      borderRadius: 6,
+                      fontFamily: SANS,
+                      fontSize: 26,
+                      color: "#a11",
+                      fontWeight: 700,
+                    }}
+                  >
+                    ⚠ No records found.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <PainVignette />
+      <PainCaption
+        text="3 sites. one address."
+        localF={bi.localF}
+        durF={bi.durF}
+        fps={fps}
+      />
+    </AbsoluteFill>
+  );
+};
+
+// 4 — inbox retyping (manual data entry) → foreshadows email-to-contacts
+const PainInbox: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const unread = 47 + Math.floor(ipl(bi.localF, 0, bi.durF, 0, 12));
+  const typed = "Sarah Diaz".slice(
+    0,
+    Math.floor(ipl(bi.localF, bi.durF * 0.3, bi.durF * 0.8, 0, 10)),
+  );
+  const caret = Math.floor(frame / 8) % 2 === 0;
+  return (
+    <AbsoluteFill style={{ background: PAINBG }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 150,
+          left: 110,
+          right: 110,
+          height: 520,
+          background: "#11141b",
+          borderRadius: 10,
+          border: "1px solid #222",
+          overflow: "hidden",
+          filter: "saturate(0.7)",
+        }}
+      >
+        <div
+          style={{
+            height: 56,
+            background: "#181c24",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 22px",
+            fontFamily: SANS,
+            fontSize: 24,
+            color: "#cdd",
+          }}
+        >
+          <span>📥 Inbox</span>
+          <span style={{ color: "#f87171", fontWeight: 800 }}>
+            {unread} unread
+          </span>
+        </div>
+        {Array.from({ length: 5 }).map((_, k) => (
+          <div
+            key={k}
+            style={{
+              display: "flex",
+              gap: 14,
+              padding: "18px 22px",
+              borderBottom: "1px solid #1c1f27",
+            }}
+          >
+            <div
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                background: k < 2 ? "#60a5fa" : "#333",
+              }}
+            />
+            <div
+              style={{
+                flex: 1,
+                height: 12,
+                background: "#262b34",
+                borderRadius: 2,
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      {/* separate contact form being typed into */}
+      <div
+        style={{
+          position: "absolute",
+          top: 720,
+          left: 110,
+          right: 110,
+          height: 220,
+          background: "#0e1117",
+          borderRadius: 10,
+          border: "1px solid #2a2f3a",
+          padding: 28,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 22,
+            color: "#889",
+            marginBottom: 14,
+          }}
+        >
+          New contact (other app)
+        </div>
+        <div
+          style={{
+            height: 60,
+            background: "#070a11",
+            border: "2px solid #3a4150",
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            padding: "0 18px",
+            fontFamily: SANS,
+            fontSize: 30,
+            color: "#fff",
+          }}
+        >
+          {typed}
+          {caret ? "▋" : ""}
+        </div>
+      </div>
+      <PainVignette />
+      <PainCaption
+        text="copy. paste. repeat."
+        localF={bi.localF}
+        durF={bi.durF}
+        fps={fps}
+      />
+    </AbsoluteFill>
+  );
+};
+
+// 5 — the sticky-note follow-up that slips → foreshadows the restoration lead flow
+const PainSticky: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const fall = ipl(
+    bi.localF,
+    bi.durF * 0.4,
+    bi.durF * 0.85,
+    0,
+    1,
+    Easing.in(Easing.quad),
+  );
+  const glow = 0.4 + 0.4 * Math.abs(Math.sin(bi.localF / 7));
+  return (
+    <AbsoluteFill style={{ background: PAINBG }}>
+      {/* phone with glowing lead text */}
+      <div
+        style={{
+          position: "absolute",
+          top: 300,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 340,
+          height: 680,
+          background: "#0a0a0c",
+          borderRadius: 44,
+          border: "8px solid #222",
+          boxShadow: `0 0 ${50 * glow}px rgba(52,211,153,${0.3 * glow})`,
+        }}
+      >
+        <div
+          style={{
+            margin: "120px 30px 0",
+            background: "rgba(52,211,153,0.14)",
+            border: "1px solid rgba(52,211,153,0.5)",
+            borderRadius: 16,
+            padding: 22,
+            fontFamily: SANS,
+            fontSize: 26,
+            color: "#dffaef",
+          }}
+        >
+          hey my basement flooded, can someone come out?? 312-555-1234
+        </div>
+      </div>
+      {/* sticky note falling off */}
+      <div
+        style={{
+          position: "absolute",
+          top: 620 + fall * 760,
+          left: 720 + fall * 60,
+          width: 190,
+          height: 190,
+          background: "#d9c84a",
+          transform: `rotate(${8 + fall * 40}deg)`,
+          boxShadow: "0 14px 30px rgba(0,0,0,0.5)",
+          fontFamily: "'Comic Sans MS',cursive",
+          fontSize: 32,
+          fontWeight: 700,
+          color: "#4a4208",
+          padding: 20,
+          opacity: 1 - fall * 0.3,
+        }}
+      >
+        CALL BACK
+      </div>
+      <PainVignette />
+      <PainCaption
+        text="the lead that slipped."
+        localF={bi.localF}
+        durF={bi.durF}
+        fps={fps}
+      />
+    </AbsoluteFill>
+  );
+};
+
+// 6 — peak → silence
+const PainPeak: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const pull = ipl(bi.localF, bi.durF * 0.3, bi.durF, 0, 1, ease);
+  return (
+    <AbsoluteFill
+      style={{
+        background: "#040406",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: ipl(pull, 0, 1, 200, 760),
+          height: 3,
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,255,255,0.85), transparent)",
+          opacity: ipl(bi.localF, 0, 8, 0, 1),
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 250,
+          left: 60,
+          right: 60,
+          textAlign: "center",
+          fontFamily: SANS,
+          fontWeight: 700,
+          fontSize: 50,
+          color: "#fff",
+          opacity: ipl(bi.localF, bi.durF * 0.4, bi.durF * 0.7, 0, 1),
+        }}
+      >
+        You don't need more hours.
       </div>
     </AbsoluteFill>
   );
 };
 
-// 2 — BRIDGE (Jarvis): the dropped balls get caught, then the core locks
-const BRIDGE_SLIPS = [
-  { t: "Missed call" },
-  { t: "Blown deadline" },
-  { t: "Forgotten follow-up" },
-  { t: "Dropped handoff" },
-];
-const BRIDGE_TAGS = ["NOTHING MISSED", "EVERYTHING TRACKED", "FEWER EMAILS"];
-const hexPts = (r: number) =>
-  Array.from({ length: 6 }, (_, k) => {
-    const a = ((k * 60 - 90) * Math.PI) / 180;
-    return `${240 + Math.cos(a) * r},${240 + Math.sin(a) * r}`;
-  }).join(" ");
-
-const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// 7 — turn into the product
+const TurnToProof: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const cx = 540;
-  const coreY = 820;
-  const scanY = ipl(bi.localF, 8, bi.durF * 0.46, 280, 740, easeInOut);
-  const scanOn = bi.localF > 6 && bi.localF < bi.durF * 0.52;
-  const coreP = ipl(bi.localF, bi.durF * 0.34, bi.durF * 0.66, 0, 1, ease);
-  const tagsP = ipl(bi.localF, bi.durF * 0.66, bi.durF * 0.84, 0, 1, ease);
-  const headP = ipl(bi.localF, bi.durF * 0.72, bi.durF * 0.88, 0, 1, ease);
-  const bloom = coreP;
-  const rot = frame * 1.1;
+  const snap = ipl(bi.localF, 4, 16, 0, 1, ease);
+  const icons = ["📄", "🏠", "✉", "📥"];
   return (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(ellipse at 50% 52%, #0b1228 0%, #04050a 100%)",
-        overflow: "hidden",
+          "radial-gradient(ellipse at 50% 45%, #0c1020 0%, #05060a 100%)",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      <DotGrid color={LAW.indigo} opacity={0.24} frame={frame} />
-      <Bloom color={`rgba(99,102,241,${0.5 * bloom})`} at="50% 60%" />
-      {/* dropped-ball alerts (sell the problem) → caught by the scan */}
-      {BRIDGE_SLIPS.map((p, i) => {
-        const rowY = 320 + i * 112;
-        const appear = ipl(bi.localF, 4 + i * 5, 4 + i * 5 + 10, 0, 1, ease);
-        const caught = scanY > rowY + 6;
-        const fp = ipl(
+      <DotGrid color={LAW.indigo} opacity={0.2 * snap} frame={frame} />
+      <div
+        style={{
+          width: 760,
+          height: 460,
+          background: LAW.bg2,
+          borderRadius: 22,
+          border: `1.5px solid ${LAW.indigo}66`,
+          boxShadow: `0 0 70px ${LAW.indigo}44`,
+          opacity: snap,
+          transform: `scale(${0.82 + snap * 0.18})`,
+          padding: 30,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+          {[0, 1, 2, 3].map((k) => (
+            <div
+              key={k}
+              style={{
+                flex: 1,
+                height: 70,
+                background: "rgba(255,255,255,0.04)",
+                border: `1px solid ${LAW.indigo}33`,
+                borderRadius: 12,
+              }}
+            />
+          ))}
+        </div>
+        <div
+          style={{
+            height: 180,
+            background: `linear-gradient(180deg, ${LAW.indigo}22, transparent)`,
+            borderRadius: 12,
+          }}
+        />
+      </div>
+      {/* the 4 pain props become 4 icons sliding toward the app */}
+      {icons.map((ic, i) => {
+        const p = ipl(
           bi.localF,
-          bi.durF * 0.48 + i * 3,
-          bi.durF * 0.48 + i * 3 + 18,
+          bi.durF * 0.55 + i * 2,
+          bi.durF * 0.55 + i * 2 + 10,
           0,
           1,
           ease,
         );
-        const y = rowY + (coreY - rowY) * fp;
-        const sc = appear * (1 - fp * 0.82);
         return (
           <div
             key={i}
             style={{
               position: "absolute",
-              left: 190,
-              right: 190,
-              top: y - 40,
-              transform: `scale(${sc})`,
-              transformOrigin: "50% 50%",
-              opacity: appear * (1 - fp * 0.95),
+              left: ipl(p, 0, 1, 150 + i * 220, 520),
+              top: ipl(p, 0, 1, 1300, 760),
+              fontSize: 50,
+              opacity: (1 - p) * snap,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                background: caught
-                  ? "rgba(52,211,153,0.12)"
-                  : "rgba(244,71,95,0.12)",
-                border: `1.5px solid ${caught ? FIRE.emerald : "rgba(244,71,95,0.6)"}`,
-                borderRadius: 16,
-                padding: "16px 24px",
-                boxShadow: caught
-                  ? `0 0 26px ${FIRE.emerald}55`
-                  : `0 0 18px rgba(244,71,95,0.25)`,
-              }}
-            >
-              <div style={{ fontSize: 30, width: 42 }}>
-                {caught ? "✅" : "⚠️"}
-              </div>
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontWeight: 700,
-                  fontSize: 32,
-                  color: "#fff",
-                  flex: 1,
-                }}
-              >
-                {p.t}
-              </div>
-              {caught && (
-                <div
-                  style={{
-                    fontFamily: SANS,
-                    fontSize: 22,
-                    fontWeight: 800,
-                    color: FIRE.emerald,
-                  }}
-                >
-                  CAUGHT
-                </div>
-              )}
-            </div>
+            {ic}
           </div>
         );
       })}
-      {/* scan beam */}
-      {scanOn && (
-        <div
-          style={{
-            position: "absolute",
-            left: 150,
-            right: 150,
-            top: scanY,
-            height: 5,
-            background: `linear-gradient(90deg, transparent, ${LAW.sky}, ${LAW.indigoHi}, ${LAW.sky}, transparent)`,
-            boxShadow: `0 0 30px ${LAW.indigo}`,
-            borderRadius: 3,
-          }}
-        />
-      )}
-      {/* arc-reactor core with hex HUD frame */}
-      {coreP > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            left: cx,
-            top: coreY,
-            transform: `translate(-50%,-50%) scale(${0.5 + coreP * 0.5})`,
-            opacity: coreP,
-          }}
-        >
-          <svg
-            width="480"
-            height="480"
-            viewBox="0 0 480 480"
-            style={{ overflow: "visible" }}
-          >
-            <defs>
-              <radialGradient id="bcoreg" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#fff" />
-                <stop offset="38%" stopColor={LAW.indigoHi} />
-                <stop offset="100%" stopColor={LAW.indigo} stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <g transform={`rotate(${rot * 0.4} 240 240)`}>
-              <polygon
-                points={hexPts(205)}
-                fill="none"
-                stroke={LAW.indigo}
-                strokeWidth="2.5"
-                opacity="0.5"
-              />
-            </g>
-            <g transform={`rotate(${-rot * 0.4} 240 240)`}>
-              <polygon
-                points={hexPts(168)}
-                fill="none"
-                stroke={LAW.indigoHi}
-                strokeWidth="2"
-                opacity="0.4"
-              />
-            </g>
-            <g transform={`rotate(${rot} 240 240)`}>
-              <circle
-                cx="240"
-                cy="240"
-                r="148"
-                fill="none"
-                stroke={LAW.indigo}
-                strokeWidth="3"
-                strokeDasharray="38 26"
-                opacity="0.7"
-              />
-            </g>
-            <g transform={`rotate(${-rot * 1.7} 240 240)`}>
-              <circle
-                cx="240"
-                cy="240"
-                r="110"
-                fill="none"
-                stroke={LAW.sky}
-                strokeWidth="5"
-                strokeDasharray="58 22"
-                opacity="0.95"
-                style={{ filter: `drop-shadow(0 0 10px ${LAW.sky})` }}
-              />
-            </g>
-            <circle
-              cx="240"
-              cy="240"
-              r={62 + Math.sin(frame / 6) * 6}
-              fill="url(#bcoreg)"
-              style={{
-                filter: `drop-shadow(0 0 ${46 * bloom}px ${LAW.indigo})`,
-              }}
-            />
-            {[0, 1, 2, 3, 4, 5].map((k) => {
-              const a = ((rot * 1.1 + k * 60) * Math.PI) / 180;
-              return (
-                <circle
-                  key={k}
-                  cx={240 + Math.cos(a) * 178}
-                  cy={240 + Math.sin(a) * 178}
-                  r="5"
-                  fill="#fff"
-                  opacity="0.85"
-                />
-              );
-            })}
-          </svg>
-        </div>
-      )}
-      {/* headline */}
       <div
         style={{
           position: "absolute",
-          top: 1180,
-          left: 0,
-          right: 0,
+          bottom: 250,
+          left: 60,
+          right: 60,
           textAlign: "center",
           fontFamily: SANS,
-          fontSize: 50,
           fontWeight: 800,
+          fontSize: 50,
           color: "#fff",
-          opacity: headP,
-          padding: "0 80px",
-          textShadow: `0 0 30px ${LAW.indigo}`,
-          transform: `translateY(${(1 - headP) * 18}px)`,
+          opacity: snap,
+          textShadow: `0 0 26px ${LAW.indigo}`,
         }}
       >
-        It catches what you'd{" "}
-        <span style={{ color: LAW.indigoHi }}>forget.</span>
-      </div>
-      {/* payoff tags */}
-      <div
-        style={{
-          position: "absolute",
-          top: 1300,
-          left: 0,
-          right: 0,
-          display: "flex",
-          justifyContent: "center",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        {BRIDGE_TAGS.map((t, i) => (
-          <div
-            key={i}
-            style={{
-              fontFamily: SANS,
-              fontWeight: 800,
-              fontSize: 24,
-              letterSpacing: "0.04em",
-              color: "#fff",
-              background: "rgba(99,102,241,0.18)",
-              border: `1.5px solid ${LAW.indigo}`,
-              borderRadius: 999,
-              padding: "12px 22px",
-              opacity: ipl(
-                bi.localF,
-                bi.durF * 0.68 + i * 4,
-                bi.durF * 0.68 + i * 4 + 10,
-                0,
-                1,
-                ease,
-              ),
-              boxShadow: `0 0 20px ${LAW.indigo}55`,
-            }}
-          >
-            ✓ {t}
-          </div>
-        ))}
+        You need the right tools.{" "}
+        <span style={{ color: LAW.indigoHi }}>So I built them.</span>
       </div>
     </AbsoluteFill>
   );
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-//  STOLEN MULE — accurate recreation (v6). Cursor + elements share the SAME rect
-//  so every click lands exactly. Real sidebar, real screens, real 3 AI tools.
+//  PRACTICE OS app (accurate recreation): cursor + elements share one rect
 // ════════════════════════════════════════════════════════════════════════════
 const MULE = {
   canvas: "#0a0e17",
@@ -932,7 +1322,7 @@ const MuleSidebar: React.FC<{ activeIdx: number }> = ({ activeIdx }) => (
           boxShadow: `0 0 18px ${MULE.indigo}88`,
         }}
       >
-        S
+        ◆
       </div>
       <div
         style={{
@@ -943,7 +1333,7 @@ const MuleSidebar: React.FC<{ activeIdx: number }> = ({ activeIdx }) => (
           letterSpacing: "-0.01em",
         }}
       >
-        Stolen Mule
+        Practice OS
       </div>
     </div>
     <div
@@ -2367,322 +2757,603 @@ const LawEmail: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
 };
 
 // 5 — PIVOT (two opposite worlds)
-const Pivot: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// ════════════════════════════════════════════════════════════════════════════
+//  MORPH (v7) — the SAME app re-skins indigo→copper & relabels in place.
+//  Replaces the old hard split-wipe PIVOT. Reuses the Practice-OS chrome geometry.
+// ════════════════════════════════════════════════════════════════════════════
+const lerpHex = (a: string, b: string, t: number) => {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+};
+const REST_NAV = [
+  { label: "Leads", icon: "📥" },
+  { label: "Pipeline", icon: "▦" },
+  { label: "Contacts", icon: "👥" },
+  { label: "Dashboard", icon: "📊" },
+];
+
+const Morph: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const wipe = ipl(bi.localF, 4, bi.durF * 0.5, 0, 1, ease);
+  const m = ipl(bi.localF, 0, bi.durF * 0.85, 0, 1, easeInOut);
+  const c = lerpHex("#6366F1", "#F0742A", m);
+  const lawOut = ipl(m, 0.15, 0.5, 1, 0);
+  const restIn = ipl(m, 0.3, 0.7, 0, 1);
   return (
-    <AbsoluteFill style={{ background: "#000" }}>
+    <AbsoluteFill style={{ background: lerpHex("#0a0e17", "#0b0805", m) }}>
+      <DotGrid color={c} opacity={0.18} frame={frame} />
+      {/* sidebar — stays mounted, recolors + relabels in place */}
       <div
         style={{
           position: "absolute",
-          inset: 0,
-          right: "50%",
-          background: `linear-gradient(180deg,${LAW.bg2},${LAW.bg})`,
-          borderRight: `2px solid ${LAW.indigo}`,
-        }}
-      >
-        <DotGrid color={LAW.indigo} opacity={0.4} frame={frame} />
-        <Bloom color="rgba(99,102,241,0.4)" />
-        <div
-          style={{
-            position: "absolute",
-            top: "40%",
-            left: 0,
-            right: 0,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 92 }}>⚖️</div>
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 34,
-              fontWeight: 800,
-              color: LAW.indigoHi,
-              marginTop: 12,
-            }}
-          >
-            LAW FIRM
-          </div>
-          <div style={{ fontFamily: SANS, fontSize: 24, color: LAW.soft }}>
-            cases & documents
-          </div>
-        </div>
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          left: "50%",
-          background: `linear-gradient(180deg,${FIRE.bg2},${FIRE.bg})`,
-          borderLeft: `2px solid ${FIRE.copper}`,
-          transform: `translateX(${(1 - wipe) * 100}%)`,
-        }}
-      >
-        <DotGrid color={FIRE.copper} opacity={0.4} frame={frame} />
-        <Bloom color="rgba(240,116,42,0.4)" />
-        <div
-          style={{
-            position: "absolute",
-            top: "40%",
-            left: 0,
-            right: 0,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 92 }}>🦺💧</div>
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 34,
-              fontWeight: 800,
-              color: FIRE.copperHi,
-              marginTop: 12,
-            }}
-          >
-            FIRE & WATER REPAIR
-          </div>
-          <div style={{ fontFamily: SANS, fontSize: 24, color: FIRE.soft }}>
-            jobs & dollars
-          </div>
-        </div>
-      </div>
-      <div
-        style={{
-          position: "absolute",
+          left: 0,
           top: 0,
           bottom: 0,
-          left: `${wipe * 50}%`,
-          width: 8,
-          background: "#fff",
-          filter: "blur(3px)",
-          opacity: wipe < 1 ? 1 : 0,
+          width: SIDE_W,
+          background: lerpHex("#070a11", "#0e0805", m),
+          borderRight: `1px solid ${c}33`,
         }}
-      />
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "44px 22px 0",
+          }}
+        >
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 11,
+              background: c,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontFamily: SANS,
+              fontWeight: 800,
+              fontSize: 22,
+              boxShadow: `0 0 18px ${c}88`,
+            }}
+          >
+            ◆
+          </div>
+          <div
+            style={{
+              fontFamily: SANS,
+              fontWeight: 800,
+              fontSize: 26,
+              color: "#fff",
+            }}
+          >
+            Practice OS
+          </div>
+        </div>
+        {/* rows 0-3: crossfade law→restoration label in place */}
+        {NAV.slice(0, 4).map((n, i) => {
+          const y = navRowY(i);
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: 12,
+                top: y,
+                width: SIDE_W - 24,
+                height: ROW_H - 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "0 16px",
+                borderRadius: 12,
+                background: i === 0 ? `${c}26` : "transparent",
+                fontFamily: SANS,
+                fontSize: 22,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  opacity: lawOut,
+                  color: "rgba(255,255,255,0.6)",
+                }}
+              >
+                {n.icon} {n.label}
+              </span>
+              <span
+                style={{
+                  position: "absolute",
+                  opacity: restIn,
+                  color: "#fff",
+                  fontWeight: 700,
+                }}
+              >
+                {REST_NAV[i].icon} {REST_NAV[i].label}
+              </span>
+            </div>
+          );
+        })}
+        {/* rows 4-11 collapse away */}
+        {NAV.slice(4).map((n, i) => {
+          const idx = i + 4;
+          const h = ipl(m, 0.2, 0.7, ROW_H - 8, 0);
+          const op = ipl(m, 0.2, 0.6, 0.6, 0);
+          return (
+            <div
+              key={idx}
+              style={{
+                position: "absolute",
+                left: 12,
+                top: navRowY(idx),
+                width: SIDE_W - 24,
+                height: h,
+                opacity: op,
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "0 16px",
+                fontFamily: SANS,
+                fontSize: 22,
+                color: "rgba(255,255,255,0.5)",
+              }}
+            >
+              {n.icon} {n.label}
+            </div>
+          );
+        })}
+      </div>
+      {/* topbar */}
       <div
         style={{
           position: "absolute",
-          bottom: 360,
-          left: 0,
+          left: SIDE_W,
           right: 0,
-          textAlign: "center",
-          fontFamily: SANS,
-          fontSize: 40,
-          fontWeight: 800,
-          color: "#fff",
-          opacity: ipl(bi.localF, bi.durF * 0.5, bi.durF * 0.65, 0, 1),
-          textShadow: "0 4px 20px #000",
+          top: 0,
+          height: 110,
+          borderBottom: `1px solid ${c}33`,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 44px",
         }}
       >
-        Same builder.
+        <span
+          style={{
+            position: "absolute",
+            opacity: lawOut,
+            fontFamily: SANS,
+            fontSize: 40,
+            fontWeight: 800,
+            color: "#e6eaf2",
+          }}
+        >
+          Email → Contacts
+        </span>
+        <span
+          style={{
+            position: "absolute",
+            opacity: restIn,
+            fontFamily: SANS,
+            fontSize: 40,
+            fontWeight: 800,
+            color: "#FFF3EA",
+          }}
+        >
+          Leads
+        </span>
       </div>
-    </AbsoluteFill>
-  );
-};
-
-// 6 — RESTO money (money is the hero)
-const RestoMoney: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
-  frame,
-  fps,
-  bi,
-}) => {
-  const tilt = ipl(bi.localF, 0, bi.durF * 0.4, 10, 0, easeInOut);
-  const push = 1 + ipl(bi.localF, 0, bi.durF * 0.5, 0.0, 0.14);
-  const num = countUp(frame, bi.sF + 4, bi.durF * 0.55, 612480);
-  const glow = 0.7 + 0.3 * Math.abs(Math.sin(bi.localF / 7));
-  const kpiA = (i: number) =>
-    ipl(
-      bi.localF,
-      bi.durF * 0.55 + i * 4,
-      bi.durF * 0.55 + i * 4 + 12,
-      0,
-      1,
-      ease,
-    );
-  const sweep = ipl(bi.localF, bi.durF * 0.5, bi.durF * 0.72, 0, 1);
-  return (
-    <AbsoluteFill
-      style={{ background: `linear-gradient(180deg, ${FIRE.bg2}, ${FIRE.bg})` }}
-    >
-      <DotGrid color={FIRE.copper} opacity={0.3} frame={frame} speed={0.22} />
-      <Bloom color="rgba(240,116,42,0.42)" />
-      <Stage tilt={tilt} scale={push}>
+      {/* content: law pane slides up/out; restoration canvas pushes in behind */}
+      <div
+        style={{
+          position: "absolute",
+          left: SIDE_W + 44,
+          top: 150,
+          right: 44,
+          bottom: 40,
+          overflow: "hidden",
+        }}
+      >
         <div
           style={{
             position: "absolute",
             inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
+            background: "linear-gradient(180deg,#150d06,#0b0805)",
+            borderRadius: 16,
+            opacity: restIn,
+            transform: `scale(${ipl(m, 0.3, 1, 0.94, 1)})`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            transform: `translateY(${ipl(m, 0.1, 0.6, 0, -700)}px)`,
+            opacity: lawOut,
           }}
         >
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 30,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              color: FIRE.soft,
-            }}
-          >
-            Jobs sold this year
-          </div>
-          <div
-            style={{
-              position: "relative",
-              fontFamily: SANS,
-              fontSize: 220,
-              fontWeight: 800,
-              letterSpacing: "-0.05em",
-              color: FIRE.copperHi,
-              textShadow: `0 0 ${70 * glow}px ${FIRE.copper}`,
-              fontVariantNumeric: "tabular-nums",
-              lineHeight: 1,
-            }}
-          >
-            {fmtMoney(num)}
-            <LightSweep p={sweep} />
-          </div>
-          <div style={{ display: "flex", gap: 24, marginTop: 50 }}>
-            {[
-              { l: "Jobs won", v: "38" },
-              { l: "Average job", v: "$16,100" },
-              { l: "New customers", v: "52" },
-            ].map((k, i) => (
-              <div
-                key={i}
-                style={{
-                  background: FIRE.card,
-                  border: `1px solid ${FIRE.border}`,
-                  borderRadius: 18,
-                  padding: "22px 30px",
-                  opacity: kpiA(i),
-                  transform: `translateY(${(1 - kpiA(i)) * 26}px)`,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: SANS,
-                    fontSize: 22,
-                    fontWeight: 700,
-                    color: FIRE.soft,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  {k.l}
-                </div>
-                <div
-                  style={{
-                    fontFamily: SANS,
-                    fontSize: 50,
-                    fontWeight: 800,
-                    color: FIRE.text,
-                  }}
-                >
-                  {k.v}
-                </div>
-                <div
-                  style={{
-                    fontFamily: SANS,
-                    fontSize: 22,
-                    fontWeight: 700,
-                    color: FIRE.emerald,
-                  }}
-                >
-                  ▲ up 22%
-                </div>
-              </div>
-            ))}
-          </div>
+          {[0, 1, 2, 3].map((k) => (
+            <div
+              key={k}
+              style={{
+                height: 70,
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 12,
+                marginBottom: 14,
+              }}
+            />
+          ))}
         </div>
-      </Stage>
+      </div>
+      {/* continuity anchor (matches the global wordmark position) + thesis line */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 250,
+          left: 60,
+          right: 60,
+          textAlign: "center",
+          fontFamily: SANS,
+          fontWeight: 800,
+          fontSize: 46,
+          color: "#fff",
+          opacity: ipl(m, 0.4, 0.7, 0, 1),
+          textShadow: `0 0 24px ${c}`,
+        }}
+      >
+        Same software. Different business.
+      </div>
     </AbsoluteFill>
   );
 };
 
-// 7 — RESTO pipeline (customer card travels across 4 plain columns)
+// ════════════════════════════════════════════════════════════════════════════
+//  RESTORATION (v7) — LEAD-FIRST. text → number → one clean lead → that lead
+//  connected across pipeline + contacts + dashboard → money as the payoff.
+//  A persistent copper "thread" follows the lead so you SEE it's one record.
+// ════════════════════════════════════════════════════════════════════════════
+const RPhone: React.FC<{ frame: number; children: React.ReactNode }> = ({
+  frame,
+  children,
+}) => (
+  <AbsoluteFill
+    style={{
+      background: "#0A0E14",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <DotGrid color={FIRE.copper} opacity={0.18} frame={frame} />
+    <Bloom color="rgba(240,116,42,0.28)" />
+    <div
+      style={{
+        width: 820,
+        height: 1560,
+        borderRadius: 74,
+        background: "#0E1621",
+        border: "12px solid #1b2a3a",
+        boxShadow: "0 40px 130px rgba(0,0,0,0.8)",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          height: 128,
+          background: "#17212B",
+          display: "flex",
+          alignItems: "center",
+          padding: "0 38px",
+          gap: 18,
+        }}
+      >
+        <div
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: "50%",
+            background: FIRE.copper,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 34,
+          }}
+        >
+          🤖
+        </div>
+        <div>
+          <div
+            style={{
+              fontFamily: SANS,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 32,
+            }}
+          >
+            Auto-assistant
+          </div>
+          <div style={{ fontFamily: SANS, color: FIRE.emerald, fontSize: 22 }}>
+            ● live
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: 36, position: "relative" }}>{children}</div>
+    </div>
+  </AbsoluteFill>
+);
+const MSG =
+  "hey its john my basement flooded last nite 312-555-1234 can someone come thurs??";
+
+// 1 — text arrives
+const RestoText: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const typeP = ipl(bi.localF, 8, bi.durF * 0.78, 0, 1);
+  return (
+    <RPhone frame={frame}>
+      <div
+        style={{
+          maxWidth: "90%",
+          background: "#2B5278",
+          color: "#fff",
+          borderRadius: "26px 26px 26px 6px",
+          padding: "26px 30px",
+          fontFamily: SANS,
+          fontSize: 34,
+          lineHeight: 1.4,
+        }}
+      >
+        {MSG.slice(0, Math.floor(MSG.length * typeP))}
+        {typeP < 1 && <span style={{ opacity: 0.6 }}>▋</span>}
+      </div>
+    </RPhone>
+  );
+};
+
+// 2 — the number is the thread (highlight + lift as a copper chip)
+const RestoNumber: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const scanY = ipl(bi.localF, 4, bi.durF * 0.6, 150, 320);
+  const lift = ipl(bi.localF, bi.durF * 0.45, bi.durF * 0.85, 0, 1, ease);
+  return (
+    <RPhone frame={frame}>
+      <div
+        style={{
+          maxWidth: "90%",
+          background: "#2B5278",
+          color: "#fff",
+          borderRadius: "26px 26px 26px 6px",
+          padding: "26px 30px",
+          fontFamily: SANS,
+          fontSize: 34,
+          lineHeight: 1.4,
+          position: "relative",
+        }}
+      >
+        hey its john my basement flooded last nite{" "}
+        <span
+          style={{
+            background: `rgba(240,116,42,${0.4 * (1 - lift)})`,
+            borderRadius: 6,
+            padding: "0 4px",
+            opacity: 1 - lift,
+          }}
+        >
+          312-555-1234
+        </span>{" "}
+        can someone come thurs??
+        <div
+          style={{
+            position: "absolute",
+            left: 24,
+            right: 24,
+            top: scanY,
+            height: 4,
+            background: `linear-gradient(90deg,transparent,${FIRE.copperHi},transparent)`,
+            boxShadow: `0 0 22px ${FIRE.copper}`,
+            opacity: bi.localF < bi.durF * 0.6 ? 1 : 0,
+          }}
+        />
+      </div>
+      {/* the lifted number chip floating toward the (future) lead card */}
+      <div
+        style={{
+          position: "absolute",
+          left: 60 + lift * 200,
+          top: 360 - lift * 60,
+          fontFamily: MONO,
+          fontSize: 40,
+          fontWeight: 800,
+          color: "#fff",
+          background: FIRE.copper,
+          borderRadius: 12,
+          padding: "10px 20px",
+          opacity: lift,
+          boxShadow: `0 0 26px ${FIRE.copper}`,
+          transform: `scale(${0.8 + lift * 0.2})`,
+        }}
+      >
+        📞 312-555-1234
+      </div>
+    </RPhone>
+  );
+};
+
+// 3 — one clean lead (thread node born)
+const RestoLead: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const a = ipl(bi.localF, 4, 18, 0, 1, ease);
+  const fields = [
+    ["Name", "John S."],
+    ["Phone", "312-555-1234"],
+    ["Job", "💧 Water — flooded basement"],
+    ["When", "Thursday"],
+  ];
+  const pulse = 0.6 + 0.4 * Math.abs(Math.sin(bi.localF / 6));
+  return (
+    <RPhone frame={frame}>
+      <div
+        style={{
+          maxWidth: "90%",
+          background: "#1f2c39",
+          borderRadius: "26px 26px 26px 6px",
+          padding: "20px 26px",
+          fontFamily: SANS,
+          fontSize: 26,
+          color: FIRE.copperHi,
+          marginBottom: 26,
+        }}
+      >
+        read it… handled
+      </div>
+      <div
+        style={{
+          background: "#101722",
+          border: `2px solid ${FIRE.copper}`,
+          borderRadius: 24,
+          padding: 34,
+          opacity: a,
+          transform: `scale(${0.92 + a * 0.08})`,
+          boxShadow: `0 0 ${40 * pulse}px ${FIRE.copper}66`,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 24,
+            fontWeight: 800,
+            color: FIRE.emerald,
+            letterSpacing: "0.06em",
+            marginBottom: 18,
+          }}
+        >
+          ✓ NEW LEAD
+        </div>
+        {fields.map((f, i) => {
+          const fa = ipl(bi.localF, 8 + i * 5, 8 + i * 5 + 8, 0, 1, ease);
+          return (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                gap: 16,
+                marginBottom: 14,
+                opacity: fa,
+              }}
+            >
+              <div
+                style={{
+                  width: 110,
+                  fontFamily: SANS,
+                  fontSize: 24,
+                  color: FIRE.soft,
+                }}
+              >
+                {f[0]}
+              </div>
+              <div
+                style={{
+                  fontFamily: i === 1 ? MONO : SANS,
+                  fontSize: 30,
+                  fontWeight: 700,
+                  color: "#fff",
+                }}
+              >
+                {f[1]}
+              </div>
+            </div>
+          );
+        })}
+        {/* the thread node is born */}
+        <div
+          style={{
+            position: "absolute",
+            right: -10,
+            top: "50%",
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: FIRE.copper,
+            boxShadow: `0 0 ${20 * pulse}px ${FIRE.copper}`,
+            opacity: a,
+          }}
+        />
+      </div>
+    </RPhone>
+  );
+};
+
+// 4 — HERO: one lead connected across pipeline + contacts + dashboard
 const RestoPipe: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const cols = [
-    "New call",
-    "We followed up",
-    "We sent a price",
-    "Got the job 💰",
-  ];
-  const colW = 232;
-  const gap = 20;
+  const cols = ["New call", "Followed up", "Sent a price", "Got the job"];
+  const colW = 232,
+    gap = 18,
+    x0 = 70,
+    topY = 250;
+  const travel = ipl(bi.localF, 0.18 * bi.durF, 0.8 * bi.durF, 0, 3, easeInOut);
+  const stage = Math.min(3, Math.round(travel));
+  const cardX = x0 + travel * (colW + gap);
+  const cardY = topY + 70;
+  const won = ipl(bi.localF, 0.78 * bi.durF, 0.9 * bi.durF, 0, 1, ease);
+  const threadC = won > 0.3 ? FIRE.emerald : FIRE.copper;
   const enter = ipl(bi.localF, 0, 12, 0, 1, ease);
-  const travel = ipl(
-    bi.localF,
-    bi.durF * 0.18,
-    bi.durF * 0.82,
-    0,
-    3,
-    easeInOut,
-  );
-  const stageIdx = Math.min(3, Math.round(travel));
-  const cardX = 60 + travel * (colW + gap);
-  const stamped = ipl(bi.localF, bi.durF * 0.78, bi.durF * 0.9, 0, 1, ease);
+  // connection endpoints
+  const contactsPt = { x: 960, y: 470 };
+  const dashPt = { x: 540, y: 1160 };
+  const cardPt = { x: cardX + (colW - 28) / 2, y: cardY + 60 };
   return (
     <AbsoluteFill
-      style={{ background: `linear-gradient(180deg, ${FIRE.bg2}, ${FIRE.bg})` }}
+      style={{ background: "linear-gradient(180deg,#150d06,#0b0805)" }}
     >
-      <DotGrid color={FIRE.copper} opacity={0.26} frame={frame} />
-      <Bloom color="rgba(240,116,42,0.36)" />
+      <DotGrid color={FIRE.copper} opacity={0.22} frame={frame} />
+      {/* board */}
       <div
         style={{
           position: "absolute",
-          top: 150,
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          fontFamily: SANS,
-          fontSize: 44,
-          fontWeight: 800,
-          color: FIRE.text,
-          opacity: enter,
-        }}
-      >
-        Watch a customer become a paid job
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          top: 560,
-          left: 60,
-          right: 60,
+          top: topY,
+          left: x0,
           display: "flex",
           gap,
+          opacity: enter,
         }}
       >
         {cols.map((c, i) => (
           <div
             key={i}
             style={{
-              flex: 1,
+              width: colW,
+              minHeight: 420,
               background:
-                i === stageIdx ? `${FIRE.copper}22` : "rgba(255,255,255,0.03)",
-              border: `1px solid ${i === stageIdx ? FIRE.copper : FIRE.border}`,
-              borderRadius: 18,
-              padding: "18px 14px",
-              minHeight: 520,
-              boxShadow: i === stageIdx ? `0 0 30px ${FIRE.copper}55` : "none",
-              opacity: enter,
+                i === stage ? `${FIRE.copper}1f` : "rgba(255,255,255,0.03)",
+              border: `1px solid ${i === stage ? FIRE.copper : FIRE.border}`,
+              borderRadius: 16,
+              padding: 14,
+              boxShadow: i === stage ? `0 0 26px ${FIRE.copper}44` : "none",
             }}
           >
             <div
               style={{
                 fontFamily: SANS,
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: 700,
                 color: i === 3 ? FIRE.emerald : FIRE.soft,
                 textAlign: "center",
@@ -2693,18 +3364,109 @@ const RestoPipe: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
           </div>
         ))}
       </div>
-      {/* traveling customer card */}
+      {/* contacts chip (right) */}
       <div
         style={{
           position: "absolute",
-          top: 640,
+          left: contactsPt.x - 6,
+          top: contactsPt.y - 50,
+          width: 110,
+          background: "rgba(255,255,255,0.04)",
+          border: `1px solid ${won > 0.3 ? FIRE.emerald : FIRE.copper}`,
+          borderRadius: 14,
+          padding: 14,
+          textAlign: "center",
+          opacity: enter,
+        }}
+      >
+        <div style={{ fontFamily: SANS, fontSize: 16, color: FIRE.soft }}>
+          Contacts
+        </div>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            background: `${FIRE.copper}33`,
+            color: FIRE.copperHi,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "8px auto",
+            fontFamily: SANS,
+            fontWeight: 800,
+          }}
+        >
+          J
+        </div>
+        <div style={{ fontFamily: SANS, fontSize: 16, color: "#fff" }}>
+          John S. {won > 0.3 ? "✓" : ""}
+        </div>
+      </div>
+      {/* dashboard counter (bottom) */}
+      <div
+        style={{
+          position: "absolute",
+          left: dashPt.x - 150,
+          top: dashPt.y - 30,
+          width: 300,
+          background: "rgba(255,255,255,0.04)",
+          border: `1px solid ${FIRE.border}`,
+          borderRadius: 14,
+          padding: "14px 20px",
+          textAlign: "center",
+          opacity: enter,
+        }}
+      >
+        <div style={{ fontFamily: SANS, fontSize: 16, color: FIRE.soft }}>
+          Dashboard · jobs
+        </div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 40,
+            fontWeight: 800,
+            color: won > 0.3 ? FIRE.emerald : "#fff",
+          }}
+        >
+          {38 + (won > 0.3 ? 1 : 0)}
+        </div>
+      </div>
+      {/* the persistent copper THREAD: card → contacts, card → dashboard */}
+      <svg
+        width={W}
+        height={H}
+        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+      >
+        <path
+          d={`M ${cardPt.x} ${cardPt.y} Q ${(cardPt.x + contactsPt.x) / 2} ${cardPt.y - 80} ${contactsPt.x} ${contactsPt.y}`}
+          fill="none"
+          stroke={threadC}
+          strokeWidth="3"
+          opacity={enter * 0.8}
+          style={{ filter: `drop-shadow(0 0 6px ${threadC})` }}
+        />
+        <path
+          d={`M ${cardPt.x} ${cardPt.y} Q ${cardPt.x} ${(cardPt.y + dashPt.y) / 2} ${dashPt.x} ${dashPt.y}`}
+          fill="none"
+          stroke={threadC}
+          strokeWidth="3"
+          opacity={enter * 0.8}
+          style={{ filter: `drop-shadow(0 0 6px ${threadC})` }}
+        />
+      </svg>
+      {/* John's travelling lead card */}
+      <div
+        style={{
+          position: "absolute",
           left: cardX,
-          width: colW - 14,
+          top: cardY,
+          width: colW - 28,
           background: "#1c130c",
-          border: `2px solid ${stageIdx === 3 ? FIRE.emerald : FIRE.copper}`,
-          borderRadius: 16,
-          padding: 20,
-          boxShadow: `0 18px 50px rgba(0,0,0,0.6), 0 0 30px ${FIRE.copper}66`,
+          border: `2px solid ${threadC}`,
+          borderRadius: 14,
+          padding: 16,
+          boxShadow: `0 0 26px ${threadC}77`,
           opacity: enter,
         }}
       >
@@ -2712,48 +3474,46 @@ const RestoPipe: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
           style={{
             fontFamily: SANS,
             fontWeight: 800,
-            fontSize: 30,
-            color: FIRE.text,
+            fontSize: 26,
+            color: "#fff",
           }}
         >
-          John Smith
+          John S.
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <div
+          style={{
+            fontFamily: MONO,
+            fontSize: 16,
+            color: FIRE.soft,
+            marginTop: 4,
+          }}
+        >
+          312-555-1234
+        </div>
+        <div style={{ marginTop: 8 }}>
           <span
             style={{
               background: `${FIRE.info}33`,
               color: FIRE.info,
               borderRadius: 8,
-              padding: "5px 12px",
+              padding: "4px 10px",
               fontFamily: SANS,
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: 700,
             }}
           >
             💧 Water
           </span>
         </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 20,
-            color: FIRE.soft,
-            marginTop: 10,
-          }}
-        >
-          Flooded basement
-        </div>
-        {stamped > 0 && (
+        {won > 0 && (
           <div
             style={{
-              marginTop: 16,
+              marginTop: 10,
               fontFamily: SANS,
               fontWeight: 800,
-              fontSize: 40,
+              fontSize: 30,
               color: FIRE.emerald,
-              opacity: stamped,
-              transform: `scale(${0.8 + stamped * 0.2})`,
-              textShadow: `0 0 20px ${FIRE.emerald}`,
+              opacity: won,
             }}
           >
             $14,200
@@ -2764,211 +3524,126 @@ const RestoPipe: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   );
 };
 
-// 8 — AI beat (the Jarvis moment): messy text → scan → tokens → clean card
-const AiText: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+// 5 — PAYOFF: the money is the sum of leads like John
+const RestoMoney: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
   bi,
 }) => {
-  const enter = ipl(bi.localF, 0, 12, 0, 1, ease);
-  const msg =
-    "hey its john my basement flooded last night 312-555-1234 can someone come look thurs?";
-  const typeP = ipl(bi.localF, 8, bi.durF * 0.28, 0, 1);
-  const shown = msg.slice(0, Math.floor(msg.length * typeP));
-  const scanY = ipl(bi.localF, bi.durF * 0.34, bi.durF * 0.52, 360, 620);
-  const scanOn = bi.localF > bi.durF * 0.34 && bi.localF < bi.durF * 0.56;
-  const tokens = [
-    { label: "Name", val: "John Smith", t: 0.5 },
-    { label: "Phone", val: "312-555-1234", t: 0.56 },
-    { label: "Job", val: "Water damage – basement", t: 0.62 },
-  ];
-  const cardAssemble = ipl(
-    bi.localF,
-    bi.durF * 0.48,
-    bi.durF * 0.66,
-    0,
-    1,
-    ease,
-  );
-  const saved = ipl(bi.localF, bi.durF * 0.78, bi.durF * 0.9, 0, 1, ease);
+  const num = (function () {
+    const p = ipl(bi.localF, 6, bi.durF * 0.7, 0, 1, ease);
+    return Math.round(612480 * p);
+  })();
+  const glow = 0.7 + 0.3 * Math.abs(Math.sin(bi.localF / 7));
+  const kpiA = (i: number) =>
+    ipl(
+      bi.localF,
+      bi.durF * 0.55 + i * 4,
+      bi.durF * 0.55 + i * 4 + 12,
+      0,
+      1,
+      ease,
+    );
   return (
     <AbsoluteFill
       style={{
-        background: "#070A10",
+        background: "linear-gradient(180deg,#150d06,#0b0805)",
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <DotGrid color={FIRE.copper} opacity={0.18} frame={frame} />
-      <Bloom color="rgba(240,116,42,0.3)" />
-      {/* full-screen phone */}
-      <div
-        style={{
-          width: 880,
-          height: 1680,
-          borderRadius: 78,
-          background: "#0E1621",
-          border: "12px solid #1b2a3a",
-          boxShadow: "0 40px 140px rgba(0,0,0,0.8)",
-          overflow: "hidden",
-          position: "relative",
-          opacity: enter,
-        }}
-      >
+      <DotGrid color={FIRE.copper} opacity={0.26} frame={frame} />
+      <Bloom color="rgba(240,116,42,0.4)" />
+      <div style={{ textAlign: "center" }}>
         <div
           style={{
-            height: 130,
-            background: "#17212B",
-            display: "flex",
-            alignItems: "center",
-            padding: "0 40px",
-            gap: 20,
+            fontFamily: SANS,
+            fontSize: 30,
+            fontWeight: 700,
+            color: FIRE.soft,
           }}
         >
-          <div
-            style={{
-              width: 74,
-              height: 74,
-              borderRadius: "50%",
-              background: FIRE.copper,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 36,
-            }}
-          >
-            🤖
-          </div>
-          <div>
-            <div
-              style={{
-                fontFamily: SANS,
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: 32,
-              }}
-            >
-              Auto-assistant
-            </div>
-            <div
-              style={{ fontFamily: SANS, color: FIRE.emerald, fontSize: 22 }}
-            >
-              ● working 24/7
-            </div>
-          </div>
+          Jobs sold this year
         </div>
-        {/* messy incoming text */}
-        <div style={{ position: "relative", padding: 36 }}>
-          <div
-            style={{
-              maxWidth: "88%",
-              background: "#2B5278",
-              color: "#fff",
-              borderRadius: "26px 26px 26px 6px",
-              padding: "26px 30px",
-              fontFamily: SANS,
-              fontSize: 34,
-              lineHeight: 1.42,
-              opacity: typeP > 0 ? 1 : 0,
-            }}
-          >
-            {shown}
-            {typeP < 1 && <span style={{ opacity: 0.6 }}>▋</span>}
-          </div>
-          {/* scan line */}
-          {scanOn && (
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 190,
+            fontWeight: 800,
+            letterSpacing: "-0.05em",
+            color: FIRE.copperHi,
+            textShadow: `0 0 ${70 * glow}px ${FIRE.copper}`,
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1,
+          }}
+        >
+          {"$" + num.toLocaleString("en-US")}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 22,
+            marginTop: 44,
+            justifyContent: "center",
+          }}
+        >
+          {[
+            ["Jobs won", "38"],
+            ["Avg job", "$16,100"],
+            ["New customers", "52"],
+          ].map((k, i) => (
             <div
+              key={i}
               style={{
-                position: "absolute",
-                left: 24,
-                right: 24,
-                top: scanY,
-                height: 6,
-                background: `linear-gradient(90deg, transparent, ${FIRE.copperHi}, transparent)`,
-                boxShadow: `0 0 26px ${FIRE.copper}`,
-                borderRadius: 3,
-              }}
-            />
-          )}
-          {/* clean card assembling */}
-          {cardAssemble > 0 && (
-            <div
-              style={{
-                marginTop: 40,
-                background: "#101722",
-                border: `2px solid ${saved > 0 ? FIRE.emerald : FIRE.copper}`,
-                borderRadius: 24,
-                padding: 34,
-                opacity: cardAssemble,
-                boxShadow: `0 0 50px ${FIRE.copper}55`,
+                background: FIRE.card,
+                border: `1px solid ${FIRE.border}`,
+                borderRadius: 18,
+                padding: "20px 28px",
+                opacity: kpiA(i),
               }}
             >
               <div
                 style={{
                   fontFamily: SANS,
-                  fontSize: 26,
-                  fontWeight: 800,
-                  color: saved > 0 ? FIRE.emerald : FIRE.copperHi,
-                  marginBottom: 18,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: FIRE.soft,
+                  textTransform: "uppercase",
                   letterSpacing: "0.06em",
                 }}
               >
-                {saved > 0 ? "✓ NEW JOB SAVED" : "READING…"}
+                {k[0]}
               </div>
-              {tokens.map((tk, i) => {
-                const fieldIn = ipl(
-                  bi.localF,
-                  bi.durF * tk.t,
-                  bi.durF * tk.t + 8,
-                  0,
-                  1,
-                  ease,
-                );
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      gap: 16,
-                      marginBottom: 16,
-                      opacity: fieldIn,
-                      alignItems: "baseline",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: SANS,
-                        fontSize: 26,
-                        fontWeight: 700,
-                        color: FIRE.soft,
-                        width: 130,
-                      }}
-                    >
-                      {tk.label}:
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: i === 1 ? MONO : SANS,
-                        fontSize: 34,
-                        fontWeight: 700,
-                        color: "#fff",
-                        textShadow: `0 0 14px ${FIRE.copper}88`,
-                      }}
-                    >
-                      {tk.val}
-                    </div>
-                  </div>
-                );
-              })}
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 46,
+                  fontWeight: 800,
+                  color: FIRE.text,
+                }}
+              >
+                {k[1]}
+              </div>
             </div>
-          )}
+          ))}
+        </div>
+        <div
+          style={{
+            marginTop: 40,
+            fontFamily: SANS,
+            fontSize: 28,
+            fontWeight: 600,
+            color: FIRE.copperHi,
+            opacity: ipl(bi.localF, bi.durF * 0.7, bi.durF * 0.85, 0, 1),
+          }}
+        >
+          every dollar started as one text.
         </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-// 9 — PROOF → YOURS (two HUD cards morph into "your business")
 const ProofTurn: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
   fps,
@@ -3319,25 +3994,52 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
       frame >= Math.round(x.start * fps) &&
       frame < Math.round((x.start + x.dur) * fps),
   )?.key;
-  const fireKeys = ["RESTO_MONEY", "RESTO_PIPE", "AI_TEXT"];
+  const fireKeys = [
+    "MORPH",
+    "RESTO_TEXT",
+    "RESTO_NUMBER",
+    "RESTO_LEAD",
+    "RESTO_PIPE",
+    "RESTO_MONEY",
+  ];
   const accent =
     activeKey && fireKeys.includes(activeKey) ? FIRE.copper : LAW.indigo;
 
   return (
     <AbsoluteFill style={{ background: "#000" }}>
-      {b.PROOF_FLASH.visible && (
-        <Trans bi={b.PROOF_FLASH}>
-          <ProofFlash frame={frame} fps={fps} bi={b.PROOF_FLASH} />
+      {b.PAIN_OPEN_DESK.visible && (
+        <Trans bi={b.PAIN_OPEN_DESK}>
+          <PainOpenDesk frame={frame} fps={fps} bi={b.PAIN_OPEN_DESK} />
         </Trans>
       )}
-      {b.HOOK.visible && (
-        <Trans bi={b.HOOK}>
-          <HookScene frame={frame} fps={fps} bi={b.HOOK} />
+      {b.PAIN_CONTRACT.visible && (
+        <Trans bi={b.PAIN_CONTRACT}>
+          <PainContract frame={frame} fps={fps} bi={b.PAIN_CONTRACT} />
         </Trans>
       )}
-      {b.BRIDGE.visible && (
-        <Trans bi={b.BRIDGE}>
-          <BridgeScene frame={frame} fps={fps} bi={b.BRIDGE} />
+      {b.PAIN_COUNTY.visible && (
+        <Trans bi={b.PAIN_COUNTY}>
+          <PainCounty frame={frame} fps={fps} bi={b.PAIN_COUNTY} />
+        </Trans>
+      )}
+      {b.PAIN_INBOX.visible && (
+        <Trans bi={b.PAIN_INBOX}>
+          <PainInbox frame={frame} fps={fps} bi={b.PAIN_INBOX} />
+        </Trans>
+      )}
+      {b.PAIN_STICKY.visible && (
+        <Trans bi={b.PAIN_STICKY}>
+          <PainSticky frame={frame} fps={fps} bi={b.PAIN_STICKY} />
+        </Trans>
+      )}
+      {b.PAIN_PEAK.visible && (
+        <Trans bi={b.PAIN_PEAK}>
+          <PainPeak frame={frame} fps={fps} bi={b.PAIN_PEAK} />
+        </Trans>
+      )}
+      {b.TURN_TO_PROOF.visible && (
+        <Trans bi={b.TURN_TO_PROOF}>
+          <TurnToProof frame={frame} fps={fps} bi={b.TURN_TO_PROOF} />
         </Trans>
       )}
       {b.LAW_TOUR.visible && (
@@ -3360,14 +4062,24 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
           <LawEmail frame={frame} fps={fps} bi={b.LAW_EMAIL} />
         </Trans>
       )}
-      {b.PIVOT.visible && (
-        <Trans bi={b.PIVOT}>
-          <Pivot frame={frame} fps={fps} bi={b.PIVOT} />
+      {b.MORPH.visible && (
+        <Trans bi={b.MORPH}>
+          <Morph frame={frame} fps={fps} bi={b.MORPH} />
         </Trans>
       )}
-      {b.RESTO_MONEY.visible && (
-        <Trans bi={b.RESTO_MONEY}>
-          <RestoMoney frame={frame} fps={fps} bi={b.RESTO_MONEY} />
+      {b.RESTO_TEXT.visible && (
+        <Trans bi={b.RESTO_TEXT}>
+          <RestoText frame={frame} fps={fps} bi={b.RESTO_TEXT} />
+        </Trans>
+      )}
+      {b.RESTO_NUMBER.visible && (
+        <Trans bi={b.RESTO_NUMBER}>
+          <RestoNumber frame={frame} fps={fps} bi={b.RESTO_NUMBER} />
+        </Trans>
+      )}
+      {b.RESTO_LEAD.visible && (
+        <Trans bi={b.RESTO_LEAD}>
+          <RestoLead frame={frame} fps={fps} bi={b.RESTO_LEAD} />
         </Trans>
       )}
       {b.RESTO_PIPE.visible && (
@@ -3375,9 +4087,9 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
           <RestoPipe frame={frame} fps={fps} bi={b.RESTO_PIPE} />
         </Trans>
       )}
-      {b.AI_TEXT.visible && (
-        <Trans bi={b.AI_TEXT}>
-          <AiText frame={frame} fps={fps} bi={b.AI_TEXT} />
+      {b.RESTO_MONEY.visible && (
+        <Trans bi={b.RESTO_MONEY}>
+          <RestoMoney frame={frame} fps={fps} bi={b.RESTO_MONEY} />
         </Trans>
       )}
       {b.PROOF_TURN.visible && (

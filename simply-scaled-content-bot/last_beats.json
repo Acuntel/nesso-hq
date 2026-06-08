@@ -1,67 +1,97 @@
 [
   {
-    "key": "PROOF_FLASH",
+    "key": "PAIN_OPEN_DESK",
     "start": 0.0,
-    "dur": 2.0987
+    "dur": 3.4246
   },
   {
-    "key": "HOOK",
-    "start": 2.0987,
-    "dur": 4.6172
+    "key": "PAIN_CONTRACT",
+    "start": 3.4246,
+    "dur": 2.3644
   },
   {
-    "key": "BRIDGE",
-    "start": 6.716,
-    "dur": 2.9479
+    "key": "PAIN_COUNTY",
+    "start": 5.789,
+    "dur": 2.1495
+  },
+  {
+    "key": "PAIN_INBOX",
+    "start": 7.9385,
+    "dur": 2.042
+  },
+  {
+    "key": "PAIN_STICKY",
+    "start": 9.9805,
+    "dur": 2.5794
+  },
+  {
+    "key": "PAIN_PEAK",
+    "start": 12.5599,
+    "dur": 2.077
+  },
+  {
+    "key": "TURN_TO_PROOF",
+    "start": 14.6369,
+    "dur": 2.626
   },
   {
     "key": "LAW_TOUR",
-    "start": 9.6639,
-    "dur": 9.1077
+    "start": 17.2628,
+    "dur": 8.7151
   },
   {
     "key": "LAW_PDF",
-    "start": 18.7716,
-    "dur": 8.8738
+    "start": 25.978,
+    "dur": 7.2677
   },
   {
     "key": "LAW_HOME",
-    "start": 27.6454,
-    "dur": 6.2227
+    "start": 33.2457,
+    "dur": 5.8702
   },
   {
     "key": "LAW_EMAIL",
-    "start": 33.8681,
-    "dur": 4.1975
+    "start": 39.1159,
+    "dur": 4.8364
   },
   {
-    "key": "PIVOT",
-    "start": 38.0656,
-    "dur": 2.9382
+    "key": "MORPH",
+    "start": 43.9522,
+    "dur": 3.9736
   },
   {
-    "key": "RESTO_MONEY",
-    "start": 41.0039,
-    "dur": 5.9108
+    "key": "RESTO_TEXT",
+    "start": 47.9258,
+    "dur": 4.1233
+  },
+  {
+    "key": "RESTO_NUMBER",
+    "start": 52.0491,
+    "dur": 3.9237
+  },
+  {
+    "key": "RESTO_LEAD",
+    "start": 55.9728,
+    "dur": 2.8755
   },
   {
     "key": "RESTO_PIPE",
-    "start": 46.9147,
-    "dur": 5.037
+    "start": 58.8483,
+    "dur": 6.8185
   },
   {
-    "key": "AI_TEXT",
-    "start": 51.9517,
-    "dur": 7.3143
+    "key": "RESTO_MONEY",
+    "start": 65.6669,
+    "dur": 3.9736
   },
   {
     "key": "PROOF_TURN",
-    "start": 59.266,
-    "dur": 4.6243
+    "start": 69.6404,
+    "dur": 4.299
   },
   {
     "key": "CLOSE_CTA",
-    "start": 63.8903,
-    "dur": 12.1097
+    "start": 73.9394,
+    "dur": 8.0606
   }
 ]
