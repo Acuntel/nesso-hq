@@ -44,7 +44,7 @@ import remotion_client  # noqa: E402
 
 log = logging.getLogger("simply_reel")
 
-TARGET_DURATION = 60.0
+TARGET_DURATION = 66.0
 FPS = 30
 
 BRAND = "Simply Scaled"
@@ -68,55 +68,70 @@ def prerendered_path() -> str | None:
     """The committed, full-quality reel that /makesimply sends by default."""
     return PRERENDERED if os.path.exists(PRERENDERED) else None
 
-# ── The 12 beats (v2): VO line + minimum on-screen duration (s) ──────────────
-# Tight read; final timing is scaled to hit exactly 60.0s. Keys MUST match the
-# SimplyScaledReel.tsx composition.
+# ── The 10 beats (v3): VO line + minimum on-screen duration (s) ──────────────
+# Generic names only (no client/product names), differentiated law vs restoration,
+# slower hook + close, no email. Keys MUST match SimplyScaledReel.tsx. Scales to ~63s.
 BEATS = [
-    ("HOOK", "What are the five things you waste the most time on, every single day, running your business?", 4.6),
-    ("BRIDGE", "Now imagine every one of them — handled. This is what I build.", 2.8),
-    ("SM_TOOLS", "This is Stolen Mule — the system I built for a real law firm, The REAL Law Group. Thirty-plus tools and A.I., in one place.", 6.2),
-    ("SM_MONEY", "Every dollar earned, every dollar still owed. Watch it grow, month by month. No spreadsheets, no guessing.", 5.2),
-    ("PIVOT", "Now watch me do it again — for a completely different business.", 3.0),
-    ("RO_HEAD", "Same builder. This is Restoration One. Every job, every lead, every dollar sold — updating live.", 5.2),
-    ("RO_CRM", "A full CRM, pipeline, and real contacts. See where leads slip away — and the money waiting to be paid.", 5.6),
-    ("TG_DEMO", "A guy in the field texts in a messy lead… and seconds later, it's a clean lead on the board. Nothing gets missed.", 6.0),
-    ("PROOF", "Real businesses. Real people. A law firm, a restoration crew — built by one developer.", 5.0),
-    ("TURN", "If I can make these feel this powerful… imagine yours.", 2.8),
-    ("CLOSE", "It's me — a real person you can call or text today. Free fifteen-minute teardown, no pitch.", 4.4),
-    ("CTA", "Call or text eight four seven, two one two, twenty one forty two. Let's build yours. Simply Scaled.", 5.4),
+    ("HOOK", "If you run a business, five simple things quietly eat up your whole day… every single day.", 7.0),
+    ("BRIDGE", "Now imagine a computer just… does them all for you.", 4.0),
+    ("LAW_FULL", "For a law firm, it keeps every client, every document, and every case in one organized place — so nothing gets lost.", 6.5),
+    ("LAW_MONEY", "It even shows the money — exactly what you've earned, and what your clients still owe.", 5.0),
+    ("PIVOT", "Same builder — a completely different kind of business.", 3.5),
+    ("RESTO_MONEY", "For a fire-and-water repair company, it's a live scoreboard. Six hundred twelve thousand dollars in jobs sold this year.", 6.5),
+    ("RESTO_PIPE", "Every customer is tracked from the first call to the paid job — so nobody slips through the cracks.", 6.0),
+    ("AI_TEXT", "And a customer texts in plain English. The software reads the mess, pulls out the details, and files the job all by itself.", 8.0),
+    ("PROOF_TURN", "Two real businesses — one person built both. Now imagine this, built for yours.", 6.5),
+    ("CLOSE_CTA", "This is Simply Scaled. Call or text eight four seven, two one two, two one four two for a free fifteen minute call. Tell me your business, and I'll tell you exactly what to automate first.", 10.0),
 ]
 
 # ── SFX cues: (file, beat_key, offset_in_beat_s, volume) ─────────────────────
 SFX_CUES = [
-    ("notification_ding.mp3", "HOOK", 0.2, 0.5),
-    ("ui_tap.mp3", "HOOK", 0.5, 0.4),
-    ("ui_tap.mp3", "HOOK", 1.05, 0.4),
-    ("ui_tap.mp3", "HOOK", 1.6, 0.4),
-    ("ui_tap.mp3", "HOOK", 2.15, 0.4),
-    ("ui_tap.mp3", "HOOK", 2.7, 0.4),
-    ("riser_short.mp3", "HOOK", 3.5, 0.5),
-    ("whoosh_short.mp3", "BRIDGE", 1.3, 0.55),
-    ("sub_drop.mp3", "BRIDGE", 1.8, 0.8),
-    ("ui_tap.mp3", "SM_TOOLS", 1.2, 0.4),
-    ("ui_tap.mp3", "SM_TOOLS", 2.4, 0.4),
-    ("ui_tap.mp3", "SM_TOOLS", 3.6, 0.4),
-    ("cash_ding.mp3", "SM_MONEY", 0.5, 0.5),
-    ("riser_short.mp3", "SM_MONEY", 1.1, 0.4),
-    ("whoosh_short.mp3", "PIVOT", 0.0, 0.6),
-    ("sub_drop.mp3", "PIVOT", 1.3, 0.7),
-    ("cash_ding.mp3", "RO_HEAD", 0.5, 0.55),
-    ("whoosh_short.mp3", "RO_CRM", 1.4, 0.5),
-    ("whoosh_short.mp3", "RO_CRM", 3.6, 0.5),
-    ("typing_tick.mp3", "TG_DEMO", 0.5, 0.35),
-    ("send_swoosh.mp3", "TG_DEMO", 2.4, 0.55),
-    ("notification_ding.mp3", "TG_DEMO", 4.3, 0.55),
-    ("cash_ding.mp3", "TG_DEMO", 4.6, 0.4),
-    ("impact_hit.mp3", "PROOF", 0.2, 0.5),
-    ("whoosh_short.mp3", "PROOF", 0.7, 0.45),
-    ("riser_short.mp3", "TURN", 0.2, 0.4),
-    ("logo_ding.mp3", "CLOSE", 0.2, 0.55),
-    ("cash_ding.mp3", "CTA", 2.6, 0.4),
-    ("logo_ding.mp3", "CTA", 3.0, 0.4),
+    # HOOK — one tap per pain row (staggered, slow)
+    ("ui_tap.mp3", "HOOK", 0.5, 0.45),
+    ("ui_tap.mp3", "HOOK", 1.05, 0.45),
+    ("ui_tap.mp3", "HOOK", 1.6, 0.45),
+    ("ui_tap.mp3", "HOOK", 2.15, 0.45),
+    ("ui_tap.mp3", "HOOK", 2.7, 0.5),
+    # BRIDGE — problems funnel into the device
+    ("riser_short.mp3", "BRIDGE", 0.2, 0.5),
+    ("send_swoosh.mp3", "BRIDGE", 1.6, 0.55),
+    ("impact_hit.mp3", "BRIDGE", 2.2, 0.6),
+    ("sub_drop.mp3", "BRIDGE", 2.25, 0.6),
+    ("notification_ding.mp3", "BRIDGE", 2.5, 0.4),
+    # LAW vault — calm, restrained, no cash
+    ("send_swoosh.mp3", "LAW_FULL", 0.1, 0.5),
+    ("ui_tap.mp3", "LAW_FULL", 2.6, 0.45),
+    ("whoosh_short.mp3", "LAW_FULL", 3.0, 0.45),
+    ("riser_short.mp3", "LAW_MONEY", 0.3, 0.4),
+    ("cash_ding.mp3", "LAW_MONEY", 3.0, 0.45),  # single dignified ding
+    # PIVOT — seam wipe to the opposite world
+    ("whoosh_short.mp3", "PIVOT", 0.2, 0.6),
+    ("impact_hit.mp3", "PIVOT", 1.75, 0.6),
+    # RESTO money — the money is the hero (prominent cash)
+    ("riser_short.mp3", "RESTO_MONEY", 0.1, 0.5),
+    ("cash_ding.mp3", "RESTO_MONEY", 3.6, 0.7),
+    ("cash_ding.mp3", "RESTO_MONEY", 4.7, 0.45),
+    # RESTO pipe — card crosses 4 columns + dollar stamp
+    ("whoosh_short.mp3", "RESTO_PIPE", 1.8, 0.45),
+    ("whoosh_short.mp3", "RESTO_PIPE", 2.7, 0.45),
+    ("whoosh_short.mp3", "RESTO_PIPE", 3.6, 0.45),
+    ("whoosh_short.mp3", "RESTO_PIPE", 4.5, 0.45),
+    ("cash_ding.mp3", "RESTO_PIPE", 4.75, 0.65),
+    # AI beat — richest sound design
+    ("typing_tick.mp3", "AI_TEXT", 0.9, 0.35),
+    ("notification_ding.mp3", "AI_TEXT", 2.3, 0.5),
+    ("sub_drop.mp3", "AI_TEXT", 3.0, 0.55),
+    ("ui_tap.mp3", "AI_TEXT", 4.0, 0.35),
+    ("ui_tap.mp3", "AI_TEXT", 4.5, 0.35),
+    ("ui_tap.mp3", "AI_TEXT", 5.0, 0.35),
+    ("logo_ding.mp3", "AI_TEXT", 6.4, 0.6),
+    # PROOF → yours
+    ("whoosh_short.mp3", "PROOF_TURN", 0.4, 0.5),
+    ("logo_ding.mp3", "PROOF_TURN", 2.6, 0.45),
+    ("riser_short.mp3", "PROOF_TURN", 3.8, 0.45),
+    # CLOSE — held, confident
+    ("logo_ding.mp3", "CLOSE_CTA", 0.4, 0.55),
+    ("logo_ding.mp3", "CLOSE_CTA", 8.8, 0.45),
 ]
 
 
@@ -340,7 +355,7 @@ def mux_audio(
         idx += 1
     if music:
         inputs += ["-i", music]
-        fc.append(f"[{idx}:a]volume=0.10,afade=t=in:st=0:d=1.2,afade=t=out:st=58:d=2[mus]")
+        fc.append(f"[{idx}:a]volume=0.10,afade=t=in:st=0:d=1.2,afade=t=out:st={TARGET_DURATION - 2:.1f}:d=2[mus]")
         mix_labels.append("[mus]")
         idx += 1
 

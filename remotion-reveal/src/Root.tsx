@@ -114,22 +114,19 @@ export const RemotionRoot: React.FC = () => {
         }}
       />
 
-      {/* ── Simply Scaled — 60s two-dashboard sales reel ───────────────── */}
+      {/* ── Simply Scaled — hero reel v3 (full-screen, ~63s) ───────────── */}
       <Composition
         id="SimplyScaledReel"
         component={SimplyScaledReel}
-        durationInFrames={Math.round(60 * FPS)}
+        durationInFrames={Math.round(68 * FPS)}
         fps={FPS}
         width={VIDEO_WIDTH}
         height={VIDEO_HEIGHT}
         defaultProps={{
           brand: "Simply Scaled",
           phone: "(847) 212-2142",
-          email: "bradyschwartz25@gmail.com",
-          offer:
-            "Free 15-min teardown of where your money's leaking — no pitch.",
           logoUrl: "",
-          founderPhotoUrl: "",
+          lite: false,
         }}
       />
 
