@@ -33,6 +33,7 @@ const DEFAULT_DURS: { key: string; dur: number }[] = [
   { key: "HOOK", dur: 7 },
   { key: "BRIDGE", dur: 4 },
   { key: "LAW_FULL", dur: 6 },
+  { key: "LAW_AI", dur: 6 },
   { key: "LAW_MONEY", dur: 5 },
   { key: "PIVOT", dur: 4 },
   { key: "RESTO_MONEY", dur: 6 },
@@ -53,12 +54,13 @@ function buildDefaultBeats(): ReelBeat[] {
 
 const CAPTIONS: Record<string, string> = {
   HOOK: "RUNNING A BUSINESS? THESE 5 THINGS EAT YOUR DAY.",
-  BRIDGE: "IMAGINE A COMPUTER JUST… DOES THEM FOR YOU.",
-  LAW_FULL: "A LAW FIRM: EVERY CASE, FILE & DOCUMENT — ONE PLACE.",
-  LAW_MONEY: "SEE WHAT YOU EARNED — AND WHAT YOU'RE STILL OWED.",
+  BRIDGE: "ONE SYSTEM THAT DOES IT ALL FOR YOU.",
+  LAW_FULL: "A LAW FIRM: EVERY CASE, FILE & DOCUMENT IN ONE PLACE.",
+  LAW_AI: "CUSTOM AI THAT READS A CONTRACT IN SECONDS.",
+  LAW_MONEY: "SEE WHAT YOU'VE EARNED, AND WHAT YOU'RE OWED.",
   PIVOT: "SAME BUILDER. A COMPLETELY DIFFERENT BUSINESS.",
-  RESTO_MONEY: "A FIRE & WATER REPAIR CO. — $612,480 IN JOBS SOLD.",
-  RESTO_PIPE: "EVERY CUSTOMER — FROM FIRST CALL TO PAID JOB.",
+  RESTO_MONEY: "A FIRE & WATER REPAIR CO: $612,480 IN JOBS SOLD.",
+  RESTO_PIPE: "EVERY CUSTOMER, FROM FIRST CALL TO PAID JOB.",
   AI_TEXT: "A CUSTOMER TEXTS. THE SOFTWARE FILES THE JOB ITSELF.",
   PROOF_TURN: "TWO REAL BUSINESSES. ONE PERSON BUILT BOTH.",
   CLOSE_CTA: "",
@@ -565,92 +567,205 @@ const BridgeScene: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   fps,
   bi,
 }) => {
-  const conv = ipl(bi.localF, 0, bi.durF * 0.55, 0, 1, ease);
-  const lock = ipl(bi.localF, bi.durF * 0.5, bi.durF * 0.62, 0, 1, ease);
-  const bloom = ipl(bi.localF, bi.durF * 0.55, bi.durF * 0.7, 0, 1);
+  const cx = 540;
+  const coreY = 700;
+  // a Jarvis scan beam sweeps the stacked pain rows, flipping each to green
+  const scanY = ipl(bi.localF, 6, bi.durF * 0.44, 420, 1010, easeInOut);
+  const scanOn = bi.localF > 4 && bi.localF < bi.durF * 0.52;
+  const coreP = ipl(bi.localF, bi.durF * 0.36, bi.durF * 0.72, 0, 1, ease);
+  const textP = ipl(bi.localF, bi.durF * 0.66, bi.durF * 0.82, 0, 1, ease);
+  const bloom = coreP;
+  const rot = frame * 1.3;
   return (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(ellipse at 50% 45%, #0c1020 0%, #05060a 100%)",
-        alignItems: "center",
-        justifyContent: "center",
+          "radial-gradient(ellipse at 50% 42%, #0c1226 0%, #04050a 100%)",
+        overflow: "hidden",
       }}
     >
-      <DotGrid color={LAW.indigo} opacity={0.3} frame={frame} />
-      <Bloom color={`rgba(99,102,241,${0.4 * bloom})`} />
-      {/* converging pain rows */}
+      <DotGrid color={LAW.indigo} opacity={0.26} frame={frame} />
+      <Bloom color={`rgba(99,102,241,${0.55 * bloom})`} at="50% 56%" />
+      {/* pain rows: scanned green, then fed smoothly into the core */}
       {PAINS.map((p, i) => {
-        const ang = (i / PAINS.length) * Math.PI * 2;
-        const r = (1 - conv) * 520;
-        const x = Math.cos(ang) * r;
-        const y = Math.sin(ang) * r - 40;
-        const checked = lock > 0;
+        const rowY = 440 + i * 110;
+        const checked = scanY > rowY + 8;
+        const fp = ipl(
+          bi.localF,
+          bi.durF * 0.42 + i * 3,
+          bi.durF * 0.42 + i * 3 + 20,
+          0,
+          1,
+          ease,
+        );
+        const y = rowY + (coreY - rowY) * fp;
+        const sc = 1 - fp * 0.82;
         return (
           <div
             key={i}
             style={{
               position: "absolute",
-              left: "50%",
-              top: "50%",
-              transform: `translate(${x - 40}px, ${y - 40}px) scale(${0.6 + 0.4 * (1 - conv)})`,
-              opacity: conv < 0.95 ? 1 : 1 - lock,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: checked
-                ? "rgba(52,211,153,0.16)"
-                : "rgba(244,71,95,0.14)",
-              border: `1px solid ${checked ? FIRE.emerald : RED}`,
-              borderRadius: 12,
-              padding: "8px 12px",
-              fontFamily: SANS,
-              fontSize: 22,
-              color: "#fff",
-              whiteSpace: "nowrap",
+              left: 120,
+              right: 120,
+              top: y - 42,
+              transform: `scale(${sc})`,
+              transformOrigin: "50% 50%",
+              opacity: 1 - fp * 0.92,
             }}
           >
-            {checked ? "✓" : p.icon} {p.t}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                background: checked
+                  ? "rgba(52,211,153,0.12)"
+                  : "rgba(244,71,95,0.10)",
+                border: `1.5px solid ${checked ? FIRE.emerald : "rgba(244,71,95,0.5)"}`,
+                borderRadius: 16,
+                padding: "18px 26px",
+                boxShadow: checked ? `0 0 26px ${FIRE.emerald}55` : "none",
+              }}
+            >
+              <div style={{ fontSize: 34, width: 46 }}>
+                {checked ? "✅" : p.icon}
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontWeight: 700,
+                  fontSize: 34,
+                  color: "#fff",
+                  flex: 1,
+                }}
+              >
+                {p.t}
+              </div>
+            </div>
           </div>
         );
       })}
-      {/* the device */}
-      <div
-        style={{
-          width: 280,
-          height: 340,
-          borderRadius: 32,
-          background: "linear-gradient(160deg,#1a2440,#0e1424)",
-          border: `2px solid ${LAW.indigoHi}`,
-          boxShadow: `0 0 ${80 * bloom}px ${LAW.indigo}`,
-          transform: `scale(${0.6 + lock * 0.5})`,
-          opacity: conv,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 90,
-        }}
-      >
-        ⚡
-      </div>
+      {/* Jarvis scan beam */}
+      {scanOn && (
+        <div
+          style={{
+            position: "absolute",
+            left: 90,
+            right: 90,
+            top: scanY,
+            height: 5,
+            background: `linear-gradient(90deg, transparent, ${LAW.indigoHi}, ${LAW.sky}, ${LAW.indigoHi}, transparent)`,
+            boxShadow: `0 0 30px ${LAW.indigo}`,
+            borderRadius: 3,
+          }}
+        />
+      )}
+      {/* arc-reactor core (counter-rotating rings + orbiting nodes) */}
+      {coreP > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: coreY,
+            transform: `translate(-50%,-50%) scale(${0.45 + coreP * 0.55})`,
+            opacity: coreP,
+          }}
+        >
+          <svg
+            width="480"
+            height="480"
+            viewBox="0 0 480 480"
+            style={{ overflow: "visible" }}
+          >
+            <defs>
+              <radialGradient id="coreg" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#fff" />
+                <stop offset="42%" stopColor={LAW.indigoHi} />
+                <stop offset="100%" stopColor={LAW.indigo} stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <g transform={`rotate(${rot} 240 240)`}>
+              <circle
+                cx="240"
+                cy="240"
+                r="210"
+                fill="none"
+                stroke={LAW.indigo}
+                strokeWidth="3"
+                strokeDasharray="42 24"
+                opacity="0.7"
+              />
+            </g>
+            <g transform={`rotate(${-rot * 1.6} 240 240)`}>
+              <circle
+                cx="240"
+                cy="240"
+                r="158"
+                fill="none"
+                stroke={LAW.indigoHi}
+                strokeWidth="4"
+                strokeDasharray="8 28"
+                opacity="0.85"
+              />
+            </g>
+            <g transform={`rotate(${rot * 2.2} 240 240)`}>
+              <circle
+                cx="240"
+                cy="240"
+                r="112"
+                fill="none"
+                stroke={LAW.sky}
+                strokeWidth="6"
+                strokeDasharray="64 20"
+                opacity="0.95"
+                style={{ filter: `drop-shadow(0 0 10px ${LAW.sky})` }}
+              />
+            </g>
+            <circle
+              cx="240"
+              cy="240"
+              r={68 + Math.sin(frame / 6) * 7}
+              fill="url(#coreg)"
+              style={{
+                filter: `drop-shadow(0 0 ${44 * bloom}px ${LAW.indigo})`,
+              }}
+            />
+            {[0, 1, 2, 3, 4, 5].map((k) => {
+              const a = ((rot * 1.1 + k * 60) * Math.PI) / 180;
+              return (
+                <circle
+                  key={k}
+                  cx={240 + Math.cos(a) * 185}
+                  cy={240 + Math.sin(a) * 185}
+                  r="6"
+                  fill="#fff"
+                  opacity="0.9"
+                />
+              );
+            })}
+          </svg>
+        </div>
+      )}
+      {/* headline loads in */}
       <div
         style={{
           position: "absolute",
-          top: 360,
+          top: 1150,
           left: 0,
           right: 0,
           textAlign: "center",
           fontFamily: SANS,
-          fontSize: 50,
+          fontSize: 56,
           fontWeight: 800,
           color: "#fff",
-          opacity: lock,
+          opacity: textP,
           padding: "0 80px",
           textShadow: `0 0 30px ${LAW.indigo}`,
+          transform: `translateY(${(1 - textP) * 20}px)`,
         }}
       >
-        Now imagine a computer just…{" "}
-        <span style={{ color: LAW.indigoHi }}>does them for you.</span>
+        One system that does it <span style={{ color: LAW.indigoHi }}>all</span>{" "}
+        for you.
       </div>
     </AbsoluteFill>
   );
@@ -671,7 +786,7 @@ const LawFull: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   const cx = 540 + (1 - cursorP) * 260;
   const cy = 1180 + (1 - cursorP) * 160;
   const cases = [
-    { n: "Johnson — 14 Oak St.", t: "Home Purchase" },
+    { n: "Johnson · 14 Oak St.", t: "Home Purchase" },
     { n: "Mercer Estate", t: "Estate Plan" },
     { n: "Diaz v. Whitfield", t: "Litigation" },
   ];
@@ -828,7 +943,7 @@ const LawFull: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
                   marginTop: 6,
                 }}
               >
-                Johnson — 14 Oak St.
+                Johnson · 14 Oak St.
               </div>
               {[0, 1, 2, 3, 4].map((k) => (
                 <div
@@ -870,6 +985,236 @@ const LawFull: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   );
 };
 
+// 3b — LAW custom AI: reads a contract, auto-files the key terms
+const LAW_TERMS = [
+  { label: "Parties", val: "Johnson / Mercer", t: 0.4 },
+  { label: "Closing date", val: "June 30, 2026", t: 0.5 },
+  { label: "Purchase price", val: "$740,000", t: 0.6 },
+  { label: "Deadline", val: "Added to calendar", t: 0.7 },
+];
+const LawAi: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
+  frame,
+  fps,
+  bi,
+}) => {
+  const enter = ipl(bi.localF, 0, 12, 0, 1, ease);
+  const scanY = ipl(
+    bi.localF,
+    bi.durF * 0.18,
+    bi.durF * 0.6,
+    300,
+    1040,
+    easeInOut,
+  );
+  const scanOn = bi.localF > bi.durF * 0.16 && bi.localF < bi.durF * 0.66;
+  const panelIn = ipl(bi.localF, bi.durF * 0.3, bi.durF * 0.44, 0, 1, ease);
+  const done = ipl(bi.localF, bi.durF * 0.78, bi.durF * 0.9, 0, 1, ease);
+  // key lines on the document (y positions inside the doc) that light up as the scan passes
+  const keyLines = [360, 470, 580];
+  return (
+    <AbsoluteFill
+      style={{ background: `linear-gradient(180deg, ${LAW.bg2}, ${LAW.bg})` }}
+    >
+      <DotGrid color={LAW.indigo} opacity={0.24} frame={frame} />
+      <Bloom color="rgba(99,102,241,0.32)" />
+      <div
+        style={{
+          position: "absolute",
+          top: 120,
+          left: 60,
+          right: 60,
+          opacity: enter,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: MONO,
+            fontSize: 24,
+            letterSpacing: "0.22em",
+            color: LAW.indigoHi,
+          }}
+        >
+          CUSTOM AI · BUILT FOR THIS FIRM
+        </div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 52,
+            fontWeight: 800,
+            color: LAW.text,
+            marginTop: 8,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.05,
+          }}
+        >
+          It reads the contract
+          <br />
+          for you.
+        </div>
+      </div>
+      {/* the contract document */}
+      <div
+        style={{
+          position: "absolute",
+          top: 300,
+          left: 60,
+          width: 560,
+          bottom: 360,
+          background: "#F4F1EA",
+          borderRadius: 14,
+          padding: "40px 44px",
+          boxShadow: "0 30px 70px rgba(0,0,0,0.5)",
+          overflow: "hidden",
+          opacity: enter,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: SANS,
+            fontWeight: 800,
+            fontSize: 26,
+            color: "#1a1a1a",
+          }}
+        >
+          PURCHASE AGREEMENT
+        </div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 18,
+            color: "#666",
+            marginTop: 4,
+          }}
+        >
+          Johnson · 14 Oak St.
+        </div>
+        {Array.from({ length: 14 }).map((_, k) => {
+          const ly = 360 + k * 42; // absolute-ish y to compare with scanY
+          const lit = scanY > ly && keyLines.some((g) => Math.abs(g - ly) < 24);
+          const isKey = keyLines.some((g) => Math.abs(g - ly) < 24);
+          return (
+            <div
+              key={k}
+              style={{
+                height: 14,
+                borderRadius: 3,
+                marginTop: 18,
+                width: `${88 - (k % 4) * 9}%`,
+                background: lit ? LAW.indigo : isKey ? "#c9c4b8" : "#d8d4ca",
+                boxShadow: lit ? `0 0 14px ${LAW.indigo}` : "none",
+              }}
+            />
+          );
+        })}
+      </div>
+      {/* scan beam over the document */}
+      {scanOn && (
+        <div
+          style={{
+            position: "absolute",
+            left: 60,
+            width: 560,
+            top: scanY,
+            height: 5,
+            background: `linear-gradient(90deg, transparent, ${LAW.sky}, ${LAW.indigoHi}, transparent)`,
+            boxShadow: `0 0 24px ${LAW.indigo}`,
+            borderRadius: 3,
+            zIndex: 20,
+          }}
+        />
+      )}
+      {/* auto-filed summary panel */}
+      <div
+        style={{
+          position: "absolute",
+          top: 320,
+          right: 60,
+          width: 380,
+          background: "rgba(99,102,241,0.08)",
+          border: `2px solid ${done > 0 ? FIRE.emerald : LAW.indigo}`,
+          borderRadius: 22,
+          padding: 30,
+          opacity: panelIn,
+          boxShadow: `0 0 40px ${LAW.indigo}44`,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 24,
+            fontWeight: 800,
+            color: done > 0 ? FIRE.emerald : LAW.indigoHi,
+            letterSpacing: "0.04em",
+            marginBottom: 20,
+          }}
+        >
+          {done > 0 ? "✓ FILED TO THE CASE" : "EXTRACTING…"}
+        </div>
+        {LAW_TERMS.map((tk, i) => {
+          const a = ipl(
+            bi.localF,
+            bi.durF * tk.t,
+            bi.durF * tk.t + 9,
+            0,
+            1,
+            ease,
+          );
+          return (
+            <div
+              key={i}
+              style={{
+                marginBottom: 20,
+                opacity: a,
+                transform: `translateX(${(1 - a) * 28}px)`,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: LAW.soft,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {tk.label}
+              </div>
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 30,
+                  fontWeight: 700,
+                  color: "#fff",
+                  textShadow: `0 0 12px ${LAW.indigo}88`,
+                }}
+              >
+                {tk.val}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          bottom: 250,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontFamily: SANS,
+          fontSize: 30,
+          fontWeight: 700,
+          color: LAW.indigoHi,
+          opacity: done,
+        }}
+      >
+        Summarized & filed in seconds.
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 // 4 — LAW money (single clean line + count-up)
 const LawMoney: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
   frame,
@@ -901,7 +1246,7 @@ const LawMoney: React.FC<{ frame: number; fps: number; bi: BeatInfo }> = ({
             marginBottom: 24,
           }}
         >
-          FEES COLLECTED — MONTH BY MONTH
+          FEES COLLECTED, MONTH BY MONTH
         </div>
         <LineChart
           draw={Math.max(0.001, draw)}
@@ -1875,9 +2220,34 @@ const CloseCta: React.FC<{
           lineHeight: 1.4,
         }}
       >
-        Free 15-minute call — I'll tell you exactly what to automate first. No
+        Free 15-minute call. I'll tell you exactly what to automate first. No
         pitch.
       </div>
+    </AbsoluteFill>
+  );
+};
+
+// Smooth screen-to-screen transition: a quick scale + crossfade so every cut
+// reads as a motivated camera move, not a hard slideshow jump. `last` keeps the
+// final CTA from fading out at the end.
+const Trans: React.FC<{
+  bi: BeatInfo;
+  last?: boolean;
+  children: React.ReactNode;
+}> = ({ bi, last, children }) => {
+  const inP = ipl(bi.localF, 0, 8, 0, 1, ease);
+  const outP = last ? 0 : ipl(bi.localF, bi.durF - 6, bi.durF, 0, 1);
+  const op = Math.min(inP, 1 - outP);
+  const scale = 1 + (1 - inP) * 0.05 + outP * 0.03;
+  return (
+    <AbsoluteFill
+      style={{
+        opacity: op,
+        transform: `scale(${scale})`,
+        transformOrigin: "50% 50%",
+      }}
+    >
+      {children}
     </AbsoluteFill>
   );
 };
@@ -1907,36 +2277,67 @@ export const SimplyScaledReel: React.FC<SimplyScaledReelProps> = ({
 
   return (
     <AbsoluteFill style={{ background: "#000" }}>
-      {b.HOOK.visible && <HookScene frame={frame} fps={fps} bi={b.HOOK} />}
+      {b.HOOK.visible && (
+        <Trans bi={b.HOOK}>
+          <HookScene frame={frame} fps={fps} bi={b.HOOK} />
+        </Trans>
+      )}
       {b.BRIDGE.visible && (
-        <BridgeScene frame={frame} fps={fps} bi={b.BRIDGE} />
+        <Trans bi={b.BRIDGE}>
+          <BridgeScene frame={frame} fps={fps} bi={b.BRIDGE} />
+        </Trans>
       )}
       {b.LAW_FULL.visible && (
-        <LawFull frame={frame} fps={fps} bi={b.LAW_FULL} />
+        <Trans bi={b.LAW_FULL}>
+          <LawFull frame={frame} fps={fps} bi={b.LAW_FULL} />
+        </Trans>
+      )}
+      {b.LAW_AI.visible && (
+        <Trans bi={b.LAW_AI}>
+          <LawAi frame={frame} fps={fps} bi={b.LAW_AI} />
+        </Trans>
       )}
       {b.LAW_MONEY.visible && (
-        <LawMoney frame={frame} fps={fps} bi={b.LAW_MONEY} />
+        <Trans bi={b.LAW_MONEY}>
+          <LawMoney frame={frame} fps={fps} bi={b.LAW_MONEY} />
+        </Trans>
       )}
-      {b.PIVOT.visible && <Pivot frame={frame} fps={fps} bi={b.PIVOT} />}
+      {b.PIVOT.visible && (
+        <Trans bi={b.PIVOT}>
+          <Pivot frame={frame} fps={fps} bi={b.PIVOT} />
+        </Trans>
+      )}
       {b.RESTO_MONEY.visible && (
-        <RestoMoney frame={frame} fps={fps} bi={b.RESTO_MONEY} />
+        <Trans bi={b.RESTO_MONEY}>
+          <RestoMoney frame={frame} fps={fps} bi={b.RESTO_MONEY} />
+        </Trans>
       )}
       {b.RESTO_PIPE.visible && (
-        <RestoPipe frame={frame} fps={fps} bi={b.RESTO_PIPE} />
+        <Trans bi={b.RESTO_PIPE}>
+          <RestoPipe frame={frame} fps={fps} bi={b.RESTO_PIPE} />
+        </Trans>
       )}
-      {b.AI_TEXT.visible && <AiText frame={frame} fps={fps} bi={b.AI_TEXT} />}
+      {b.AI_TEXT.visible && (
+        <Trans bi={b.AI_TEXT}>
+          <AiText frame={frame} fps={fps} bi={b.AI_TEXT} />
+        </Trans>
+      )}
       {b.PROOF_TURN.visible && (
-        <ProofTurn frame={frame} fps={fps} bi={b.PROOF_TURN} />
+        <Trans bi={b.PROOF_TURN}>
+          <ProofTurn frame={frame} fps={fps} bi={b.PROOF_TURN} />
+        </Trans>
       )}
       {b.CLOSE_CTA.visible && (
-        <CloseCta
-          frame={frame}
-          fps={fps}
-          bi={b.CLOSE_CTA}
-          brand={brand}
-          phone={phone}
-          logoUrl={logoUrl}
-        />
+        <Trans bi={b.CLOSE_CTA} last>
+          <CloseCta
+            frame={frame}
+            fps={fps}
+            bi={b.CLOSE_CTA}
+            brand={brand}
+            phone={phone}
+            logoUrl={logoUrl}
+          />
+        </Trans>
       )}
 
       {/* small persistent wordmark (hidden during close) */}

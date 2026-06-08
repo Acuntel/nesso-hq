@@ -44,7 +44,7 @@ import remotion_client  # noqa: E402
 
 log = logging.getLogger("simply_reel")
 
-TARGET_DURATION = 66.0
+TARGET_DURATION = 70.0
 FPS = 30
 
 BRAND = "Simply Scaled"
@@ -73,64 +73,80 @@ def prerendered_path() -> str | None:
 # slower hook + close, no email. Keys MUST match SimplyScaledReel.tsx. Scales to ~63s.
 BEATS = [
     ("HOOK", "If you run a business, five simple things quietly eat up your whole day… every single day.", 7.0),
-    ("BRIDGE", "Now imagine a computer just… does them all for you.", 4.0),
-    ("LAW_FULL", "For a law firm, it keeps every client, every document, and every case in one organized place — so nothing gets lost.", 6.5),
-    ("LAW_MONEY", "It even shows the money — exactly what you've earned, and what your clients still owe.", 5.0),
-    ("PIVOT", "Same builder — a completely different kind of business.", 3.5),
+    ("BRIDGE", "Now imagine one system that just… does it all for you.", 4.0),
+    ("LAW_FULL", "For a law firm, it keeps every client, every document, and every case in one organized place, so nothing ever gets lost.", 6.5),
+    ("LAW_AI", "I even built them custom A.I. that reads a forty-page contract and pulls every date, party, and deadline in seconds.", 6.5),
+    ("LAW_MONEY", "It even shows the money: exactly what you've earned, and what your clients still owe.", 5.0),
+    ("PIVOT", "Same builder, a completely different kind of business.", 3.5),
     ("RESTO_MONEY", "For a fire-and-water repair company, it's a live scoreboard. Six hundred twelve thousand dollars in jobs sold this year.", 6.5),
-    ("RESTO_PIPE", "Every customer is tracked from the first call to the paid job — so nobody slips through the cracks.", 6.0),
+    ("RESTO_PIPE", "Every customer is tracked from the first call to the paid job, so nobody slips through the cracks.", 6.0),
     ("AI_TEXT", "And a customer texts in plain English. The software reads the mess, pulls out the details, and files the job all by itself.", 8.0),
-    ("PROOF_TURN", "Two real businesses — one person built both. Now imagine this, built for yours.", 6.5),
+    ("PROOF_TURN", "Two real businesses, one person built both. Now imagine this, built for yours.", 6.5),
     ("CLOSE_CTA", "This is Simply Scaled. Call or text eight four seven, two one two, two one four two for a free fifteen minute call. Tell me your business, and I'll tell you exactly what to automate first.", 10.0),
 ]
 
 # ── SFX cues: (file, beat_key, offset_in_beat_s, volume) ─────────────────────
 SFX_CUES = [
-    # HOOK — one tap per pain row (staggered, slow)
-    ("ui_tap.mp3", "HOOK", 0.5, 0.45),
-    ("ui_tap.mp3", "HOOK", 1.05, 0.45),
-    ("ui_tap.mp3", "HOOK", 1.6, 0.45),
-    ("ui_tap.mp3", "HOOK", 2.15, 0.45),
-    ("ui_tap.mp3", "HOOK", 2.7, 0.5),
-    # BRIDGE — problems funnel into the device
-    ("riser_short.mp3", "BRIDGE", 0.2, 0.5),
-    ("send_swoosh.mp3", "BRIDGE", 1.6, 0.55),
-    ("impact_hit.mp3", "BRIDGE", 2.2, 0.6),
-    ("sub_drop.mp3", "BRIDGE", 2.25, 0.6),
-    ("notification_ding.mp3", "BRIDGE", 2.5, 0.4),
-    # LAW vault — calm, restrained, no cash
-    ("send_swoosh.mp3", "LAW_FULL", 0.1, 0.5),
+    # HOOK — one crisp tap per pain row (staggered, slow)
+    ("pop2.mp3", "HOOK", 0.5, 0.5),
+    ("pop2.mp3", "HOOK", 1.05, 0.5),
+    ("pop2.mp3", "HOOK", 1.6, 0.5),
+    ("pop2.mp3", "HOOK", 2.15, 0.5),
+    ("pop2.mp3", "HOOK", 2.7, 0.55),
+    # BRIDGE — Jarvis: scan checks each row (blips), core forms (power_up), locks
+    ("power_up.mp3", "BRIDGE", 0.2, 0.5),
+    ("blip.mp3", "BRIDGE", 0.7, 0.4),
+    ("blip.mp3", "BRIDGE", 1.05, 0.4),
+    ("blip.mp3", "BRIDGE", 1.4, 0.4),
+    ("blip.mp3", "BRIDGE", 1.75, 0.4),
+    ("blip.mp3", "BRIDGE", 2.1, 0.4),
+    ("shimmer.mp3", "BRIDGE", 2.3, 0.5),
+    ("impact_hit.mp3", "BRIDGE", 2.6, 0.55),
+    # LAW vault — calm; swish in, soft click + flip
+    ("swish.mp3", "LAW_FULL", 0.0, 0.5),
     ("ui_tap.mp3", "LAW_FULL", 2.6, 0.45),
-    ("whoosh_short.mp3", "LAW_FULL", 3.0, 0.45),
+    ("pop2.mp3", "LAW_FULL", 3.0, 0.4),
+    # LAW custom AI — shimmer in, a blip per extracted term, ding when filed
+    ("shimmer.mp3", "LAW_AI", 0.0, 0.55),
+    ("blip.mp3", "LAW_AI", 2.6, 0.45),
+    ("blip.mp3", "LAW_AI", 3.25, 0.45),
+    ("blip.mp3", "LAW_AI", 3.9, 0.45),
+    ("blip.mp3", "LAW_AI", 4.55, 0.45),
+    ("logo_ding.mp3", "LAW_AI", 5.0, 0.55),
+    # LAW money — thoom in, line-draw riser, single dignified cash ding
+    ("thoom.mp3", "LAW_MONEY", 0.0, 0.5),
     ("riser_short.mp3", "LAW_MONEY", 0.3, 0.4),
-    ("cash_ding.mp3", "LAW_MONEY", 3.0, 0.45),  # single dignified ding
+    ("cash_ding.mp3", "LAW_MONEY", 3.0, 0.45),
     # PIVOT — seam wipe to the opposite world
     ("whoosh_short.mp3", "PIVOT", 0.2, 0.6),
     ("impact_hit.mp3", "PIVOT", 1.75, 0.6),
-    # RESTO money — the money is the hero (prominent cash)
-    ("riser_short.mp3", "RESTO_MONEY", 0.1, 0.5),
-    ("cash_ding.mp3", "RESTO_MONEY", 3.6, 0.7),
+    # RESTO money — power-up in, big prominent cash on the number
+    ("power_up.mp3", "RESTO_MONEY", 0.0, 0.5),
+    ("riser_short.mp3", "RESTO_MONEY", 0.1, 0.45),
+    ("cash_ding.mp3", "RESTO_MONEY", 3.6, 0.75),
     ("cash_ding.mp3", "RESTO_MONEY", 4.7, 0.45),
-    # RESTO pipe — card crosses 4 columns + dollar stamp
-    ("whoosh_short.mp3", "RESTO_PIPE", 1.8, 0.45),
-    ("whoosh_short.mp3", "RESTO_PIPE", 2.7, 0.45),
-    ("whoosh_short.mp3", "RESTO_PIPE", 3.6, 0.45),
-    ("whoosh_short.mp3", "RESTO_PIPE", 4.5, 0.45),
-    ("cash_ding.mp3", "RESTO_PIPE", 4.75, 0.65),
-    # AI beat — richest sound design
+    # RESTO pipe — swish per column cross + dollar stamp
+    ("swish.mp3", "RESTO_PIPE", 0.0, 0.45),
+    ("swish.mp3", "RESTO_PIPE", 2.7, 0.45),
+    ("swish.mp3", "RESTO_PIPE", 3.6, 0.45),
+    ("swish.mp3", "RESTO_PIPE", 4.5, 0.45),
+    ("cash_ding.mp3", "RESTO_PIPE", 4.75, 0.7),
+    # AI beat — richest design: thoom in, typing, shimmer scan, token blips, ding
+    ("thoom.mp3", "AI_TEXT", 0.0, 0.45),
     ("typing_tick.mp3", "AI_TEXT", 0.9, 0.35),
     ("notification_ding.mp3", "AI_TEXT", 2.3, 0.5),
-    ("sub_drop.mp3", "AI_TEXT", 3.0, 0.55),
-    ("ui_tap.mp3", "AI_TEXT", 4.0, 0.35),
-    ("ui_tap.mp3", "AI_TEXT", 4.5, 0.35),
-    ("ui_tap.mp3", "AI_TEXT", 5.0, 0.35),
+    ("shimmer.mp3", "AI_TEXT", 3.0, 0.55),
+    ("blip.mp3", "AI_TEXT", 4.0, 0.4),
+    ("blip.mp3", "AI_TEXT", 4.5, 0.4),
+    ("blip.mp3", "AI_TEXT", 5.0, 0.4),
     ("logo_ding.mp3", "AI_TEXT", 6.4, 0.6),
     # PROOF → yours
-    ("whoosh_short.mp3", "PROOF_TURN", 0.4, 0.5),
+    ("power_up.mp3", "PROOF_TURN", 0.0, 0.45),
     ("logo_ding.mp3", "PROOF_TURN", 2.6, 0.45),
-    ("riser_short.mp3", "PROOF_TURN", 3.8, 0.45),
-    # CLOSE — held, confident
-    ("logo_ding.mp3", "CLOSE_CTA", 0.4, 0.55),
+    ("shimmer.mp3", "PROOF_TURN", 3.8, 0.45),
+    # CLOSE — thoom settle, held wordmark + final ding
+    ("thoom.mp3", "CLOSE_CTA", 0.0, 0.45),
+    ("logo_ding.mp3", "CLOSE_CTA", 0.5, 0.55),
     ("logo_ding.mp3", "CLOSE_CTA", 8.8, 0.45),
 ]
 
