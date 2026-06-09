@@ -397,31 +397,43 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ─────────────────────────────────────────────────────────────────────────────
 
 REEL_BUDGET_SECONDS = 20 * 60
+_SIMPLY_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "simply-scaled-content-bot"
+)
+_REEL_BUSY = False
+
+
+def _reel_pipeline():
+    """Import the sibling pipeline module (sys.path set up once)."""
+    import sys
+
+    if _SIMPLY_DIR not in sys.path:
+        sys.path.insert(0, _SIMPLY_DIR)
+    import reel_pipeline
+
+    return reel_pipeline
+
+
+def _reel_caption() -> str:
+    try:
+        dur = _reel_pipeline().TARGET_DURATION
+    except Exception:  # noqa: BLE001
+        dur = 60
+    return f"Simply Scaled — {dur:.0f}s sales reel 🎬"
 
 
 def _build_simply_reel() -> dict:
-    """Blocking: import the sibling pipeline and build one reel."""
-    import sys
-
-    ss = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "simply-scaled-content-bot"
-    )
-    if ss not in sys.path:
-        sys.path.insert(0, ss)
-    import reel_pipeline
-
-    return reel_pipeline.build_reel()
+    """Blocking: build one reel (raises on failure)."""
+    return _reel_pipeline().build_reel()
 
 
 async def _send_reel(update, result: dict):
     if result.get("error"):
         await update.message.reply_text(f"❌ Reel failed: {result['error'][:500]}")
         return
-    path = result["output_path"]
-    dur = result.get("duration", 60)
     try:
         await _reply_video_with_retry(
-            update, path, caption=f"Simply Scaled — {dur:.0f}s sales reel 🎬"
+            update, result["output_path"], caption=_reel_caption()
         )
     except Exception as e:
         await update.message.reply_text(f"❌ Reel rendered but failed to send: {e}")
@@ -434,20 +446,8 @@ async def _send_reel(update, result: dict):
 
 def _prerendered_reel() -> str | None:
     """Path to the committed full-quality reel (sent by default), or None."""
-    import sys
-
-    ss = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "simply-scaled-content-bot"
-    )
-    if ss not in sys.path:
-        sys.path.insert(0, ss)
-    try:
-        import reel_pipeline
-
-        return reel_pipeline.prerendered_path()
-    except Exception:  # noqa: BLE001
-        p = os.path.join(ss, "reel_prerendered.mp4")
-        return p if os.path.exists(p) else None
+    p = os.path.join(_SIMPLY_DIR, "reel_prerendered.mp4")
+    return p if os.path.exists(p) else None
 
 
 async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -455,6 +455,7 @@ async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     /makesimply        → send the ready-made 60s Simply Scaled reel (instant)
     /makesimply fresh  → re-render it from scratch (slow; Railway-lite mode)
     """
+    global _REEL_BUSY
     args = [a.lower() for a in (context.args or [])]
     fresh = any(a in ("fresh", "new", "render", "rebuild") for a in args)
     prer = _prerendered_reel()
@@ -464,9 +465,7 @@ async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if prer and not fresh:
         await update.message.reply_text("🎬 Sending your Simply Scaled reel...")
         try:
-            await _reply_video_with_retry(
-                update, prer, caption="Simply Scaled — 60s sales reel 🎬"
-            )
+            await _reply_video_with_retry(update, prer, caption=_reel_caption())
             await update.message.reply_text(
                 "📞 (847) 212-2142   ·   bradyschwartz25@gmail.com\n"
                 "Simply Scaled — custom dashboards & automation for any business.\n"
@@ -476,23 +475,35 @@ async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Failed to send reel: {e}")
         return
 
+    if _REEL_BUSY:
+        await update.message.reply_text(
+            "⏳ A reel render is already running — I'll send it when it's done."
+        )
+        return
+
     # Fresh render (best-effort; falls back to the pre-rendered file on failure).
     await update.message.reply_text(
         "🎬 Re-rendering your Simply Scaled reel from scratch...\n"
-        "ElevenLabs voiceover → render both dashboards → mix audio + SFX.\n"
+        "ElevenLabs voiceover → render both dashboards → mix + loudnorm audio.\n"
         "This is slow (several minutes). I'll send the saved cut if it can't finish here."
     )
     start = time.time()
     loop = asyncio.get_running_loop()
-    fut = loop.run_in_executor(None, _build_simply_reel)
-    result = None
+    _REEL_BUSY = True
     try:
-        result = await asyncio.wait_for(fut, timeout=REEL_BUDGET_SECONDS)
-    except asyncio.TimeoutError:
-        result = {"error": f"render exceeded {REEL_BUDGET_SECONDS // 60}min"}
-    except Exception as e:  # noqa: BLE001
-        log.error("makesimply fresh build failed", exc_info=True)
-        result = {"error": str(e)}
+        fut = loop.run_in_executor(None, _build_simply_reel)
+        result = None
+        try:
+            result = await asyncio.wait_for(fut, timeout=REEL_BUDGET_SECONDS)
+        except asyncio.TimeoutError:
+            # The pipeline's own render watchdog (REEL_RENDER_TIMEOUT) kills the
+            # Remotion process group, so the executor thread dies shortly after.
+            result = {"error": f"render exceeded {REEL_BUDGET_SECONDS // 60}min"}
+        except Exception as e:  # noqa: BLE001
+            log.error("makesimply fresh build failed", exc_info=True)
+            result = {"error": str(e)}
+    finally:
+        _REEL_BUSY = False
 
     if result and not result.get("error"):
         await _send_reel(update, result)
@@ -514,9 +525,7 @@ async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Fresh render couldn't finish here ({err[:120]}). Sending the saved cut instead."
         )
         try:
-            await _reply_video_with_retry(
-                update, prer, caption="Simply Scaled — 60s sales reel 🎬"
-            )
+            await _reply_video_with_retry(update, prer, caption=_reel_caption())
         except Exception as e:  # noqa: BLE001
             await update.message.reply_text(f"❌ Failed to send reel: {e}")
     else:

@@ -1,97 +1,67 @@
 [
   {
-    "key": "PAIN_OPEN_DESK",
+    "key": "HOOK_MIRACLE",
     "start": 0.0,
-    "dur": 3.4246
+    "dur": 4.3528
   },
   {
-    "key": "PAIN_CONTRACT",
-    "start": 3.4246,
-    "dur": 2.3644
-  },
-  {
-    "key": "PAIN_COUNTY",
-    "start": 5.789,
-    "dur": 2.1495
-  },
-  {
-    "key": "PAIN_INBOX",
-    "start": 7.9385,
-    "dur": 2.042
-  },
-  {
-    "key": "PAIN_STICKY",
-    "start": 9.9805,
-    "dur": 2.5794
-  },
-  {
-    "key": "PAIN_PEAK",
-    "start": 12.5599,
-    "dur": 2.077
+    "key": "PAIN_DESK",
+    "start": 4.3528,
+    "dur": 2.6636
   },
   {
     "key": "TURN_TO_PROOF",
-    "start": 14.6369,
-    "dur": 2.626
+    "start": 7.0164,
+    "dur": 5.0805
   },
   {
     "key": "LAW_TOUR",
-    "start": 17.2628,
-    "dur": 8.7151
+    "start": 12.0969,
+    "dur": 6.056
   },
   {
     "key": "LAW_PDF",
-    "start": 25.978,
-    "dur": 7.2677
-  },
-  {
-    "key": "LAW_HOME",
-    "start": 33.2457,
-    "dur": 5.8702
-  },
-  {
-    "key": "LAW_EMAIL",
-    "start": 39.1159,
-    "dur": 4.8364
+    "start": 18.1529,
+    "dur": 5.2044
   },
   {
     "key": "MORPH",
-    "start": 43.9522,
-    "dur": 3.9736
+    "start": 23.3573,
+    "dur": 2.9273
   },
   {
     "key": "RESTO_TEXT",
-    "start": 47.9258,
-    "dur": 4.1233
-  },
-  {
-    "key": "RESTO_NUMBER",
-    "start": 52.0491,
-    "dur": 3.9237
+    "start": 26.2845,
+    "dur": 2.6495
   },
   {
     "key": "RESTO_LEAD",
-    "start": 55.9728,
-    "dur": 2.8755
+    "start": 28.934,
+    "dur": 4.6411
   },
   {
     "key": "RESTO_PIPE",
-    "start": 58.8483,
-    "dur": 6.8185
+    "start": 33.5751,
+    "dur": 4.3528
   },
   {
     "key": "RESTO_MONEY",
-    "start": 65.6669,
-    "dur": 3.9736
+    "start": 37.9279,
+    "dur": 3.894
   },
   {
     "key": "PROOF_TURN",
-    "start": 69.6404,
-    "dur": 4.299
+    "start": 41.8219,
+    "dur": 3.9743
+  },
+  {
+    "key": "FOUNDER",
+    "start": 45.7962,
+    "dur": 3.8061
   },
   {
     "key": "CLOSE_CTA",
-    "start": 73.9394,
-    "dur": 8.0606
+    "start": 49.6023,
+    "dur": 10.3977
   }
 ]
