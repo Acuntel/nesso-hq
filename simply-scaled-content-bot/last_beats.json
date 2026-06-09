@@ -1,67 +1,77 @@
 [
   {
-    "key": "HOOK_MIRACLE",
+    "key": "HOOK_LIVE_CATCH",
     "start": 0.0,
-    "dur": 4.3528
+    "dur": 4.5939
   },
   {
-    "key": "PAIN_DESK",
-    "start": 4.3528,
-    "dur": 2.6636
+    "key": "NARRATOR_REVEAL",
+    "start": 4.5939,
+    "dur": 3.1957
   },
   {
-    "key": "TURN_TO_PROOF",
-    "start": 7.0164,
-    "dur": 5.0805
+    "key": "PIPELINE_PROOF",
+    "start": 7.7896,
+    "dur": 3.7949
   },
   {
-    "key": "LAW_TOUR",
-    "start": 12.0969,
-    "dur": 6.056
+    "key": "MONEY_ODOMETER",
+    "start": 11.5846,
+    "dur": 3.2749
   },
   {
-    "key": "LAW_PDF",
-    "start": 18.1529,
-    "dur": 5.2044
+    "key": "NIGHTWATCH_3AM",
+    "start": 14.8595,
+    "dur": 2.7963
   },
   {
-    "key": "MORPH",
-    "start": 23.3573,
-    "dur": 2.9273
+    "key": "SIBLINGS_PULLBACK",
+    "start": 17.6558,
+    "dur": 2.5965
   },
   {
-    "key": "RESTO_TEXT",
-    "start": 26.2845,
-    "dur": 2.6495
+    "key": "SIBLING_LAW_OS",
+    "start": 20.2523,
+    "dur": 4.1944
   },
   {
-    "key": "RESTO_LEAD",
-    "start": 28.934,
-    "dur": 4.6411
+    "key": "SIBLING_CONTRACT_AI",
+    "start": 24.4467,
+    "dur": 3.9947
   },
   {
-    "key": "RESTO_PIPE",
-    "start": 33.5751,
-    "dur": 4.3528
+    "key": "SIBLING_OUTBOUND_DUO",
+    "start": 28.4414,
+    "dur": 3.7949
   },
   {
-    "key": "RESTO_MONEY",
-    "start": 37.9279,
-    "dur": 3.894
+    "key": "FLEET_COUNT",
+    "start": 32.2363,
+    "dur": 2.9966
   },
   {
-    "key": "PROOF_TURN",
-    "start": 41.8219,
-    "dur": 3.9743
+    "key": "MAKER",
+    "start": 35.233,
+    "dur": 3.3955
   },
   {
-    "key": "FOUNDER",
-    "start": 45.7962,
-    "dur": 3.8061
+    "key": "BUILT_ME",
+    "start": 38.6285,
+    "dur": 3.3955
   },
   {
-    "key": "CLOSE_CTA",
-    "start": 49.6023,
-    "dur": 10.3977
+    "key": "YOUR_LEAK_SCAN",
+    "start": 42.0239,
+    "dur": 3.3955
+  },
+  {
+    "key": "OFFER",
+    "start": 45.4194,
+    "dur": 3.5952
+  },
+  {
+    "key": "CTA_HOLD",
+    "start": 49.0146,
+    "dur": 10.9854
   }
 ]

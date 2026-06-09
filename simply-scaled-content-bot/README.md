@@ -1,25 +1,28 @@
-# Simply Scaled — 60s Sales-Reel Bot (v8)
+# Simply Scaled — 60s Sales-Reel Bot (v9 "THE SYSTEM SPEAKS")
 
 A second "content bot" that lives inside the Nesso content engine and reuses the
 same infra (ElevenLabs key, ffmpeg, the Telegram bot process). Instead of Nesso
-TikToks, it renders **one 60.0-second vertical sales reel** that shows off two
-real dashboards Brady built — **Stolen Mule** (law-firm Command Deck) and
-**Restoration One** (restoration $20k dashboard) — and converts the viewer into
-a call/text. It's a sizzle reel for Simply Scaled's dev services.
+TikToks, it renders **one 60.0-second vertical sales reel** — a Jarvis-style pitch where
+the narrator IS the software Brady built, demoing itself and its 14 sibling
+systems before introducing its maker. It converts the viewer into a call/text.
 
 ## What it produces
 
 `SimplyScaledReel` (Remotion composition, `../remotion-reveal/src/SimplyScaledReel.tsx`
-plus scene modules in `../remotion-reveal/src/simply/`) — 13 beats:
++ camera/HUD/kit/scenes in `../remotion-reveal/src/jarvis/`) — a Jarvis-style
+system pitch. The narrator IS the software: an AI Brady built pitches its own
+maker in first person. One continuous camera flythrough (z-tunnel, zero cuts),
+a persistent living HUD (mission clock, status ticker, voice waveform, progress
+rail), 15 beats:
 
-1. **Flash-forward hook** — a messy customer text snaps into a clean $14,200
-   lead in the first four seconds (the bait; the full journey replays later)
-2. Compressed pain beat (sticky notes / missed calls) → the turn ("So I built them")
-3. **Law act** — 5-screen Practice OS tour with push-in camera + the contract-AI scan
-4. **Bright in-place morph** — the same app recolors indigo→copper on screen
-5. **Restoration act** — text → clean lead → connected pipeline → $612k payoff
-6. Proof turn → **founder beat** (a real person) → CTA hold with phone, email,
-   offer and urgency, screenshot-still to the last frame
+1. **Flash-forward hook** — messy customer text → $14,200 won lead, frame 1
+2. "I'm not a person. I'm the software." → auto-drag pipeline proof → $612,480 odometer
+3. **Nightwatch** — the mission clock spins to 03:07 and the bot catches a lead
+4. **"And I have siblings"** — constellation of 9 sibling systems; dives into the
+   Chicago law-firm OS, the $0.04 contract AI, and the outbound call+email duo
+5. **14 SYSTEMS · 12 MONTHS · 1 BUILDER** → the maker beat → "HE BUILT ME.
+   HE CAN BUILD ONE FOR YOU." → a radar scan of YOUR business tags the leaks
+6. Offer card → CTA hold (phone, email, offer, urgency) to the literal last frame
 
 Output: 1080×1920, 30 fps, **exactly 60.0s**, loudness-normalized to
 **-14 LUFS / -1.5 dBTP** (social-feed standard), ElevenLabs VO + music bed +
@@ -86,5 +89,5 @@ Needs `ELEVENLABS_API_KEY` and `TELEGRAM_BOT_TOKEN` in `../.env`.
 - `reel_prerendered.mp4` — the committed reel `/makesimply` sends (update via `--promote`).
 - `simply_scaled_reel.mp4` — untracked convenience copy of the latest promoted render.
 - `last_beats.json` — timing of the last successful render (written by `build_reel`).
-- `STORYBOARD.md` — the binding 13-beat storyboard + VO script.
+- `STORYBOARD.md` — the binding 15-beat v9 storyboard + VO script.
 - `MASTERPROMPTS.md` — historical: the v1-v7 master prompts + adversarial sales analysis.

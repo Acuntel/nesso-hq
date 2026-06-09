@@ -102,16 +102,19 @@ def prerendered_path() -> str | None:
 
 
 def _sfx_cues() -> list[tuple[str, str, float, float]]:
-    """(file, beat_key, frac_of_beat, volume) — manifest cues + generated
-    LAW_TOUR click pairs (same fractions the composition animates with)."""
+    """(file, beat_key, frac_of_beat, volume) — straight from the manifest.
+    If a `tour` block exists AND a LAW_TOUR beat is present, generate its
+    click pairs from the same fractions the composition animates with."""
     cues: list[tuple[str, str, float, float]] = []
+    keys = {b["key"] for b in MANIFEST["beats"]}
     for b in MANIFEST["beats"]:
         for f, frac, vol in b.get("sfx", []):
             cues.append((f, b["key"], float(frac), float(vol)))
-    opens = ["ss_open.mp3", "ss_load.mp3", "ss_chime.mp3", "ss_pop.mp3"]
-    for i, frac in enumerate(MANIFEST["tour"]["fracs"]):
-        cues.append(("ss_click.mp3", "LAW_TOUR", float(frac), 0.46))
-        cues.append((opens[i % len(opens)], "LAW_TOUR", float(frac) + 0.012, 0.3))
+    if "LAW_TOUR" in keys and MANIFEST.get("tour"):
+        opens = ["ss_open.mp3", "ss_load.mp3", "ss_chime.mp3", "ss_pop.mp3"]
+        for i, frac in enumerate(MANIFEST["tour"]["fracs"]):
+            cues.append(("ss_click.mp3", "LAW_TOUR", float(frac), 0.46))
+            cues.append((opens[i % len(opens)], "LAW_TOUR", float(frac) + 0.012, 0.3))
     return cues
 
 

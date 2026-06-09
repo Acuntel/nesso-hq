@@ -1,316 +1,242 @@
 {
-  "version": 8,
+  "version": 9,
+  "concept": "THE SYSTEM SPEAKS — an AI Brady built narrates the reel, demos itself, reveals its sibling systems, introduces its maker, scans YOUR business, locks the CTA. One continuous camera flythrough, persistent HUD, zero cuts.",
   "targetDuration": 60.0,
-  "tour": {
-    "stops": [
-      1,
-      3,
-      6,
-      8
-    ],
-    "fracs": [
-      0.16,
-      0.36,
-      0.56,
-      0.76
-    ]
-  },
   "beats": [
     {
-      "key": "HOOK_MIRACLE",
+      "key": "HOOK_LIVE_CATCH",
       "minDur": 4.6,
-      "vo": "Watch this. One messy text becomes a fourteen-thousand-dollar job.",
-      "caption": "A MESSY TEXT → A $14,200 JOB. IN 4 SECONDS.",
+      "vo": "Watch me turn this mess into fourteen thousand dollars.",
+      "caption": "WATCH ME TURN A MESSY TEXT INTO $14,200.",
       "big": true,
+      "cam": { "x": 0, "y": 0, "roll": 0 },
+      "move": "warp",
       "sfx": [
-        [
-          "ss_type.mp3",
-          0.06,
-          0.32
-        ],
-        [
-          "ss_scan.mp3",
-          0.42,
-          0.5
-        ],
-        [
-          "ss_sparkle.mp3",
-          0.6,
-          0.42
-        ],
-        [
-          "ss_cash.mp3",
-          0.72,
-          0.55
-        ]
+        ["ss_type.mp3", 0.02, 0.32],
+        ["ss_scan.mp3", 0.45, 0.5],
+        ["ss_sparkle.mp3", 0.62, 0.4],
+        ["ss_cash.mp3", 0.78, 0.55],
+        ["ss_swoosh2.mp3", 0.93, 0.45]
       ]
     },
     {
-      "key": "PAIN_DESK",
-      "minDur": 2.8,
-      "vo": "This is how most businesses still run.",
-      "caption": "STICKY NOTES. MISSED CALLS. MONEY YOU'LL NEVER SEE.",
-      "big": false,
-      "sfx": [
-        [
-          "ss_swoosh2.mp3",
-          0.0,
-          0.32
-        ],
-        [
-          "ss_tick.mp3",
-          0.55,
-          0.3
-        ]
-      ]
-    },
-    {
-      "key": "TURN_TO_PROOF",
-      "minDur": 3.6,
-      "vo": "You don't need more hours. You need the right tools. So I built them.",
+      "key": "NARRATOR_REVEAL",
+      "minDur": 3.2,
+      "vo": "I'm not a person. I'm the software.",
       "caption": "",
       "big": false,
+      "cam": { "x": 26, "y": -14, "roll": 0.8 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_power.mp3",
-          0.28,
-          0.5
-        ],
-        [
-          "ss_open.mp3",
-          0.58,
-          0.34
-        ]
+        ["ss_power.mp3", 0.1, 0.5],
+        ["ss_type.mp3", 0.4, 0.3],
+        ["ss_lock.mp3", 0.7, 0.4],
+        ["swish.mp3", 0.92, 0.3]
       ]
     },
     {
-      "key": "LAW_TOUR",
-      "minDur": 6.4,
-      "vo": "This one runs a whole law firm in Chicago. Matters, billing, calendar, even trust accounting.",
-      "caption": "LIVE AT A CHICAGO LAW FIRM. EVERY DOLLAR, ONE SCREEN.",
+      "key": "PIPELINE_PROOF",
+      "minDur": 3.8,
+      "vo": "Read. Booked. Every number updated.",
+      "caption": "READ → BOOKED → NUMBERS UPDATE THEMSELVES",
       "big": false,
+      "cam": { "x": -22, "y": 10, "roll": -0.7 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_swoosh2.mp3",
-          0.0,
-          0.34
-        ]
+        ["ss_click.mp3", 0.08, 0.35],
+        ["swish.mp3", 0.3, 0.35],
+        ["ss_thunk.mp3", 0.48, 0.5],
+        ["ss_ding2.mp3", 0.6, 0.4],
+        ["ss_cash.mp3", 0.72, 0.4],
+        ["ss_swoosh2.mp3", 0.92, 0.3]
       ]
     },
     {
-      "key": "LAW_PDF",
-      "minDur": 5.5,
-      "vo": "Custom A.I. reads a contract, and flags every missing date, name, and signature.",
-      "caption": "AI READS A CONTRACT IN 30 SECONDS.",
-      "big": false,
-      "sfx": [
-        [
-          "ss_open.mp3",
-          0.0,
-          0.34
-        ],
-        [
-          "ss_click.mp3",
-          0.28,
-          0.46
-        ],
-        [
-          "ss_scan.mp3",
-          0.34,
-          0.5
-        ],
-        [
-          "ss_success.mp3",
-          0.56,
-          0.42
-        ],
-        [
-          "ss_lock.mp3",
-          0.74,
-          0.38
-        ]
-      ]
-    },
-    {
-      "key": "MORPH",
-      "minDur": 2.8,
-      "vo": "Same engine. Rebuilt for a different business.",
+      "key": "MONEY_ODOMETER",
+      "minDur": 3.2,
+      "vo": "Six hundred twelve thousand dollars tracked this year.",
       "caption": "",
       "big": false,
+      "cam": { "x": 0, "y": -24, "roll": 0.5 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_power.mp3",
-          0.0,
-          0.42
-        ],
-        [
-          "ss_lock.mp3",
-          0.72,
-          0.32
-        ]
+        ["ss_riser.mp3", 0.0, 0.35],
+        ["ss_cash.mp3", 0.5, 0.5],
+        ["ss_tick.mp3", 0.8, 0.25],
+        ["ss_swoosh2.mp3", 0.92, 0.3]
       ]
     },
     {
-      "key": "RESTO_TEXT",
+      "key": "NIGHTWATCH_3AM",
       "minDur": 2.8,
-      "vo": "Every job starts with a panicked text.",
-      "caption": "A REAL CUSTOMER TEXTS IN.",
+      "vo": "I never sleep.",
+      "caption": "IT CATCHES LEADS AT 3 A.M.",
       "big": false,
+      "cam": { "x": -18, "y": 8, "roll": -0.6 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_type.mp3",
-          0.15,
-          0.32
-        ],
-        [
-          "ss_ding2.mp3",
-          0.82,
-          0.4
-        ]
+        ["ss_tick.mp3", 0.08, 0.3],
+        ["ss_ding2.mp3", 0.45, 0.45],
+        ["ss_success.mp3", 0.7, 0.35],
+        ["ss_swoosh2.mp3", 0.9, 0.4]
       ]
     },
     {
-      "key": "RESTO_LEAD",
-      "minDur": 3.4,
-      "vo": "The software reads it — seconds later, a clean lead on the board.",
-      "caption": "MESSY TEXT IN → CLEAN LEAD OUT.",
+      "key": "SIBLINGS_PULLBACK",
+      "minDur": 2.6,
+      "vo": "And I have siblings.",
+      "caption": "AND I HAVE SIBLINGS.",
       "big": false,
+      "cam": { "x": 0, "y": 0, "roll": 0 },
+      "move": "rise",
       "sfx": [
-        [
-          "ss_scan.mp3",
-          0.05,
-          0.46
-        ],
-        [
-          "ss_sparkle.mp3",
-          0.38,
-          0.4
-        ],
-        [
-          "ss_lock.mp3",
-          0.6,
-          0.36
-        ],
-        [
-          "ss_ding2.mp3",
-          0.72,
-          0.42
-        ]
+        ["ss_swoosh2.mp3", 0.0, 0.45],
+        ["ss_pop.mp3", 0.45, 0.35],
+        ["ss_pop.mp3", 0.6, 0.35],
+        ["ss_sparkle.mp3", 0.75, 0.3],
+        ["swish.mp3", 0.9, 0.3]
       ]
     },
     {
-      "key": "RESTO_PIPE",
-      "minDur": 4.6,
-      "vo": "Win the job, and every number updates itself. Nothing slips.",
-      "caption": "WIN A JOB → THE NUMBERS UPDATE THEMSELVES.",
-      "big": false,
-      "sfx": [
-        [
-          "swish.mp3",
-          0.25,
-          0.34
-        ],
-        [
-          "swish.mp3",
-          0.45,
-          0.34
-        ],
-        [
-          "swish.mp3",
-          0.62,
-          0.34
-        ],
-        [
-          "ss_cash.mp3",
-          0.82,
-          0.55
-        ]
-      ]
-    },
-    {
-      "key": "RESTO_MONEY",
-      "minDur": 3.6,
-      "vo": "Six hundred twelve thousand dollars. One text at a time.",
-      "caption": "",
-      "big": false,
-      "sfx": [
-        [
-          "ss_riser.mp3",
-          0.05,
-          0.4
-        ],
-        [
-          "ss_cash.mp3",
-          0.6,
-          0.5
-        ]
-      ]
-    },
-    {
-      "key": "PROOF_TURN",
+      "key": "SIBLING_LAW_OS",
       "minDur": 4.2,
-      "vo": "A law firm. A restoration crew. One builder. Imagine yours.",
-      "caption": "",
+      "vo": "One runs a Chicago law firm. Even trust accounting.",
+      "caption": "LIVE AT A CHICAGO LAW FIRM — EVEN TRUST ACCOUNTING",
       "big": false,
+      "cam": { "x": 22, "y": -12, "roll": 0.7 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_power.mp3",
-          0.0,
-          0.4
-        ],
-        [
-          "ss_chime.mp3",
-          0.5,
-          0.42
-        ]
+        ["ss_open.mp3", 0.05, 0.4],
+        ["ss_click.mp3", 0.35, 0.35],
+        ["ss_click.mp3", 0.55, 0.35],
+        ["ss_lock.mp3", 0.78, 0.45],
+        ["ss_swoosh2.mp3", 0.93, 0.3]
       ]
     },
     {
-      "key": "FOUNDER",
+      "key": "SIBLING_CONTRACT_AI",
+      "minDur": 4.0,
+      "vo": "One reads contracts in thirty seconds. Four cents.",
+      "caption": "FLAGS EVERY MISSING DATE, NAME & SIGNATURE",
+      "big": false,
+      "cam": { "x": -20, "y": 12, "roll": -0.7 },
+      "move": "dolly",
+      "sfx": [
+        ["ss_load.mp3", 0.06, 0.35],
+        ["ss_scan.mp3", 0.25, 0.5],
+        ["ss_pop.mp3", 0.5, 0.4],
+        ["ss_pop.mp3", 0.62, 0.4],
+        ["ss_chime.mp3", 0.82, 0.35],
+        ["ss_swoosh2.mp3", 0.93, 0.3]
+      ]
+    },
+    {
+      "key": "SIBLING_OUTBOUND_DUO",
+      "minDur": 3.8,
+      "vo": "One makes sales calls. One drafts two hundred emails.",
+      "caption": "AI SALES CALLS · 200 EMAIL DRAFTS A DAY",
+      "big": false,
+      "cam": { "x": 0, "y": -20, "roll": 0.5 },
+      "move": "dolly",
+      "sfx": [
+        ["ss_open.mp3", 0.05, 0.4],
+        ["ss_type.mp3", 0.45, 0.3],
+        ["ss_tick.mp3", 0.65, 0.35],
+        ["ss_success.mp3", 0.85, 0.35],
+        ["ss_swoosh2.mp3", 0.93, 0.3]
+      ]
+    },
+    {
+      "key": "FLEET_COUNT",
+      "minDur": 2.8,
+      "vo": "Fourteen systems. One year. One builder.",
+      "caption": "",
+      "big": false,
+      "cam": { "x": 18, "y": 10, "roll": -0.5 },
+      "move": "dolly",
+      "sfx": [
+        ["ss_swoosh2.mp3", 0.0, 0.3],
+        ["ss_tick.mp3", 0.25, 0.4],
+        ["ss_pop.mp3", 0.55, 0.35],
+        ["ss_success.mp3", 0.8, 0.4],
+        ["swish.mp3", 0.9, 0.25]
+      ]
+    },
+    {
+      "key": "MAKER",
+      "minDur": 3.4,
+      "vo": "My maker: Brady. Real person. No agency.",
+      "caption": "",
+      "big": false,
+      "cam": { "x": 0, "y": -16, "roll": 0 },
+      "move": "dolly",
+      "sfx": [
+        ["ss_riser.mp3", 0.0, 0.25],
+        ["ss_sparkle.mp3", 0.4, 0.4],
+        ["ss_chime.mp3", 0.7, 0.35],
+        ["ss_swoosh2.mp3", 0.93, 0.25]
+      ]
+    },
+    {
+      "key": "BUILT_ME",
+      "minDur": 3.4,
+      "vo": "He built me. He can build one for you.",
+      "caption": "",
+      "big": false,
+      "cam": { "x": 20, "y": -10, "roll": 0.6 },
+      "move": "dolly",
+      "sfx": [
+        ["ss_scan.mp3", 0.15, 0.35],
+        ["ss_type.mp3", 0.42, 0.3],
+        ["ss_lock.mp3", 0.7, 0.45],
+        ["ss_swoosh2.mp3", 0.92, 0.3]
+      ]
+    },
+    {
+      "key": "YOUR_LEAK_SCAN",
+      "minDur": 3.4,
+      "vo": "Missed calls. Stuck invoices. Leaking money.",
+      "caption": "",
+      "big": false,
+      "cam": { "x": -16, "y": 8, "roll": -0.5 },
+      "move": "dolly",
+      "sfx": [
+        ["ss_scan.mp3", 0.1, 0.5],
+        ["ss_tick.mp3", 0.35, 0.3],
+        ["ss_tick.mp3", 0.5, 0.3],
+        ["ss_tick.mp3", 0.65, 0.3],
+        ["ss_thunk.mp3", 0.85, 0.45],
+        ["ss_swoosh2.mp3", 0.93, 0.3]
+      ]
+    },
+    {
+      "key": "OFFER",
       "minDur": 3.6,
-      "vo": "It's just me — Brady. A real person you can text today.",
+      "vo": "Text him. Fifteen free minutes. No pitch.",
       "caption": "",
       "big": false,
+      "cam": { "x": 0, "y": 0, "roll": 0 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_open.mp3",
-          0.05,
-          0.3
-        ],
-        [
-          "ss_chime.mp3",
-          0.5,
-          0.36
-        ]
+        ["ss_open.mp3", 0.08, 0.4],
+        ["ss_ding2.mp3", 0.5, 0.45],
+        ["ss_thunk.mp3", 0.78, 0.45],
+        ["ss_riser.mp3", 0.92, 0.3]
       ]
     },
     {
-      "key": "CLOSE_CTA",
-      "minDur": 9.5,
-      "vo": "Free fifteen-minute teardown — no pitch. Call or text: eight four seven, two one two, twenty-one forty-two. I only take a few builds a month.",
+      "key": "CTA_HOLD",
+      "minDur": 11.0,
+      "vo": "Only a few builds a month. Call or text. Eight four seven... two one two... twenty-one forty-two.",
       "caption": "",
       "big": false,
+      "cam": { "x": 0, "y": 0, "roll": 0 },
+      "move": "dolly",
       "sfx": [
-        [
-          "ss_power.mp3",
-          0.0,
-          0.4
-        ],
-        [
-          "ss_ding2.mp3",
-          0.05,
-          0.42
-        ],
-        [
-          "ss_pop.mp3",
-          0.32,
-          0.4
-        ],
-        [
-          "ss_lock.mp3",
-          0.84,
-          0.4
-        ]
+        ["ss_power.mp3", 0.0, 0.4],
+        ["ss_thunk.mp3", 0.12, 0.5],
+        ["ss_chime.mp3", 0.45, 0.35],
+        ["ss_tick.mp3", 0.85, 0.2]
       ]
     }
   ]
