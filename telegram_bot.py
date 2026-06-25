@@ -18,6 +18,7 @@ from telegram import Update
 from telegram.error import NetworkError, TimedOut
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
 )
@@ -532,6 +533,55 @@ async def cmd_make_simply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Reel failed: {err[:400]}")
 
 
+async def on_tentacle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Relay Tentacle-trader approve/deny taps (callback data 'ok:<id>' / 'no:<id>') to the trader's
+    GitHub apply/discard Action, so Brady can action Tentacle's self-changes from THIS chat — no second
+    bot. This is the only non-content-engine concern here; unrelated callbacks are ignored untouched.
+
+    Needs env GITHUB_DISPATCH_TOKEN (a PAT with contents+actions write on the trader repo).
+    """
+    q = update.callback_query
+    if not q:
+        return
+    data = q.data or ""
+    if not (data.startswith("ok:") or data.startswith("no:")):
+        await q.answer()
+        return
+    verb, cid = data.split(":", 1)
+    await q.answer("approving…" if verb == "ok" else "denying…")
+    token = os.getenv("GITHUB_DISPATCH_TOKEN")
+    repo = os.getenv("TENTACLE_REPO", "Acuntel/tentacle-trader")
+    event = "apply-approved" if verb == "ok" else "discard-approval"
+    ok = False
+    if token:
+        try:
+            import requests
+            r = requests.post(
+                f"https://api.github.com/repos/{repo}/dispatches",
+                json={"event_type": event, "client_payload": {"id": cid}},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                timeout=20,
+            )
+            ok = r.status_code in (200, 204)
+        except Exception as exc:  # never break the content bot over a relay hiccup
+            logging.getLogger(__name__).warning("tentacle relay dispatch failed: %s", exc)
+    mark = ("✅ Approved" if verb == "ok" else "❌ Denied") + f" — {cid}"
+    if not token:
+        mark += "\n⚠️ set GITHUB_DISPATCH_TOKEN on this bot to action it"
+    elif not ok:
+        mark += "\n⚠️ dispatch failed (check the token's repo permissions)"
+    elif verb == "ok":
+        mark += "\nTentacle is gate-testing + deploying it now."
+    try:
+        await q.edit_message_text(mark)
+    except Exception:
+        pass
+
+
 def create_bot(token: str) -> Application:
     """Create and configure the Telegram bot."""
     request = HTTPXRequest(
@@ -563,5 +613,7 @@ def create_bot(token: str) -> Application:
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("makesimply", cmd_make_simply))
     app.add_handler(CommandHandler("make_simply", cmd_make_simply))
+    # relay Tentacle-trader approve/deny taps to its GitHub apply/discard Action (no second bot needed)
+    app.add_handler(CallbackQueryHandler(on_tentacle_callback))
 
     return app
